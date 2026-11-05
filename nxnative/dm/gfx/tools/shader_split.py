@@ -44,6 +44,7 @@
 #   Unity type trees need Unity's common string table, which is taken from the first main
 # Pair table: (vertex key, pixel key) of every BNSH variation (every Unity program); dmsh_build uses it to give vertex shaders the outputs their pixel shaders read but they do not write (see dmsh_build.py vs_pad)
 import collections, concurrent.futures as cf, hashlib, json, os, re, struct, subprocess, sys
+from forkpool import fork_map   # the pool without semaphores (no /dev/shm, as on Android)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../games')); import game as _game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import uepak
 GAME = _game.load()   # the current game profile (DM_GAME, required): source group rules and the table header note
@@ -1148,14 +1149,13 @@ ZDICTS, _ZD = {}, {}       # zstd dictionaries by ID (given when the pool starts
 
 def pool_map(fn, items, J, initargs, chunksize=1):
     """The work in a pool of processes. A host without /dev/shm (Android has none) cannot make the POSIX semaphores the
-    pool needs, so the work runs in this process instead (the same scan, one process)"""
+    pool needs, so the children are forked instead (forkpool.py): the same work, in parallel, without semaphores"""
     try:
         with cf.ProcessPoolExecutor(J, initializer=_pool_init, initargs=initargs) as ex:
             return list(ex.map(fn, items, chunksize=chunksize))
     except (FileNotFoundError, OSError) as e:
-        print(f'note: no process pool ({e.__class__.__name__}: {e}): the scan runs in this process', file=sys.stderr)
-        _pool_init(*initargs)
-        return [fn(i) for i in items]
+        print(f'note: no process pool ({e.__class__.__name__}: {e}): the work runs in forked children', file=sys.stderr)
+        return fork_map(fn, items, J, lambda: _pool_init(*initargs))
 
 def _pool_init(common, trees, zdicts={}):
     global COMMON, TREES, ZDICTS

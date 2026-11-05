@@ -10,6 +10,8 @@ read by dm/gfx/tools/smash_arc.py: 98 NROs, while the NRRs of every older releas
 other RomFS files for stored NROs and zstd frames that inflate to one (on data.arc: all 764 registered hashes in 7 minutes)."""
 import hashlib, mmap, os, struct, sys
 from multiprocessing import Pool
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'gfx', 'tools'))
+from forkpool import fork_map   # the pool without semaphores (no /dev/shm, as on Android)
 
 ZMAGIC = b'\x28\xb5\x2f\xfd'
 
@@ -125,10 +127,16 @@ def main():
             step = max(64 << 20, (sz + 47) // 48)
             jobs += [(p, a, min(sz, a + step + 0x40), left) for a in range(0, sz, step)]
         print(f'{len(want)} registered NROs, {len(found)} loose; scanning {len(big)} files ({sum(s for _, s in big) / 2**30:.1f} GB) for the other {len(left)}', flush=True)
-        with Pool(min(10, os.cpu_count() or 4)) as pool:
-            for r in pool.imap_unordered(scan, jobs):
-                for h, path, off, how, body in r:
-                    found.setdefault(h, (f'{os.path.relpath(path, romfs)}+{off:#x}', how, body))
+        try:
+            with Pool(min(10, os.cpu_count() or 4)) as pool: rs = list(pool.imap_unordered(scan, jobs))
+        except (FileNotFoundError, OSError) as e:
+            # A host without /dev/shm (Android has none) cannot make the pool's POSIX semaphores: the work runs in
+            # forked children instead (dm/gfx/tools/forkpool.py), the same rows
+            print(f'note: no process pool ({e.__class__.__name__}: {e}): the work runs in forked children', file=sys.stderr)
+            rs = fork_map(scan, jobs, min(10, os.cpu_count() or 4))
+        for r in rs:
+            for h, path, off, how, body in r:
+                found.setdefault(h, (f'{os.path.relpath(path, romfs)}+{off:#x}', how, body))
     rows, i, refused = [], 0, 0
     for h in sorted(found):
         where, how, body = found[h]

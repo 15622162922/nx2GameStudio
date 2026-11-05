@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from c1_guard import Interval, definitions_of, known   # noqa: E402
+from forkpool import fork_map   # the pool without semaphores (no /dev/shm, as on Android)   # noqa: E402
 import dmsh_chain   # noqa: E402
 
 MAX = 65536
@@ -85,7 +86,13 @@ def main():
         raise SystemExit(f"usage: {sys.argv[0]} <dmsh_b version dir> <output tsv>")
     version_dir, output = map(os.path.abspath, sys.argv[1:])
     paths = [os.path.join(version_dir, n) for n in sorted(os.listdir(version_dir)) if n.endswith("_b.json")]
-    with multiprocessing.Pool() as pool: rows = [r for r in pool.map(row, paths, chunksize=64) if r]
+    try:
+        with multiprocessing.Pool() as pool: rows = [r for r in pool.map(row, paths, chunksize=64) if r]
+    except (FileNotFoundError, OSError) as e:
+        # A host without /dev/shm (Android has none) cannot make the pool's POSIX semaphores: the work runs in
+        # forked children instead (forkpool.py), the same rows
+        print(f'note: no process pool ({e.__class__.__name__}: {e}): the work runs in forked children', file=sys.stderr)
+        rows = [r for r in fork_map(row, paths, os.cpu_count() or 8) if r]
     slots, ro = sum(r.count(":") for r in rows), sum(len(re.findall(r"\bs\d+", r.split("\t", 1)[1])) for r in rows)
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, "w", encoding="utf-8", newline="") as stream:
