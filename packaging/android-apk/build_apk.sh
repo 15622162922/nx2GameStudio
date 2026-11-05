@@ -48,6 +48,8 @@ if [[ -n $payload_flag ]]; then
     echo "   skipped (--no-payload): the phone must already have the environment"
 else
     python3 "$here/build_assets.py" --out "$cache/assets" --payload "$cache/payload-arm64.tar.gz" --toolchain "$cache/toolchain"
+    # nx_extract for the phone, built here (the phone's .NET SDK cannot): after the assets, which it joins
+    python3 "$here/build_nx_extract.py" || echo "   (no nx_extract for the phone: the .NET SDK is missing)"
 fi
 
 # 4. the APK

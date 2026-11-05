@@ -35,7 +35,7 @@
         <provider
             android:name=".ApkProvider"
             android:authorities="com.nx.android.apk"
-            android:exported="false"
+            android:exported="true"
             android:grantUriPermissions="true" />
     </application>
 </manifest>

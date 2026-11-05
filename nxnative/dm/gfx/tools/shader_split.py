@@ -1146,6 +1146,17 @@ NV_STAGES = ['vs', 'ps', 'gs', 'hs', 'ds', 'cs']   # NVN stage order
 COMMON, TREES = None, {}   # Unity common strings and borrowed type trees (given when the pool starts)
 ZDICTS, _ZD = {}, {}       # zstd dictionaries by ID (given when the pool starts) and their digested form in this process
 
+def pool_map(fn, items, J, initargs, chunksize=1):
+    """The work in a pool of processes. A host without /dev/shm (Android has none) cannot make the POSIX semaphores the
+    pool needs, so the work runs in this process instead (the same scan, one process)"""
+    try:
+        with cf.ProcessPoolExecutor(J, initializer=_pool_init, initargs=initargs) as ex:
+            return list(ex.map(fn, items, chunksize=chunksize))
+    except (FileNotFoundError, OSError) as e:
+        print(f'note: no process pool ({e.__class__.__name__}: {e}): the scan runs in this process', file=sys.stderr)
+        _pool_init(*initargs)
+        return [fn(i) for i in items]
+
 def _pool_init(common, trees, zdicts={}):
     global COMMON, TREES, ZDICTS
     COMMON, TREES, ZDICTS = common, trees, zdicts
@@ -1460,8 +1471,7 @@ def main():
     ar_jobs, ards = ard_jobs(files)   # Xenoblade Chronicles 3's archive (bf3.arh / bf3.ard)
     big += pak_jobs + tr_jobs + ue_jobs + bd_jobs + arc_jobs + pz_jobs + ar_jobs
     files = [(p, r) for p, r in files if not linkdata_jobs(p, r) and p not in paks and p not in trp and p not in uep and p not in bdts and p not in arcs and p not in pkzs and p not in ards]
-    with cf.ProcessPoolExecutor(J, initializer=_pool_init, initargs=(common, {}, zdicts)) as ex:
-        results += list(ex.map(scan_file, big)) + list(ex.map(scan_file, files, chunksize=16))
+    results += pool_map(scan_file, big, J, (common, {}, zdicts)) + pool_map(scan_file, files, J, (common, {}, zdicts), chunksize=16)
     trees, defer = {}, []
     for rel, uniq, pr, extra in results:
         if extra == 'defer': defer.append(rel)
@@ -1471,7 +1481,7 @@ def main():
         import unityfs
         for k in unityfs.KNOWN_TREES: trees.setdefault(k, unityfs.known_tree(*k))
         byrel = {r: p for p, r in files}
-        with cf.ProcessPoolExecutor(J, initializer=_pool_init, initargs=(common, trees, zdicts)) as ex: again = list(ex.map(scan_file, [(byrel[r], r) for r in defer]))
+        again = pool_map(scan_file, [(byrel[r], r) for r in defer], J, (common, trees, zdicts))
         for rel, uniq, pr, extra in again:
             if extra == 'defer': red(f'{rel}: Unity serialized file without type trees, and no bundle has a Shader type tree of the same hash to borrow')
         results = [r for r in results if r[3] != 'defer'] + again

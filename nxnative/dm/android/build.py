@@ -34,15 +34,16 @@ bin_ = Path(a.ndk) / 'toolchains/llvm/prebuilt' / host / 'bin'
 CC = str(bin_ / ('clang.exe' if os.name == 'nt' else 'clang'))
 if NX2A_ARM_HOST:
     _sysroot = next(Path(a.ndk).glob('toolchains/llvm/prebuilt/*/sysroot'), None)
-    _res = next(iter(sorted(Path(a.ndk).glob('toolchains/llvm/prebuilt/*/lib/clang/*')))), None)   # the NDK's resource dir: the builtin headers and the compiler-rt
+    _res = next(iter(sorted(Path(a.ndk).glob('toolchains/llvm/prebuilt/*/lib/clang/*'))), None)   # the NDK's resource dir: the builtin headers and the compiler-rt
     _sys_clang = _sh.which('clang')
     if not (_sysroot and _res and _sys_clang):
         sys.exit('aarch64 host: need the NDK (its sysroot and runtime libs) and clang on PATH')
-    _wd = Path(a.out if a.out else DM / 'android/out'); _wd.mkdir(parents=True, exist_ok=True)
-    _wrap = _wd / 'cc-arm'
-    _wrap.write_text(f'#!/bin/sh\nexec {_sys_clang} --sysroot={_sysroot} -resource-dir={_res} -rtlib=compiler-rt "$@"\n')
-    _wrap.chmod(_wrap.stat().st_mode | _st0.S_IXUSR)
-    CC = str(_wrap)
+    # The flags go on the command line, not into a wrapper script: the wrapper's #!/bin/sh is the phone's own shell, which
+    # cannot load the rootfs's libraries (the guest's LD_LIBRARY_PATH names them) and dies before the compiler runs
+    CC = _sys_clang
+    CC_EXTRA = [f'--sysroot={_sysroot}', f'-resource-dir={_res}', '-rtlib=compiler-rt']
+else:
+    CC_EXTRA = []
 TARGET = f'--target=aarch64-linux-android{a.api}'
 out = Path(a.out) if a.out else DM / 'android/out' / (a.game + ('-release' if a.release else ''))
 DBG = [] if a.release else ['-g']
@@ -107,7 +108,7 @@ def compile_one(s):
             subprocess.run([sys.executable, str(DM / 'android/tools/darwin2elf.py'), str(s), str(src)], check=True)
     if not dep_stale(o, d, src): return s, o, 0, ''
     flags = VPX_FLAGS if 'third_party/libvpx' in str(rel).replace(os.sep, '/') else [TARGET] + DBG if s.suffix == '.S' else CFLAGS + INC
-    r = subprocess.run([CC] + flags + ['-MMD', '-MF', str(d), '-c', str(src), '-o', str(o)], capture_output=True, text=True, errors='replace')
+    r = subprocess.run([CC] + CC_EXTRA + flags + ['-MMD', '-MF', str(d), '-c', str(src), '-o', str(o)], capture_output=True, text=True, errors='replace')
     return s, o, r.returncode, r.stderr
 
 def build(files):
@@ -130,11 +131,11 @@ if a.only_compile: sys.exit(1 if failed else 0)
 LIBS = ['-landroid', '-llog', '-lvulkan', '-laaudio', '-lnativewindow', '-lmediandk', '-lz', '-lm', '-ldl']   # -lz: the gamepad theme's PNGs (overlay_theme.c)
 LDFLAGS = [TARGET, '-fuse-ld=lld', '-Wl,--error-limit=0', '-Wl,-z,max-page-size=16384', '-Wl,--build-id', '-Wl,-z,nostart-stop-gc']
 if a.exe:
-    r = subprocess.run([CC] + LDFLAGS + ['-pie', '-o', str(out / 'dmhost')] + [str(o) for o in objs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
+    r = subprocess.run([CC] + CC_EXTRA + LDFLAGS + ['-pie', '-o', str(out / 'dmhost')] + [str(o) for o in objs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
     print(r.stderr.strip() if r.returncode else f'linked {out / "dmhost"}', file=sys.stderr if r.returncode else sys.stdout)
     if r.returncode: sys.exit(1)
 if a.lib:
-    r = subprocess.run([CC] + LDFLAGS + ['-shared', '-Wl,-soname,libdmhost.so', '-o', str(out / 'libdmhost.so')] + [str(o) for o in objs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
+    r = subprocess.run([CC] + CC_EXTRA + LDFLAGS + ['-shared', '-Wl,-soname,libdmhost.so', '-o', str(out / 'libdmhost.so')] + [str(o) for o in objs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
     print(r.stderr.strip() if r.returncode else f'linked {out / "libdmhost.so"}', file=sys.stderr if r.returncode else sys.stdout)
     if r.returncode: sys.exit(1)
     if a.release:   # the static symbol table goes too (the dynamic one stays: ANativeActivity_onCreate)
@@ -158,7 +159,7 @@ if a.adrenotools:
     for name, files, extra in libs:
         o = out / name
         if o.exists() and o.stat().st_mtime >= newest: continue
-        r = subprocess.run([CXX if any(f.suffix == '.cpp' for f in files) else CC] + ATF + [str(f) for f in files] + ['-o', str(o), f'-Wl,-soname,{name}'] + ATL + extra,
+        r = subprocess.run([CXX if any(f.suffix == '.cpp' for f in files) else CC] + CC_EXTRA + ATF + [str(f) for f in files] + ['-o', str(o), f'-Wl,-soname,{name}'] + ATL + extra,
                            capture_output=True, text=True, errors='replace')
         print(r.stderr.strip() if r.returncode else f'linked {o}', file=sys.stderr if r.returncode else sys.stdout)
         if r.returncode: sys.exit(1)

@@ -187,6 +187,11 @@ class Port:
         os.environ['DOTNET_ROOT'] = str(toolchain.dotnet_root(self.tools['dotnet']))   # where nx_extract.exe's apphost looks for the runtime (else the system's, which may lack .NET 10)
         # PYTHONUTF8: the engine's tools write their tables with open() and no encoding, which is the ANSI code page on Windows (shader_split.py's "→" failed)
         self.env = dict(os.environ, J=str(o.jobs), PYTHONIOENCODING='utf-8', PYTHONUTF8='1', DOTNET_CLI_TELEMETRY_OPTOUT='1')
+        # The build tools' own libraries (the toolchain's libshaderc for glslc): the tools are run with the environment the
+        # guest has, whose library path holds the rootfs's libraries only, and the tools' own RPATH may point elsewhere
+        if tc := Path(os.environ.get('NX2A_REPO', '')) / 'toolchain':
+            if (tc / 'lib').is_dir():
+                self.env['LD_LIBRARY_PATH'] = os.pathsep.join([str(tc / 'lib'), self.env.get('LD_LIBRARY_PATH', '')]).rstrip(os.pathsep)
 
         try:
             self.inputs()
@@ -562,7 +567,16 @@ class Port:
     def translator(self):
         """The shader translator (dm/gfx/tools/dmsh_xlate over dm/third_party/ryujinx) built from the repository's source with the player's .NET SDK, once for every game,
         in <user dir>/tools/dmsh_xlate: (dmsh_xlate.dll, the source's key). Not the iOS chain's prebuilt dm/gfx/tools/dmsh_xlate_bin, which only a Mac can rebuild
-        (its lock fingerprints Apple's Metal compiler): Android takes a translator fix as soon as it is in the source"""
+        (its lock fingerprints Apple's Metal compiler): Android takes a translator fix as soon as it is in the source.
+        A build made for the phone (NX2A_DMSH_XLATE) is used as it is: the phone's .NET SDK cannot restore the packages (no network) and its NuGet settings
+        read never ends, so the phone does not build the translator but runs one that was built for it"""
+        pre = os.environ.get('NX2A_DMSH_XLATE') or (NXNATIVE.parent / 'tools' / 'dmsh_xlate')   # the build shipped with the phone
+        if Path(pre).is_dir():
+            src = Path(pre)
+            if not (src / 'dmsh_xlate.dll').is_file(): raise BuildError(f'NX2A_DMSH_XLATE has no dmsh_xlate.dll: {src}')
+            out = paths.user_dir() / 'tools/dmsh_xlate'; nsp.rmtree(out); shutil.copytree(src, out)
+            key = nsp.fingerprint(('stat', out), ('cmd', ['dmsh_xlate', 'prebuilt']), env=self.env)
+            return out / 'dmsh_xlate.dll', key
         src = DM / 'gfx/tools/dmsh_xlate'; ryu = DM / 'third_party/ryujinx'
         files = sorted([*src.glob('*.cs'), *src.glob('*.csproj'), *ryu.glob('*.props')] + [p for p in (ryu / 'src').rglob('*') if p.suffix in ('.cs', '.csproj', '.props')
                                                                                          and not {'bin', 'obj'} & set(p.relative_to(ryu).parts)])

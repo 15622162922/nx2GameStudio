@@ -23,6 +23,10 @@ REPO = Path(__file__).resolve().parent.parent.parent
 KEEP = ['porter', 'nxnative']
 SKIP_DIRS = {'__pycache__', '.git', '.github', '.githooks', '.claude', '.idea', '.vscode', 'probes', 'tests', 'devtools',
              'packaging', 'docs', 'gui', 'ios', 'out', 'build', '.pytest_cache'}
+# The tool's own tree holds what a local build left behind (nx_extract's bin/ and obj/): the phone does not need it.
+# The build tools have bin directories of their own (the toolchain's clang/bin, its bin/glslc): they are part of the
+# tools, so only the tool's tree is stripped of them.
+TOOL_SKIP = SKIP_DIRS | {'bin', 'obj'}
 SKIP_FILES = {'.DS_Store'}
 # The Python modules the porter needs on the phone (the desktop GUI's PySide6 is not among them).
 MODULES = ['lz4', 'capstone', 'pillow', 'fonttools', 'pyyaml', 'pycryptodome', 'backports.zstd']
@@ -163,9 +167,11 @@ def main():
     for name in KEEP:
         src = REPO / name
         if not src.exists(): continue
-        copy_tree(src, tool / name)
-    # the tool's own patch script (the interpreter paths of the programs the porter starts)
+        copy_tree(src, tool / name, skip=TOOL_SKIP)
+    # the tool's own patch script (the interpreter paths of the programs the porter starts) and the SDK's
+    # globalization fix (the phone's .NET has no ICU): both are run by the app, so they travel with it
     shutil.copy2(REPO / 'packaging/android-apk/patch_interp.py', tool / 'tools/patch_interp.py')
+    shutil.copy2(REPO / 'packaging/android-apk/fix_globalization.py', tool / 'tools/fix_globalization.py')
     # the C# tools are built on the phone: the NuGet packages they restore have to be there (no network)
     nuget_packages(tool / 'nxnative' / 'dm' / 'tools' / 'nx_extract')
     # nx_extract itself: built here for linux-arm64, because the phone's .NET SDK cannot build it (its
