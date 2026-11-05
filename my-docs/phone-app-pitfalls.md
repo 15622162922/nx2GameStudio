@@ -176,7 +176,28 @@ linux-arm64 版随 APK 打包**（`build_nx_extract.py` ✓），手机上直接
 
 ---
 
-## 13. 日志里全是原始 JSON，看不出在干什么
+## 13. LibHac 遇到非 16 对齐的偏移就直接抛异常 → 改版 dump 读不了
+
+**症状**：`nx_extract` 报 `System.ArgumentException: Offset must be a multiple of 16`
+（`SectorStorage.ValidateSize` ✓），解包在 RomFS 那一步停住 ✓。
+
+**原因**：`Aes128CtrStorage` 的扇区是 16 字节 ✓，`SectorStorage.ValidateSize` 要求读取的偏移对齐 ✓。
+改版（重新打包）的 dump 里 RomFS 区域的偏移不是 16 的倍数 ✗ → LibHac 直接抛异常 ✗。
+
+**试过的改法**（在 LibHac 源码里，`git.ryujinx.app/projects/LibHac.git` ✓）：
+把对齐检查去掉 ✓ → 报错变成 `OverflowException`（RomFS 字典的长度是垃圾 ✗）→ 因为
+**CTR 的密钥流只从块边界开始才是对的** ✗：把读取改成"读覆盖的块、解密、再切片" ✗ → 还是垃圾 ✗。
+→ **这个 dump 的 RomFS 区域本身是坏的 ✗**（不是工具太严 ✗）。
+
+**结论**：改版 dump 的问题要在 dump 那边解决 ✗（重新导出/重新打包 ✓），
+工具这边不要为了这种文件放松校验 ✗（放松后只是把"崩掉"换成"读出垃圾" ✗）。
+另外，`--allow-damaged` 是给**哈希校验失败**用的 ✗，跟这个无关 ✗。
+
+**判断文件坏没坏的通用办法**：把文件拉到电脑上，用同一套 LibHac 跑一遍 ✓ → 两边一样报错就是文件的问题 ✓。
+
+---
+
+## 14. 日志里全是原始 JSON，看不出在干什么
 
 **症状**：进度条不动、日志刷 JSON，用户不知道程序在忙什么。
 
