@@ -128,7 +128,10 @@ def lost_patches(builds, exefs, mods, table=None):
 def inspect(folder, keys=None):
     """What a game folder holds, without extracting anything: the GUI's game card and `porter inspect`. keys: prod.keys (default: the configured one), which reads the title ID
     of a dump with neither a ticket nor a [title ID] tag (an untagged cartridge dump) from its NCA headers"""
-    app, fam = nsp.scan_nsps(Path(folder), dumps.EXTS, keys or config.load().get('keys'))
+    p = Path(folder).expanduser()
+    base = p if p.is_file() else None
+    if base is not None: p = p.parent
+    app, fam = nsp.scan_nsps(p, dumps.EXTS, keys or config.load().get('keys'), base)
     g, ap = profiles.by_title(app)
     files = [fam['base'], *(p for _, p in fam['updates']), *(p for _, _, p in fam['dlc'])]
     info = dict(title_id=f'{app:016X}', base=fam['base'].name, updates=[{'version': f'v{v}' if v is not None else None, 'file': p.name} for v, p in fam['updates']],
@@ -164,6 +167,10 @@ class Port:
     def run(self):
         o = self.o
         o.folder = Path(o.folder).expanduser().resolve()
+        o.game = None
+        if o.folder.is_file():    # the game file that was picked: its folder holds the updates and the DLC
+            o.game = o.folder
+            o.folder = o.folder.parent
         if not o.folder.is_dir(): raise BuildError(f'not a folder: {o.folder}')
         version_code('v0', o.vercode_offset); alias_headroom_gb(o.alias_headroom)   # an offset or headroom out of range fails now, not after the shaders
         if o.vulkan_driver:
@@ -207,12 +214,13 @@ class Port:
     # ---- inputs: the folder's games and versions, the profile, the version to pack ----
     def inputs(self):
         o = self.o
-        say(f'game folder: {o.folder}')
-        self.app, self.fam = nsp.scan_nsps(o.folder, dumps.EXTS, o.keys)
+        say(f'game folder: {o.folder}' + (f' (game: {o.game.name})' if o.game else ''))
+        self.app, self.fam = nsp.scan_nsps(o.folder, dumps.EXTS, o.keys, o.game)
         tid = f'{self.app:016X}'
         self.work = o.folder / f'{tid}_build'
         g, ap = profiles.by_title(self.app)
         self.provisional = False
+        self.check_space()      # before the survey, which unpacks the game
         if not (g and ap):
             what = f'no game profile for {tid}' if not g else f'{g.get("name", g.id)} ({g.id}) has a game profile but is not ported to Android yet (no android.tsv in {g.dir})'
             if not o.experimental: raise BuildError(f'{what}: --experimental tries it anyway (profiles: `porter profiles`)')
@@ -235,7 +243,6 @@ class Port:
             if self.derived: say(f'{self.derived}: packing {self.pkg_ver} from a profile derived from it')
         self.versions = [self.pkg_ver] if self.derived else need + ([self.pkg_ver] if self.pkg_ver not in need else [])
         self.have = have
-        self.check_space()
         self.aw = self.work / 'android'; self.logs = self.work / 'logs'
         for d in (self.aw, self.logs, self.work / 'tmp'): d.mkdir(parents=True, exist_ok=True)
         # DM_GAME picks the profile for every tool; WORK keeps their temporary folders inside the build folder (the shader translator writes thousands of files)

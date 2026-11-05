@@ -50,7 +50,8 @@ def ndk_revision(d):   # Pkg.Revision from an NDK folder's source.properties, No
 def find_ndk(cfg=None):
     """(folder, revision) of the NDK to build with: the configured one, ANDROID_NDK_HOME / ANDROID_NDK_ROOT, then the usual install places; r27c is preferred when several are found"""
     cfg = cfg if cfg is not None else config.load()
-    given = [cfg.get('ndk'), os.environ.get('ANDROID_NDK_HOME'), os.environ.get('ANDROID_NDK_ROOT')]
+    # NX2A_NDK: an NDK that ships with the program (the nixport package carries one, see packaging/nixport)
+    given = [cfg.get('ndk'), os.environ.get('NX2A_NDK'), os.environ.get('ANDROID_NDK_HOME'), os.environ.get('ANDROID_NDK_ROOT')]
     for d in filter(None, given):   # an explicit choice is taken as it is, even when it is not r27c (the check says so)
         if ndk_revision(d): return Path(d), ndk_revision(d)
     found = [Path(p) for t in (LOCAL_TOOLS, player_tools()) for p in glob.glob(str(t / 'android-ndk-*'))] + [p for r in _sdk_roots() for p in sorted((r / 'ndk').glob('*'))] + [r / 'ndk-bundle' for r in _sdk_roots()]
@@ -91,6 +92,12 @@ def find_adb(cfg=None):
     return None
 
 
+def _adb_host_unsupported():
+    """Google ships platform-tools for Linux as x86-64 only: an ARM64 Linux host (a phone) cannot run adb"""
+    import platform
+    return sys.platform.startswith('linux') and platform.machine().lower() in ('aarch64', 'arm64')
+
+
 def _importable(m):
     try: return importlib.util.find_spec(m) is not None
     except (ImportError, ValueError): return False
@@ -118,8 +125,11 @@ def checks(cfg=None, keys=None):
     good = [s for s in sdks if int(s.split('.')[0]) >= DOTNET_MAJOR]
     out.append(Check('.NET SDK', bool(good), (f'{", ".join(sdks) or "no SDK"} ({dn})' if dn else 'dotnet not found'), path=str(dn or ''), fix='' if good else f'Download missing tools, or install the .NET SDK {DOTNET_MAJOR} (dotnet.microsoft.com)'))
     adb = find_adb(cfg)
-    out.append(Check('adb', bool(adb), str(adb) if adb else 'not found: the tool cannot install on a device (the APK and data pack are still made)', required=False, path=str(adb or ''),
-                     fix='' if adb else 'Download missing tools, or install Android platform-tools'))
+    if adb: out.append(Check('adb', True, str(adb), required=False, path=str(adb)))
+    elif _adb_host_unsupported(): out.append(Check('adb', False, 'not available on this ARM64 Linux host: Google ships platform-tools for Linux as x86-64 only', required=False,
+                                                    fix='the APK and the data pack are still made; install them from the phone\'s file manager'))
+    else: out.append(Check('adb', False, 'not found: the tool cannot install on a device (the APK and data pack are still made)', required=False, path='',
+                           fix='Download missing tools, or install Android platform-tools'))
     k = keys or cfg.get('keys')
     out.append(Check('prod.keys', bool(k) and Path(k).is_file(), k if k and Path(k).is_file() else (f'no such file: {k}' if k else 'not set'), path=k or '',
                      fix='' if k and Path(k).is_file() else 'dump prod.keys from your own Switch and set its path'))

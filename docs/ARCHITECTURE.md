@@ -1,6 +1,6 @@
 # Architecture
 
-nx2android turns a player's own Switch game files into an Android app. The player picks the game's folder, clicks **Port**, and gets an APK plus the game's data, which the tool can install on a connected device. Every game the tool supports is a **game profile**; everything all games share is the **core**.
+nx2android turns a player's own Switch game files into an Android app. The player picks the game's file, clicks **Port**, and gets an APK plus the game's data, which the tool can install on a connected device. Every game the tool supports is a **game profile**; everything all games share is the **core**.
 
 ```
 gui/  (PySide6 desktop app)
@@ -24,7 +24,7 @@ nxnative/  (our fork of seedds/nxnative + the Android port)
 | **Core, Android runtime** | `nxnative/dm/android/` | Vulkan replay backend (`gfx_vk_*`), the NativeActivity front end (on-screen gamepad, pause menu, settings, the save manager's export and import, text entry with an on-screen keyboard, haptics, shaking the device as shaking the controller, audio, performance hints), the NDK build (`build.py`), the APK writer (`apk/mkapk.py`), the Vulkan shader bundle (`tools/shader_vk.py`), the profile's Android header (`tools/android_profile.py`), the gamepad's layouts (`overlay_default.tsv`: tablet and phone) and its themes (`themes/`: a sprite pack per design, and `themes.tsv`, the table of which game wears which; `themes/README.md`). | Code that depends on a game: no title IDs, game names or per-game branches in code (comments may name the game a rule was found with, as upstream's do). A game that needs something different gets a profile key. |
 | **Game profile** | `nxnative/dm/games/<title ID>/` | Data only: `game.tsv` (upstream keys), shader tables, `patches.py` (per-build rewriter cuts), and `android.tsv` (Android keys, below). | Code paths. |
 | **Port pipeline** | `porter/` | The stages that turn game files into the APK and data pack; the toolchain check; the profile registry; installing over adb. Runs headless. | UI. |
-| **GUI** | `gui/` | Screens over `porter`: setup check, game folder, profile status, options, progress, install. | Pipeline logic: everything it does, the CLI does too. |
+| **GUI** | `gui/` | Screens over `porter`: setup check, game file, profile status, options, progress, install. | Pipeline logic: everything it does, the CLI does too. |
 | **Distribution** | `packaging/` | The player's bundle (`build_bundle.py`, PyInstaller): one executable that is the GUI and the Python the pipeline runs the engine's tools with (`nx2android.py`), the committed `nxnative/` beside it, the install guide (`INSTALL.md`). | Pipeline logic or toolchains. |
 | **Dev tools** | `devtools/` | Scripts for bringing up a game on a connected device (pushing files, screen recording, soak tests, pass traces). The device comes from `devtools/device.json` or `NX2A_DEVICE`. | Anything the port needs. |
 
@@ -49,11 +49,11 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 
 ## The port
 
-`python -m porter port <game folder> -k <prod.keys>` (the GUI's **Port** button) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the APK and the data pack are made again each time (seconds).
+`python -m porter port <game file> -k <prod.keys>` (the GUI's **Port** button) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the APK and the data pack are made again each time (seconds).
 
 | Stage | What | Output (in `<game folder>/<title ID>_build/`) |
 |---|---|---|
-| inputs | Find the base game, updates and DLC (NSP / XCI / NSZ / XCZ), match the profile, pick the version; check the game folder's drive has room (about twice the game files, NSZ / XCZ counted decompressed and once more for their NSP, less an earlier port's build folder) | |
+| inputs | Find the base game, updates and DLC (NSP / XCI / NSZ / XCZ) next to the file that was picked, match the profile, pick the version; check the game folder's drive has room (about twice the game files, NSZ / XCZ counted decompressed and once more for their NSP, less an earlier port's build folder) | |
 | decompress | Only with NSZ / XCZ files that a stage below will read (a reused extraction reads none): each becomes an NSP (an XCZ: an NSP of its secure partition), its NCZs expanded and encrypted again with the keys their section tables carry, every NCA checked against its SHA-256 name (`porter/dumps.py`). Deleted once the DLC are extracted, or when the port fails | `tmp/dumps/` (temporary) |
 | extract | `nx_extract` (built with the .NET SDK) | `extract/<version>/{ExeFS,RomFS}`, `aoc/` |
 | 60 fps | Only with `--fps60` (below): the profile's own cap, or the build's FPSLocker-Warehouse config converted for the host | `android/fpslock/{fpslock.tsv,patches.py,<build ID>.yaml}` |
@@ -134,3 +134,10 @@ The engine is our own fork since 2026-10-29: no subtree pull from upstream, and 
 1. `python -m porter port <folder> --experimental --install`: the survey, a provisional profile and a first try on the device. Bring it up from there with the upstream tools and `devtools/` (docs in `nxnative/docs/agents`): the profile moves to `dm/games/<title ID>/`, fixes go into the core as general rules.
 2. Add `android.tsv` with `status` and `tested`.
 3. `python -m porter port` on its folder, install, play. Raise `status` to `playable` when it is.
+
+## The phone app
+
+`android/` is an Android app (Kotlin, Gradle) that runs the pipeline **on the phone**. It holds no pipeline logic:
+it unpacks the environment (the rootfs from the nixport payload, the build tools, the tool's own tree), starts the
+porter as a guest program and shows its output. The assets are built by `packaging/android-apk/` and are not
+committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).

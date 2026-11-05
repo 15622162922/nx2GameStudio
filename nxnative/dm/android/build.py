@@ -25,9 +25,24 @@ ap.add_argument('--adrenotools', action='store_true', help='also libadrenotools.
 a = ap.parse_args()
 if not (a.exe or a.lib): a.exe = a.lib = True
 
+import platform as _pf, shutil as _sh, stat as _st0
+# An ARM64 phone (Linux, aarch64): Google's NDK ships host tools for x86-64 only, so the compiler is the
+# phone's own clang (on PATH) and the NDK gives the Android sysroot and the compiler-rt runtime libs.
+NX2A_ARM_HOST = sys.platform.startswith('linux') and _pf.machine().lower() in ('aarch64', 'arm64')
 host = 'windows-x86_64' if os.name == 'nt' else 'linux-x86_64' if sys.platform.startswith('linux') else 'darwin-x86_64'
 bin_ = Path(a.ndk) / 'toolchains/llvm/prebuilt' / host / 'bin'
 CC = str(bin_ / ('clang.exe' if os.name == 'nt' else 'clang'))
+if NX2A_ARM_HOST:
+    _sysroot = next(Path(a.ndk).glob('toolchains/llvm/prebuilt/*/sysroot'), None)
+    _res = next(iter(sorted(Path(a.ndk).glob('toolchains/llvm/prebuilt/*/lib/clang/*')))), None)   # the NDK's resource dir: the builtin headers and the compiler-rt
+    _sys_clang = _sh.which('clang')
+    if not (_sysroot and _res and _sys_clang):
+        sys.exit('aarch64 host: need the NDK (its sysroot and runtime libs) and clang on PATH')
+    _wd = Path(a.out if a.out else DM / 'android/out'); _wd.mkdir(parents=True, exist_ok=True)
+    _wrap = _wd / 'cc-arm'
+    _wrap.write_text(f'#!/bin/sh\nexec {_sys_clang} --sysroot={_sysroot} -resource-dir={_res} -rtlib=compiler-rt "$@"\n')
+    _wrap.chmod(_wrap.stat().st_mode | _st0.S_IXUSR)
+    CC = str(_wrap)
 TARGET = f'--target=aarch64-linux-android{a.api}'
 out = Path(a.out) if a.out else DM / 'android/out' / (a.game + ('-release' if a.release else ''))
 DBG = [] if a.release else ['-g']
@@ -40,6 +55,10 @@ subprocess.run([sys.executable, str(DM / 'android/tools/android_profile.py'), 'h
 
 # the backend's own small shaders (dm/android/shaders): compiled with the NDK's glslc, embedded as gen/<name>_<stage>.spv.h
 GLSLC = Path(a.ndk) / 'shader-tools' / host / ('glslc.exe' if os.name == 'nt' else 'glslc')
+if NX2A_ARM_HOST:   # the NDK's shader-tools are host binaries for x86-64: the phone's own glslc
+    _glslc = _sh.which('glslc')
+    if not _glslc: sys.exit('aarch64 host: glslc not found (install the shaderc tools, or put glslc on PATH)')
+    GLSLC = Path(_glslc)
 for sh in sorted((DM / 'android/shaders').glob('*.*')):
     hdr = gen / a.game / f'{sh.stem}_{sh.suffix[1:]}.spv.h'
     if hdr.exists() and hdr.stat().st_mtime >= sh.stat().st_mtime: continue
@@ -119,7 +138,10 @@ if a.lib:
     print(r.stderr.strip() if r.returncode else f'linked {out / "libdmhost.so"}', file=sys.stderr if r.returncode else sys.stdout)
     if r.returncode: sys.exit(1)
     if a.release:   # the static symbol table goes too (the dynamic one stays: ANativeActivity_onCreate)
-        subprocess.run([str(bin_ / ('llvm-strip.exe' if os.name == 'nt' else 'llvm-strip')), '--strip-unneeded', str(out / 'libdmhost.so')], check=True)
+        _strip = (bin_ / ('llvm-strip.exe' if os.name == 'nt' else 'llvm-strip'))
+        if NX2A_ARM_HOST:   # the NDK's llvm-strip is an x86-64 binary: the phone's own
+            _strip = Path(_sh.which('llvm-strip') or _sh.which('llvm-strip-18') or _sh.which('strip') or _strip)
+        subprocess.run([str(_strip), '--strip-unneeded', str(out / 'libdmhost.so')], check=True)
         print(f'stripped {out / "libdmhost.so"}: {(out / "libdmhost.so").stat().st_size // 1024} KB')
 
 # --adrenotools: libadrenotools.so (gfx_vk_core.c vk_init loads a custom Vulkan driver through it, DM_VK_DRIVER) and the hooks it loads from the APK's library folder,

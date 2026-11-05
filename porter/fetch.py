@@ -45,6 +45,11 @@ def _dotnet_rid():
     return f'{os_}-{"arm64" if platform.machine().lower() in ("arm64", "aarch64") else "x64"}'
 
 
+def _adb_available():
+    """Google ships platform-tools for Linux as x86-64 only: an ARM64 Linux host (a phone) cannot run adb, so it is not fetched there"""
+    return not (sys.platform.startswith('linux') and platform.machine().lower() in ('aarch64', 'arm64'))
+
+
 def _google(index, path, name, folder):
     """The archive of SDK package `path` for this OS in Google's index"""
     for p in index.iter('remotePackage'):
@@ -72,7 +77,9 @@ def _dotnet():
 def missing(cfg=None):
     """The doctor's rows a download can fix: NDK r27c, .NET SDK 10, adb"""
     rows = {r.name: r for r in toolchain.checks(cfg)}
-    return [n for n in ('Android NDK', '.NET SDK', 'adb') if not rows[n].ok]
+    names = ['Android NDK', '.NET SDK', 'adb']
+    if not _adb_available(): names.remove('adb')
+    return [n for n in names if not rows[n].ok]
 
 
 def plan(names=None):
@@ -80,6 +87,8 @@ def plan(names=None):
     names = missing() if names is None else names
     out, index = [], None
     for n in names:
+        if n == 'adb' and not _adb_available():
+            raise BuildError('adb: Google ships platform-tools for Linux as x86-64 only, so it cannot run on this ARM64 Linux host')
         if n in ('Android NDK', 'adb') and index is None: index = ET.fromstring(_get(GOOGLE_INDEX))
         if n == 'Android NDK': out.append(_google(index, NDK_PACKAGE, n, f'android-ndk-{toolchain.NDK_RELEASE}'))
         elif n == 'adb': out.append(_google(index, 'platform-tools', n, 'platform-tools'))

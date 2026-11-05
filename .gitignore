@@ -26,3 +26,10 @@ title.keys
 
 # The player bundle (python packaging/build_bundle.py)
 /dist/
+
+# The phone app: the payload it ships (the rootfs, the build tools) and the Gradle build
+/packaging/android-apk/.cache/
+/android/build/
+/android/app/build/
+/android/.gradle/
+/android/local.properties

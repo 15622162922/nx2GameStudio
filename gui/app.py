@@ -1,5 +1,5 @@
 # The nx2android desktop app: four tabs over porter.
-#   Port   pick the game folder (porter inspect), options, Port (porter port --progress json): the stage list, the current stage's bar, the log; then open or install the result
+#   Port   pick the game file (porter inspect), options, Port (porter port --progress json): the stage list, the current stage's bar, the log; then open or install the result
 #   Setup  the tools a port needs (porter doctor), downloading the missing ones (porter tools --download), and the saved settings (porter.config): prod.keys, the NDK,
 #          dotnet, adb, the output folder, the device
 #   Games  the game profiles (porter profiles --all)
@@ -55,11 +55,11 @@ class PortTab(QWidget):
         self.porter = Porter(self); self.porter.event.connect(self.on_event); self.porter.finished.connect(self.on_finished)
         v = QVBoxLayout(self)
 
-        self.folder = QLineEdit(); self.folder.setPlaceholderText('the folder with the game\'s NSP / XCI / NSZ / XCZ files (base game, update, DLC)')
+        self.folder = QLineEdit(); self.folder.setPlaceholderText('the game file (.nsp / .xci / .nsz / .xcz): the updates and the DLC next to it are taken too')
         self.folder.editingFinished.connect(self.inspect)
         g = QGroupBox('Game'); gl = QVBoxLayout(g)
         gl.addWidget(path_row(self.folder, self.pick_folder))
-        self.card = QLabel('Choose a game folder.'); self.card.setWordWrap(True); self.card.setTextFormat(Qt.RichText); self.card.setMinimumHeight(60)
+        self.card = QLabel('Choose a game file.'); self.card.setWordWrap(True); self.card.setTextFormat(Qt.RichText); self.card.setMinimumHeight(60)
         gl.addWidget(self.card)
         v.addWidget(g)
 
@@ -67,7 +67,7 @@ class PortTab(QWidget):
         self.app_name = QLineEdit(); self.app_name.setPlaceholderText('the game\'s name')
         self.language = QComboBox()
         for code, name in LANGUAGES: self.language.addItem(name, code)
-        self.out = QLineEdit(); self.out.setPlaceholderText('the game folder')
+        self.out = QLineEdit(); self.out.setPlaceholderText("the game's folder")
         self.install = QCheckBox('Install on the device when done')
         self.device = QComboBox(); self.device.setMinimumWidth(260)
         refresh = QPushButton('Refresh'); refresh.clicked.connect(self.refresh_devices)
@@ -125,9 +125,11 @@ class PortTab(QWidget):
         self.tick = QTimer(self); self.tick.timeout.connect(self.on_tick); self.tick.start(1000)
         self.refresh_devices()
 
-    # ---- the game folder ----
+    # ---- the game file ----
     def pick_folder(self):
-        d = QFileDialog.getExistingDirectory(self, 'Game folder', self.folder.text() or str(Path.home()))
+        # the game file, not its folder: the updates and the DLC next to it are found by themselves
+        d = QFileDialog.getOpenFileName(self, 'Game file', self.folder.text() or str(Path.home()),
+                                        'Switch games (*.nsp *.xci *.nsz *.xcz);;All files (*)')[0]
         if d: self.folder.setText(d); self.inspect()
 
     def pick_driver(self):
@@ -142,14 +144,14 @@ class PortTab(QWidget):
         d = self.folder.text().strip()
         self.info = None; self.port_btn.setEnabled(False)
         if not d: return
-        if not Path(d).is_dir(): self.card.setText(f'<span style="color:#c62828">Not a folder: {d}</span>'); return
-        self.card.setText('Reading the game folder…')
+        if not Path(d).exists(): self.card.setText(f'<span style="color:#c62828">Not found: {d}</span>'); return
+        self.card.setText('Reading the game…')
         call_json(self, ['inspect', d, '--json'], self.on_inspect)
 
     def on_inspect(self, info, code):
         err = info
         self.info = info = None if info and info.get('error') else info
-        if not info: self.card.setText('<span style="color:#c62828">' + ((err or {}).get('error') or 'No game found in this folder (an NSP, XCI, NSZ or XCZ with a title ID).') + '</span>'); return
+        if not info: self.card.setText('<span style="color:#c62828">' + ((err or {}).get('error') or 'No game found (an NSP, XCI, NSZ or XCZ with a title ID).') + '</span>'); return
         a = info.get('android') or {}
         st = a.get('status', 'ios only' if info.get('profile') else 'not supported')
         col = STATUS_COLOUR.get(st, '#c62828')
@@ -303,7 +305,7 @@ class SetupTab(QWidget):
         s = QGroupBox('Settings'); f = QFormLayout(s); self.edits = {}
         for key, label, kind in self.FIELDS:
             e = QLineEdit(); self.edits[key] = e
-            e.setPlaceholderText({'ndk': 'found automatically', 'dotnet': 'found automatically', 'adb': 'found automatically', 'out': 'the game folder', 'device': 'the only connected device'}.get(key, ''))
+            e.setPlaceholderText({'ndk': 'found automatically', 'dotnet': 'found automatically', 'adb': 'found automatically', 'out': "the game's folder", 'device': 'the only connected device'}.get(key, ''))
             f.addRow(label, e if kind == 'text' else path_row(e, lambda _=False, k=key, kd=kind: self.pick(k, kd)))
         row = QHBoxLayout(); save = QPushButton('Save and check'); save.clicked.connect(self.save); row.addStretch(1); row.addWidget(save)
         f.addRow('', row)

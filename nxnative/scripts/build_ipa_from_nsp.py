@@ -442,22 +442,38 @@ def version_of(path):
     return int(m.group(1)) if m else None
 
 
-def scan_nsps(nsp_dir, exts=('nsp', 'xci'), keys=None):
+def _app_of_tid(tid):
+    """The application title ID of a title ID: the base game's, an update's or a DLC's"""
+    low = tid & 0xFFF   # base …000, update …800, DLC = base + 0x1000 + index
+    return tid if low == 0 else tid & ~0xFFF if low == 0x800 else (tid & ~0xFFF) - 0x1000
+
+
+def scan_nsps(nsp_dir, exts=('nsp', 'xci'), keys=None, base=None):
     """Group by game: {application title ID: {'base': path, 'updates': [(version, path)], 'dlc': [(title ID, version, path)]}}. exts: the kinds of dump to take (the Android porter adds nsz, xcz);
-    keys: prod.keys, whose header_key reads the title ID of a dump with neither a ticket nor a [title ID] tag from its NCA headers"""
+    keys: prod.keys, whose header_key reads the title ID of a dump with neither a ticket nor a [title ID] tag from its NCA headers; base: the game file that was picked (the folder may hold
+    other games: they are left out, and the updates and the DLC of this one are taken)"""
     fams, unknown = {}, []
     hk = header_key(keys) if keys else None
+    want = None
+    if base is not None:
+        bt = title_of(base, hk)
+        want = _app_of_tid(bt) if bt is not None else None
     for p in sorted(p for e in exts for p in nsp_dir.glob(f'*.{e}')):   # a base game may be a cartridge dump (.xci: Monster Hunter Rise); nx_extract reads its secure partition
         if p.stat().st_size == 0:   # an empty file left by an incomplete download (the Zelda BotW folder holds a 0-byte DLC NSP next to the complete (1).nsp)
             say(f'skipping an empty file: {p.name}'); continue
         tid = title_of(p, hk)
         if tid is None: unknown.append(p); continue
         low = tid & 0xFFF   # base …000, update …800, DLC = base + 0x1000 + index
-        app = tid if low == 0 else tid & ~0xFFF if low == 0x800 else (tid & ~0xFFF) - 0x1000
+        app = _app_of_tid(tid)
+        if want is not None and app != want: continue   # the other games of the folder are not the one that was picked
         f = fams.setdefault(app, {'base': None, 'updates': [], 'dlc': []})
         if low == 0: f['base'] = p
         elif low == 0x800: f['updates'].append((version_of(p), p))
         else: f['dlc'].append((tid, version_of(p), p))
+    if base is not None and want is None and fams:
+        # the picked file's title could not be read (no ticket, no tag): it is the base game
+        fam = next(iter(fams.values()))
+        if fam['base'] is None: fam['base'] = base
     if len(fams) == 1 and len(unknown) == 1 and next(iter(fams.values()))['base'] is None:   # a base game converted from a cartridge may have neither tags nor a ticket; build IDs are checked afterwards
         next(iter(fams.values()))['base'] = unknown[0]
     if not fams:

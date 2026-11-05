@@ -18,7 +18,7 @@ The app:
 python -m gui
 ```
 
-Check the **Setup** tab, choose the game's folder (the base game NSP, XCI, NSZ or XCZ, its update and DLC) on the **Port** tab, and click **Port**.
+Check the **Setup** tab, choose the game's file (the base game NSP, XCI, NSZ or XCZ; its update and DLC next to it are taken too) on the **Port** tab, and click **Port**.
 
 Or the command line:
 
@@ -112,3 +112,26 @@ The commits before 2026-10-28 predate the rule.
 ## nxnative
 
 `nxnative/` started as a squashed git subtree of [seedds/nxnative](https://github.com/seedds/nxnative) (upstream 6034fca, 2026-10-24). Since 2026-10-29 it is our own fork: no `git subtree pull`, cherry-pick or merge from upstream, and the repository has no `upstream` remote (removed 2026-10-31): `origin` is the only one. Upstream's profiles are still a good reference when bringing up a game it has; read them on GitHub (`https://github.com/seedds/nxnative/tree/main/dm/games/<title ID>`) and write our own.
+
+## The phone app
+
+`android/` is an Android app that runs the porter **on the phone**: the game files are turned into an APK on the
+device. It is a shell — the environment (the Linux rootfs from the nixport payload, the build tools, the tool's own
+tree) is unpacked on the first start, and the porter runs inside it; the screen is Android's own.
+
+```bash
+bash packaging/android-apk/build_apk.sh          # the payload and a debug APK
+bash packaging/android-apk/build_apk.sh release  # a release APK
+```
+
+The build needs the `gh` CLI (the rootfs comes from the private supply channel), Python 3.11+ and the Android SDK;
+[packaging/android-apk/README.md](../packaging/android-apk/README.md) has the parts and what the phone can and cannot
+do (no adb: the APK is installed with the system installer and the data pack is copied by the app).
+
+Two changes in the tool itself make it run on an ARM64 Linux host:
+
+- `nxnative/dm/android/build.py` builds the game's host with the phone's own compiler (`NX2A_ARM_HOST`): Google's
+  NDK ships host tools for x86-64 only, so the compiler is the ARM64 LLVM the app carries and the NDK gives the
+  Android sysroot and the compiler-rt.
+- `porter/toolchain.py` finds an NDK that ships with the program (`NX2A_NDK`), and `porter/fetch.py` does not
+  fetch adb on an ARM64 Linux host (Google ships platform-tools for Linux as x86-64 only).
