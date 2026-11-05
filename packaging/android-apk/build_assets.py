@@ -26,6 +26,8 @@ SKIP_DIRS = {'__pycache__', '.git', '.github', '.githooks', '.claude', '.idea', 
 SKIP_FILES = {'.DS_Store'}
 # The Python modules the porter needs on the phone (the desktop GUI's PySide6 is not among them).
 MODULES = ['lz4', 'capstone', 'pillow', 'fonttools', 'pyyaml', 'pycryptodome', 'backports.zstd']
+# The NuGet packages the C# tools need (nx_extract reads the NCAs): the phone restores them from its own folder.
+NUGET = [('LibHac', '0.19.0')]
 
 
 def copy_tree(src: Path, dst: Path, skip=SKIP_DIRS):
@@ -45,6 +47,26 @@ def copy_tree(src: Path, dst: Path, skip=SKIP_DIRS):
             target.parent.mkdir(parents=True, exist_ok=True)
             link = os.readlink(p)
             if not target.exists(): target.symlink_to(link)
+
+
+def nuget_packages(target: Path):
+    """The NuGet packages the tools need, as a local source: the phone has no network, and a restore that
+    waits for a name server that never answers looks like a build that never ends."""
+    print('>> the NuGet packages (the phone builds offline)')
+    packages = target / 'packages'
+    packages.mkdir(parents=True, exist_ok=True)
+    for name, version in NUGET:
+        f = packages / f'{name.lower()}.{version}.nupkg'
+        if not f.exists():
+            url = f'https://www.nuget.org/api/v2/package/{name}/{version}'
+            with urllib.request.urlopen(url) as r, open(f, 'wb') as out:
+                shutil.copyfileobj(r, out, 1 << 20)
+        print(f'   {f.name}')
+    # the restore looks here and nowhere else: no name server, no timeout
+    (target / 'NuGet.config').write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n<configuration>\n  <packageSources>\n    <clear />\n'
+        '    <add key="local" value="packages" />\n  </packageSources>\n</configuration>\n', encoding='utf-8')
+    return target
 
 
 def wheels(target: Path):
@@ -144,6 +166,15 @@ def main():
         copy_tree(src, tool / name)
     # the tool's own patch script (the interpreter paths of the programs the porter starts)
     shutil.copy2(REPO / 'packaging/android-apk/patch_interp.py', tool / 'tools/patch_interp.py')
+    # the C# tools are built on the phone: the NuGet packages they restore have to be there (no network)
+    nuget_packages(tool / 'nxnative' / 'dm' / 'tools' / 'nx_extract')
+    # nx_extract itself: built here for linux-arm64, because the phone's .NET SDK cannot build it (its
+    # globalization mode stops the SDK, and a restore needs the network)
+    nx = tool / 'tools' / 'nx_extract'
+    if not (nx / 'nx_extract').exists():
+        print('>> nx_extract (linux-arm64): the .NET SDK is missing, the phone cannot build the tool')
+    else:
+        print(f'>> nx_extract (linux-arm64) at {nx}')
     if not a.no_wheels:
         wheels(tool / 'pylibs')
 

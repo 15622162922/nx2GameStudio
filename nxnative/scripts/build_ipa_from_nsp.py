@@ -353,6 +353,12 @@ def build_nx_extract(repo, work, logs, env):
     LibHac.dll and the executable are not copied, and the build still reports success"""
     exe = 'nx_extract.exe' if os.name == 'nt' else 'nx_extract'   # Windows (the Android port builds on a PC) gets an .exe apphost
     nx = work / 'tools/nx_extract' / exe
+    pre = os.environ.get('NX2A_NX_EXTRACT')   # a build made earlier: the phone ships one (no SDK, no network)
+    if pre:
+        src = Path(pre)
+        if not (src / exe).exists(): raise BuildError(f'NX2A_NX_EXTRACT has no {exe}: {src}')
+        rmtree(nx.parent); shutil.copytree(src, nx.parent)
+        return nx
     with tempfile.TemporaryDirectory(prefix='nx_extract_') as t:
         run(['dotnet', 'build', repo / 'dm/tools/nx_extract', '-c', 'Release', '-o', t, '-v', 'quiet', '-nologo'], logs / 'nx_extract_build.log', env=env)
         if not (Path(t) / exe).exists(): raise BuildError(f'nx_extract built without an executable (see {logs / "nx_extract_build.log"})')

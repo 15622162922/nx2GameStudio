@@ -1,6 +1,5 @@
 package com.nx.android
 
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -10,26 +9,21 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.text.InputType
-import android.view.Gravity
-import android.view.ViewGroup
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.io.File
 
 /**
  * The phone's screen: the tool's own steps, with the porter's output as the log.
  *
- * The screen is Android's, not a guest window: the porter is a command-line program, and its output is the
+ * The screen is Jetpack Compose (Screen.kt); the porter is a command-line program, and its output is the
  * screen. Everything runs in the app's own folder (Env).
  */
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
 
     companion object { val GAME_EXTS = listOf(".nsp", ".xci", ".nsz", ".xcz") }
 
@@ -37,23 +31,25 @@ class MainActivity : Activity() {
     private lateinit var picker: Picker
     private val ui = Handler(Looper.getMainLooper())
 
-    private lateinit var status: TextView
-    private lateinit var keys: EditText
-    private lateinit var out: EditText
-    private lateinit var folder: EditText
-    private lateinit var touch: CheckBox
-    private lateinit var fps60: CheckBox
-    private lateinit var experimental: CheckBox
-    private lateinit var portButton: Button
-    private lateinit var cancelButton: Button
-    private lateinit var toolsButton: Button
-    private lateinit var storageButton: Button
-    private lateinit var progress: ProgressBar
-    private lateinit var logView: TextView
-    private lateinit var installButton: Button
-    private lateinit var copyButton: Button
+    // ---- what the screen draws ----
+    var status by mutableStateOf("")
+    var stageText by mutableStateOf("")
+    var progress by mutableStateOf(0f)
+    var envReady by mutableStateOf(false)
+    var storageOk by mutableStateOf(false)
+    var unpacking by mutableStateOf(false)
+    var porting by mutableStateOf(false)
+    var hasResult by mutableStateOf(false)
+    var log by mutableStateOf(listOf<String>())
 
-    private var apkPath = ""
+    var keys by mutableStateOf("/sdcard/switch/prod.keys")
+    var out by mutableStateOf("/sdcard/Switch/Ports")
+    var game by mutableStateOf("")
+    var touch by mutableStateOf(false)
+    var fps60 by mutableStateOf(false)
+    var experimental by mutableStateOf(false)
+
+    var apkPath = ""
     private var dataPath = ""
     private var packageName_ = ""
 
@@ -61,9 +57,14 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         env = Env(this)
         picker = Picker(this)
-        setContentView(buildUi())
         loadState()
+        setContent { AppScreen(this) }
         refresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()   // the storage permission may have been given while the app was in the background
     }
 
     // ---- what the user typed stays ----
@@ -72,133 +73,29 @@ class MainActivity : Activity() {
 
     /** The paths and the boxes are remembered: the app is restarted more than once during a port */
     private fun loadState() {
-        keys.setText(prefs.getString("keys", keys.text.toString()))
-        out.setText(prefs.getString("out", out.text.toString()))
-        folder.setText(prefs.getString("game", folder.text.toString()))
-        touch.isChecked = prefs.getBoolean("touch", touch.isChecked)
-        fps60.isChecked = prefs.getBoolean("fps60", fps60.isChecked)
-        experimental.isChecked = prefs.getBoolean("experimental", experimental.isChecked)
+        keys = prefs.getString("keys", keys) ?: keys
+        out = prefs.getString("out", out) ?: out
+        game = prefs.getString("game", game) ?: game
+        touch = prefs.getBoolean("touch", touch)
+        fps60 = prefs.getBoolean("fps60", fps60)
+        experimental = prefs.getBoolean("experimental", experimental)
     }
 
     private fun saveState() {
-        prefs.edit().putString("keys", keys.text.toString().trim()).putString("out", out.text.toString().trim())
-            .putString("game", folder.text.toString().trim()).putBoolean("touch", touch.isChecked)
-            .putBoolean("fps60", fps60.isChecked).putBoolean("experimental", experimental.isChecked).apply()
-    }
-
-    // ---- the screen ----------------------------------------------------------------------------------------
-
-    private fun buildUi(): ViewGroup {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 24)
-        }
-        val scroll = ScrollView(this)
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, 0)
-        }
-        scroll.addView(box)
-        root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        status = text("", 14f)
-        box.addView(status)
-
-        storageButton = button("授予存储访问权限（读取 SD 卡）") { askStorage() }
-        box.addView(storageButton)
-
-        val prepare = button("准备环境（解压 rootfs 与工具）") { unpack() }
-        val reset = button("重置环境（重新解压）") {
-            env.reset()
-            toast("已重置：再点一次「准备环境」")
-        }
-        box.addView(prepare)
-        box.addView(reset)
-
-        box.addView(label("prod.keys（自己的 Switch 导出的）"))
-        keys = input("/sdcard/switch/prod.keys")
-        box.addView(row(keys, button("浏览") { pickFile { path -> keys.setText(path) } }))
-
-        box.addView(label("输出目录"))
-        out = input("/sdcard/Switch/Ports")
-        box.addView(row(out, button("浏览") { pickFolder(out.text.toString()) { path -> out.setText(path) } }))
-
-        box.addView(label("游戏文件（NSP / XCI / NSZ / XCZ）"))
-        folder = input("")
-        box.addView(row(folder, button("浏览") { pickGame() }))
-
-        touch = check("触屏游戏（隐藏手柄）")
-        fps60 = check("60 帧")
-        experimental = check("实验性移植（还没适配的游戏）")
-        box.addView(touch); box.addView(fps60); box.addView(experimental)
-
-        toolsButton = button("检查工具（NDK / .NET / Python）") { tools() }
-        portButton = button("开始移植") { port() }
-        cancelButton = button("取消移植") { cancel() }
-        cancelButton.visibility = android.view.View.GONE
-        box.addView(toolsButton)
-        box.addView(portButton)
-        box.addView(cancelButton)
-
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
-        box.addView(progress)
-
-        installButton = button("安装 APK") { install() }
-        copyButton = button("复制数据包到游戏目录") { copyData() }
-        installButton.visibility = android.view.View.GONE
-        copyButton.visibility = android.view.View.GONE
-        box.addView(installButton)
-        box.addView(copyButton)
-
-        logView = text("", 12f)
-        val logScroll = ScrollView(this).apply {
-            addView(logView)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                (260 * resources.displayMetrics.density).toInt())
-        }
-        box.addView(logScroll)
-        return root
-    }
-
-    private fun text(s: String, size: Float) = TextView(this).apply {
-        text = s
-        textSize = size
-        setPadding(0, 8, 0, 8)
-    }
-
-    private fun label(s: String) = text(s, 13f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) }
-
-    private fun input(value: String) = EditText(this).apply {
-        setText(value)
-        textSize = 14f
-        inputType = InputType.TYPE_CLASS_TEXT
-        setSingleLine()
-    }
-
-    private fun check(s: String) = CheckBox(this).apply { text = s; textSize = 14f }
-
-    private fun button(s: String, onClick: () -> Unit) = Button(this).apply {
-        text = s
-        textSize = 14f
-        setOnClickListener { onClick() }
-    }
-
-    private fun row(vararg views: android.view.View): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        views.forEach { addView(it, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) }
+        prefs.edit().putString("keys", keys.trim()).putString("out", out.trim()).putString("game", game.trim())
+            .putBoolean("touch", touch).putBoolean("fps60", fps60).putBoolean("experimental", experimental).apply()
     }
 
     // ---- the storage ----------------------------------------------------------------------------------------
 
     /** The shared storage: the game files and the ports the tool makes. From Android 11 the old permissions are
      * not enough: the app needs the all-files access, which the user gives once */
-    private fun storageOk(): Boolean {
+    private fun storageGranted(): Boolean {
         if (Build.VERSION.SDK_INT >= 30) return Environment.isExternalStorageManager()
         return checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun askStorage() {
+    fun askStorage() {
         try {
             if (Build.VERSION.SDK_INT >= 30) {
                 startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
@@ -218,61 +115,60 @@ class MainActivity : Activity() {
     // ---- the environment -----------------------------------------------------------------------------------
 
     private fun refresh() {
-        val ok = env.ready
-        status.text = if (ok) "环境就绪" else "环境还没准备好（第一次要解压约 1.6 GB）"
-        if (!storageOk()) status.text = status.text.toString() + "；还没有存储访问权限"
-        storageButton.visibility = if (storageOk()) android.view.View.GONE else android.view.View.VISIBLE
-        portButton.isEnabled = ok && storageOk()
-        toolsButton.isEnabled = ok
+        envReady = env.ready
+        storageOk = storageGranted()
+        if (!porting && !unpacking) {
+            status = when {
+                !storageOk -> "环境已就绪；还没有存储访问权限"
+                envReady -> "环境就绪${if (env.lastCheck.isEmpty()) "" else "（${env.lastCheck}）"}"
+                else -> "环境还没准备好（第一次要解压约 1.6 GB）"
+            }
+        }
     }
-
-    private var unpacking = false
 
     /** What the port is doing now: the stage, its step and how far it is */
     private var stageName = ""
     private var stageStep = ""
     private var stageOf = 0
     private var stages = 0
-    private var ticking = false
-
-    /** The clock of the running port: the elapsed time moves on its own */
-    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private var startedAt = 0L
 
-    private fun tick() {
-        ticker.postDelayed({
-            if (startedAt > 0 && stageOf > 0) showStatus(startedAt)
-            tick()
-        }, 1000)
+    /** The clock of the running port: the elapsed time moves on its own */
+    private val ticker = Handler(Looper.getMainLooper())
+    private val tick = object : Runnable {
+        override fun run() {
+            if (startedAt > 0 && stageOf > 0) showStatus()
+            ticker.postDelayed(this, 1000)
+        }
     }
 
     /** The line under the buttons: the stage, its step and the time it has taken */
-    private fun showStatus(started: Long) {
-        val secs = (System.currentTimeMillis() - started) / 1000
+    private fun showStatus() {
+        val secs = (System.currentTimeMillis() - startedAt) / 1000
         val where = if (stageOf > 0) "阶段 $stageOf/$stages：" else ""
         val what = if (stageStep.isEmpty()) stageName else "$stageName · $stageStep"
-        status.text = "$where$what  （${secs / 60} 分 ${secs % 60} 秒）"
-        if (stageOf > 0 && stages > 0 && progress.progress < (stageOf - 1) * 100 / stages)
-            progress.progress = (stageOf - 1) * 100 / stages
+        stageText = "$where$what　（${secs / 60} 分 ${secs % 60} 秒）"
+        if (stageOf > 0 && stages > 0 && progress < (stageOf - 1) * 100f / stages)
+            progress = (stageOf - 1) * 100f / stages
     }
 
-    private fun unpack() {
+    fun unpack() {
         if (unpacking) { toast("正在准备中"); return }
         unpacking = true
+        status = "正在准备…"
         Thread {
             try {
-                env.unpack { step -> ui.post { status.text = "正在准备：$step" } }
+                env.unpack { step -> ui.post { status = "正在准备：$step" } }
                 ui.post {
                     unpacking = false
-                    status.text = "环境就绪${if (env.lastCheck.isEmpty()) "" else "（${env.lastCheck}）"}"
-                    portButton.isEnabled = storageOk()
-                    toolsButton.isEnabled = true
+                    envReady = env.ready
+                    status = "环境就绪${if (env.lastCheck.isEmpty()) "" else "（${env.lastCheck}）"}"
                 }
             } catch (e: Exception) {
                 // the whole failure in the log: the next round should not need the device to find out
                 ui.post {
                     unpacking = false
-                    status.text = "准备失败：${e.message}"
+                    status = "准备失败：${e.message}"
                     say("准备失败：${e.javaClass.name}: ${e.message}")
                     e.stackTrace.take(12).forEach { say("    at $it") }
                 }
@@ -280,45 +176,52 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    fun resetEnv() {
+        env.reset()
+        toast("已重置：再点一次「准备环境」")
+    }
+
     // ---- the tool ------------------------------------------------------------------------------------------
 
-    private fun tools() {
-        say("检查工具…\n")
+    fun tools() {
+        say("检查工具…")
         Thread {
             try {
                 // the .NET SDK and the compiler are Linux programs: their interpreter path has to point at our
                 // rootfs, or they cannot start at all
-                say("改写解释器路径…\n")
+                say("改写解释器路径…")
                 env.patchInterpreters()
-                ui.post { say("好了\n") }
-                runGuest(listOf("-m", "porter", "doctor")) { line -> ui.post { say(line) } }
+                ui.post { say("好了") }
+                // the keys are given on the command line: the doctor would look at the saved setting and
+                // report them as missing
+                val k = keys.trim()
+                val doctor = if (k.isNotEmpty()) listOf("-m", "porter", "doctor", "-k", k) else listOf("-m", "porter", "doctor")
+                runGuest(doctor) { line -> ui.post { say(line) } }
             } catch (e: Exception) {
                 ui.post { say("失败：${e.message}") }
             }
         }.start()
     }
 
-    private fun port() {
-        val f = folder.text.toString().trim()
+    fun port() {
+        val f = game.trim()
         if (f.isEmpty()) { toast("先选游戏文件"); return }
-        val k = keys.text.toString().trim()
+        val k = keys.trim()
         if (k.isEmpty()) { toast("先填 prod.keys 的路径"); return }
-        if (!storageOk()) { toast("还没有存储访问权限"); return }
+        if (!storageGranted()) { toast("还没有存储访问权限"); return }
         apkPath = ""; dataPath = ""
-        installButton.visibility = android.view.View.GONE
-        copyButton.visibility = android.view.View.GONE
-        val args = mutableListOf("-m", "porter", "port", f, "-k", k, "-o", out.text.toString().trim(), "--progress", "json")
-        if (touch.isChecked) args += "--touch"
-        if (fps60.isChecked) args += "--fps60"
-        if (experimental.isChecked) args += "--experimental"
+        hasResult = false
+        val args = mutableListOf("-m", "porter", "port", f, "-k", k, "-o", out.trim(), "--progress", "json")
+        if (touch) args += "--touch"
+        if (fps60) args += "--fps60"
+        if (experimental) args += "--experimental"
         saveState()
-        say("移植开始：$f\n")
-        portButton.isEnabled = false
-        cancelButton.visibility = android.view.View.VISIBLE
-        val started = System.currentTimeMillis()
-        startedAt = started
+        say("移植开始：$f")
+        porting = true
+        progress = 0f
+        startedAt = System.currentTimeMillis()
         stageName = ""; stageStep = ""; stageOf = 0; stages = 0
-        if (!ticking) { ticking = true; tick() }
+        ticker.removeCallbacks(tick); ticker.post(tick)
         Thread {
             try {
                 runGuest(args) { line ->
@@ -331,39 +234,37 @@ class MainActivity : Activity() {
                                 stageOf = ev.optInt("k"); stages = ev.optInt("n")
                                 stageName = ev.optString("name"); stageStep = ""
                                 say("▶ 阶段 $stageOf/$stages：$stageName")
-                                showStatus(started)
+                                showStatus()
                             }
                             "progress" -> {
                                 val frac = ev.optDouble("frac", -1.0)
-                                if (frac >= 0) progress.progress = (frac * 100).toInt()
+                                if (frac >= 0) progress = (frac * 100).toInt().toFloat()
                                 val name = ev.optString("name"); val step = ev.optString("step")
                                 if (name.isNotEmpty()) stageName = name
                                 if (step.isNotEmpty() && step != stageStep) { stageStep = step; say("  · $stageName $step") }
-                                showStatus(started)
+                                showStatus()
                             }
                             "result" -> {
                                 apkPath = ev.optString("apk"); dataPath = ev.optString("data")
                                 packageName_ = ev.optString("package")
-                                installButton.visibility = android.view.View.VISIBLE
-                                copyButton.visibility = android.view.View.VISIBLE
-                                progress.progress = 100
-                                status.text = "完成：$apkPath"
+                                hasResult = true
+                                progress = 1f
+                                status = "完成：$apkPath"
                             }
                         }
                     }
                 }
                 ui.post {
-                    status.text = if (apkPath.isEmpty()) "移植结束（没有产出 APK）：看看上面的日志" else "完成：$apkPath"
-                    portButton.isEnabled = true
-                    cancelButton.visibility = android.view.View.GONE
+                    porting = false
                     startedAt = 0
+                    status = if (apkPath.isEmpty()) "移植结束（没有产出 APK）：看看日志" else "完成：$apkPath"
                 }
             } catch (e: Exception) {
                 ui.post {
-                    status.text = "失败：${e.message}"; say("失败：${e.message}")
-                    portButton.isEnabled = true
-                    cancelButton.visibility = android.view.View.GONE
+                    porting = false
                     startedAt = 0
+                    status = "失败：${e.message}"
+                    say("失败：${e.message}")
                 }
             }
         }.start()
@@ -391,12 +292,12 @@ class MainActivity : Activity() {
      */
     private fun killGuests() {
         val me = android.os.Process.myPid()
-        for (d in java.io.File("/proc").listFiles() ?: return) {
+        for (d in File("/proc").listFiles() ?: return) {
             if (!d.name.all { it.isDigit() }) continue
             val pid = d.name.toLong()
             if (pid == me.toLong()) continue
             try {
-                val cmd = java.io.File(d, "cmdline").readText()
+                val cmd = File(d, "cmdline").readText()
                 if (cmd.contains("python3.13") || cmd.contains("dotnet") || cmd.contains("ld-linux") ||
                     cmd.contains("clang") || cmd.contains("nx_extract")) {
                     android.os.Process.killProcess(pid.toInt())
@@ -407,7 +308,7 @@ class MainActivity : Activity() {
     }
 
     /** Stops the port: the guest program and the tools it started */
-    private fun cancel() {
+    fun cancel() {
         val p = running ?: return
         try {
             p.destroyForcibly()
@@ -415,41 +316,44 @@ class MainActivity : Activity() {
         }
         killGuests()
         running = null
-        say("已取消\n")
-        status.text = "已取消"
-        portButton.isEnabled = true
-        cancelButton.visibility = android.view.View.GONE
+        say("已取消")
+        status = "已取消"
+        porting = false
         startedAt = 0
     }
 
     // ---- the pickers ----------------------------------------------------------------------------------------
 
-    private fun pickFile(onPick: (String) -> Unit) {
+    fun pickKeys() {
         try {
-            picker.file(onPick)
+            picker.file { path -> keys = path; saveState() }
         } catch (e: Exception) {
             // this tablet has no app that handles the system picker: the app's own list takes over
-            say("系统没有文件选择器，用应用内的列表\n")
-            pickOwn(keys.text.toString(), false) { path -> keys.setText(path); saveState() }
+            say("系统没有文件选择器，用应用内的列表")
+            pickOwn(keys, false) { path -> keys = path; saveState() }
         }
     }
 
-    private fun pickFolder(start: String, onPick: (String) -> Unit) {
-        try {
-            picker.tree(start, onPick)
-        } catch (e: Exception) {
-            say("系统没有文件选择器，用应用内的列表\n")
-            pickOwn(start, true) { path -> onPick(path) }
-        }
+    fun pickOutput() {
+        pickFolder(out) { path -> out = path; saveState() }
     }
 
     /**
      * The game file: the folder is picked first (a real path on the card), then the game file in it. The
      * updates and the DLC next to it are found by the tool itself.
      */
-    private fun pickGame() {
-        val start = folder.text.toString().trim().ifEmpty { "/sdcard" }
-        pickFolder(start) { dir -> pickOwn(dir, false, true) { file -> folder.setText(file); saveState() } }
+    fun pickGame() {
+        val start = game.trim().ifEmpty { "/sdcard" }
+        pickFolder(start) { dir -> pickOwn(dir, false, true) { file -> game = file; saveState() } }
+    }
+
+    private fun pickFolder(start: String, onPick: (String) -> Unit) {
+        try {
+            picker.tree(start, onPick)
+        } catch (e: Exception) {
+            say("系统没有文件选择器，用应用内的列表")
+            pickOwn(start, true) { path -> onPick(path) }
+        }
     }
 
     /** The app's own folder list: the folders of a path, and the files of it */
@@ -470,10 +374,9 @@ class MainActivity : Activity() {
             }
         } catch (e: Exception) {
         }
-        val items = names.map { it }.toTypedArray()
         android.app.AlertDialog.Builder(this)
             .setTitle(path)
-            .setItems(items) { _, which ->
+            .setItems(names.toTypedArray()) { _, which ->
                 if (names[which] == "..") pickOwn(paths[which], foldersOnly, gameFiles, onPick)
                 else if (foldersOnly) pickOwn(paths[which], foldersOnly, gameFiles, onPick)
                 else onPick(paths[which])
@@ -486,15 +389,15 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         try {
-            if (picker.onResult(requestCode, resultCode, data)) say("已选择\n")
+            if (picker.onResult(requestCode, resultCode, data)) say("已选择")
         } catch (e: Exception) {
-            say("选择失败：${e.message}\n")
+            say("选择失败：${e.message}")
         }
     }
 
     // ---- after the port ------------------------------------------------------------------------------------
 
-    private fun install() {
+    fun install() {
         if (apkPath.isEmpty()) return
         val apk = File(apkPath)
         if (!apk.exists()) { toast("找不到 $apkPath"); return }
@@ -511,7 +414,7 @@ class MainActivity : Activity() {
     }
 
     /** Copies the data pack into the game's own folder, where the game reads it */
-    private fun copyData() {
+    fun copyData() {
         if (dataPath.isEmpty() || packageName_.isEmpty()) return
         Thread {
             try {
@@ -528,16 +431,33 @@ class MainActivity : Activity() {
 
     // ---- the log --------------------------------------------------------------------------------------------
 
-    /** A line in the log. It may come from a worker thread: the view belongs to the main thread */
+    /**
+     * A line in the log. It may come from a worker thread: the state belongs to the main thread. The log is
+     * also written to a file (files/nx2a/log.txt), so that it can be read off the phone when something goes wrong.
+     */
     private fun say(s: String) {
         ui.post {
-            logView.append(s + "\n")
-            // a long port writes a lot: the log keeps the last lines
-            val lines = logView.text.toString().split("\n")
-            if (lines.size > 400) logView.text = lines.takeLast(300).joinToString("\n")
-            val scroll = logView.parent as? ScrollView
-            scroll?.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+            log = (log + s).takeLast(400)
+            try {
+                val w = logWriter ?: java.io.BufferedWriter(java.io.FileWriter(logFile(), true)).also { logWriter = it }
+                w.write(s + "\n")
+                w.flush()
+            } catch (e: Exception) {
+            }
         }
+    }
+
+    private var logWriter: java.io.BufferedWriter? = null
+
+    /** Where the log is written */
+    private fun logFile(): java.io.File {
+        val f = java.io.File(filesDir, "nx2a/log.txt")
+        f.parentFile?.mkdirs()
+        return f
+    }
+
+    fun clearLog() {
+        log = listOf()
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()

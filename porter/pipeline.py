@@ -217,7 +217,11 @@ class Port:
         say(f'game folder: {o.folder}' + (f' (game: {o.game.name})' if o.game else ''))
         self.app, self.fam = nsp.scan_nsps(o.folder, dumps.EXTS, o.keys, o.game)
         tid = f'{self.app:016X}'
-        self.work = o.folder / f'{tid}_build'
+        # the build folder: where the port's own programs run and where the game is unpacked. On a phone it
+        # cannot be next to the game (Android does not let an app run a program on the shared storage), so
+        # NX2A_WORK points at the app's own folder.
+        root = Path(os.environ.get('NX2A_WORK', '')).expanduser() if os.environ.get('NX2A_WORK') else o.folder
+        self.work = root / f'{tid}_build'
         g, ap = profiles.by_title(self.app)
         self.provisional = False
         self.check_space()      # before the survey, which unpacks the game
@@ -254,8 +258,11 @@ class Port:
         files = [f for f in self.o.folder.iterdir() if f.is_file() and f.suffix.lower()[1:] in dumps.EXTS]
         game, temp = sum(dumps.size(f) for f in files), sum(dumps.size(f) for f in files if dumps.compressed(f))
         built = sum(f.stat().st_size for f in self.work.rglob('*') if f.is_file()) if self.work.is_dir() else 0
-        need, free = max(0, 2 * game + temp - built) + 2**30, shutil.disk_usage(self.o.folder).free
-        if free < need: raise BuildError(f'not enough disk space on {self.o.folder.anchor}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
+        # the work folder may not be there yet: the space is the one of the folder that will hold it
+        where = self.work
+        while not where.exists() and where.parent != where: where = where.parent
+        need, free = max(0, 2 * game + temp - built) + 2**30, shutil.disk_usage(where).free
+        if free < need: raise BuildError(f'not enough disk space on {where.anchor}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
 
     def use_profile_dir(self, pdir, first):   # every tool finds the game's profile in pdir (game.py DM_GAMES_DIR; first: before dm/games)
         dirs = [str(pdir)] + [d for d in os.environ.get('DM_GAMES_DIR', '').split(os.pathsep) if d and d != str(pdir)]

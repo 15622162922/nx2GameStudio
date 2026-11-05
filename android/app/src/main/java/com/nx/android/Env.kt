@@ -49,11 +49,20 @@ class Env(private val ctx: Context) {
             "NX2A_HOME" to nxHome.absolutePath,
             "NX2A_NDK" to "${tool}/toolchain/ndk",
             "NX2A_REPO" to tool.absolutePath,
+            // nx_extract is built on the computer and shipped: the phone's .NET SDK cannot restore packages
+            // (no network) and its globalization mode makes the SDK itself crash
+            "NX2A_NX_EXTRACT" to "${tool}/tools/nx_extract",
+            // the build folder: Android does not let the app run a program on the shared storage, so the
+            // port's own tools and the unpacked game live in the app's own folder
+            "NX2A_WORK" to "${files}/work",
             "PYTHONUNBUFFERED" to "1",
             "PYTHONIOENCODING" to "utf-8",
             "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT" to "1",
             "DOTNET_EnableWriteXorExecute" to "0",
             "DOTNET_CLI_TELEMETRY_OPTOUT" to "1",
+            "DOTNET_SKIP_FIRST_TIME_EXPERIENCE" to "1",
+            // the NuGet packages are restored from the app's own folder: the phone has no network
+            "NUGET_PACKAGES" to "${nxHome}/nuget",
         )
     }
 
@@ -129,6 +138,7 @@ class Env(private val ctx: Context) {
         }
         // the tool's own scripts are small and change with the app: they are always the ones that are here
         copyAssets("tool/tools", File(tool, "tools"))
+        fixGlobalization()
         step("the interpreter paths")
         patchInterpreters()
         step("the check")
@@ -224,7 +234,7 @@ class Env(private val ctx: Context) {
         val script = File(tool, "tools/patch_interp.py")
         if (!script.exists()) return
         val targets = listOf(File(tool, "toolchain"), File(rootfs, "usr/bin"), File(rootfs, "usr/sbin"),
-                              File(nxHome, "toolchains"))
+                              File(nxHome, "toolchains"), File(tool, "tools/nx_extract"))
             .filter { it.exists() }
         nxHome.mkdirs()
         for (t in targets) {
@@ -253,6 +263,24 @@ class Env(private val ctx: Context) {
      * The permissions of the tool's tree, as the build wrote them: the patch's write may have taken the execute
      * bit away, and a program that cannot be started cannot be patched either.
      */
+    /**
+     * The .NET SDK on the phone stops itself without ICU (the rootfs has none): the runtime config has to
+     * declare the invariant mode, and the SDK's own files have to be told.
+     */
+    private fun fixGlobalization() {
+        val script = File(tool, "tools/fix_globalization.py")
+        val sdk = File(nxHome, "toolchains/dotnet")
+        if (!script.exists() || !sdk.isDirectory) return
+        try {
+            val p = guest(listOf(script.absolutePath, sdk.absolutePath))
+            val out = p.inputStream.bufferedReader().readText()
+            p.waitFor()
+            Log.i(TAG, "globalization: ${out.trim()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "globalization: ${e.message}")
+        }
+    }
+
     private fun restoreModes() {
         var n = 0
         for ((path, mode) in modes) {
