@@ -131,7 +131,52 @@ os.replace(tmp, path)
 
 ---
 
-## 10. 日志里全是原始 JSON，看不出在干什么
+## 10. NuGet 的配置名在 Linux 上大小写敏感 → restore 去连网，然后一直等
+
+**症状**：手机上 `dotnet build` 停在 "Determining projects to restore..."，十几分钟不动。
+
+**原因**：`nx_extract` 依赖 NuGet 包 **LibHac**（.NET 的 C# 项目要 restore 依赖）。我们把包和源都放进
+手机（`packages/libhac.0.19.0.nupkg` + `NuGet.config`），但 **NuGet 在 Linux 上只认小写的 `nuget.config`**
+（Windows 大小写不敏感，所以 `NuGet.config` 在 PC 上没问题 ✗）→ 配置没被读到 → 走默认源 nuget.org →
+手机没有 DNS → 一直等 ✗。
+
+**改法**：文件名用小写 `nuget.config` ✓；配置里 `<clear />` 再只留本地目录源 ✓，这样根本不会去连网。
+
+---
+
+## 11. .NET 9+ 的 invariant globalization 必须写在 runtimeconfig 里，否则 SDK 自己崩
+
+**症状**：`dotnet` 命令直接 Aborted（FailFast），栈里有 `GlobalizationMode.Settings..cctor()`；
+MSBuild 的 worker 节点一崩，主节点就永远等它握手（线程停在 `wait_for_partner`）→ 表现成"卡死" ✗。
+
+**原因**：rootfs 里没有 ICU ✗ → .NET 只能用 invariant 模式 → 但 .NET 9 起，
+**只设 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` 会 FailFast**，必须在 runtimeconfig 里声明
+`"System.Globalization.Invariant": true` ✓（SDK 自己的 36 个 runtimeconfig ✗）。
+
+**改法**：`packaging/android-apk/.cache/assets/tool/tools/fix_globalization.py` 给 SDK 的每个 runtimeconfig
+补上这个声明 ✓，App 解包完就自动跑一次 ✓。
+
+**顺带**：手机上的 .NET SDK 仍然编不了 C#（restore 要网 ✗）→ 所以 `nx_extract` 改成**在电脑上交叉编译
+linux-arm64 版随 APK 打包**（`build_nx_extract.py` ✓），手机上直接跑（`NX2A_NX_EXTRACT` ✓），
+一分钟的编译变成零秒 ✓。
+
+---
+
+## 12. Android 不允许在共享存储上执行程序 → build 目录必须放在 App 自己的目录里
+
+**症状**：预编译的 `nx_extract` 复制到游戏旁边的 `<游戏目录>/<title>_build/tools/` 后，
+`PermissionError: [Errno 13] Permission denied`（执行被拒 ✗）。
+
+**原因**：SELinux 不允许 App 在 media 分区（`/sdcard` ✗）上 exec ✗；游戏的 build 目录正好在 SD 卡上 ✗。
+
+**改法**：build 目录改到 App 自己的存储（`NX2A_WORK` ✓ → `files/work/<title>_build` ✓），
+产物（APK 和数据包）仍然写到 `-o` 指的地方 ✓；空间检查也跟着改成看 build 目录所在的盘 ✓。
+（注意：`check_space` 里 `shutil.disk_usage(self.work)` 在目录还没建时会抛 FileNotFoundError ✗，
+要取最近的已存在的祖先目录 ✓。）
+
+---
+
+## 13. 日志里全是原始 JSON，看不出在干什么
 
 **症状**：进度条不动、日志刷 JSON，用户不知道程序在忙什么。
 
@@ -164,4 +209,10 @@ adb shell df -h /data
 
 # 5) App 自己的日志
 adb logcat -s Nx2aEnv
+
+# 6) App 的日志文件（出错后直接拉走看）
+adb shell "run-as com.nx.android cat /data/data/com.nx.android/files/nx2a/log.txt"
 ```
+
+**判断是文件的问题还是工具的问题**：把游戏文件拉到电脑上，用同一套 LibHac 跑一遍
+（`dotnet publish -r osx-arm64` 交叉编译 `nx_extract` ✓）→ 两边一样报错就是文件本身的问题 ✓。
