@@ -401,7 +401,15 @@ class MainActivity : ComponentActivity() {
         if (apkPath.isEmpty()) return
         val apk = File(apkPath)
         if (!apk.exists()) { toast("找不到 $apkPath"); return }
-        val uri = ApkProvider.uriFor(this, apk)
+        // The installer reads the APK through the app's provider: the file goes into the app's own folder first (the
+        // shared storage's own permissions are not the app's to hand out, and the installer could not read them)
+        val local = File(filesDir, "install.apk")
+        try {
+            apk.inputStream().use { src -> local.outputStream().use { src.copyTo(it) } }
+        } catch (e: Exception) {
+            toast("复制 APK 失败：${e.message}"); return
+        }
+        val uri = ApkProvider.uriFor(this, local)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -422,6 +430,12 @@ class MainActivity : ComponentActivity() {
                 val dst = File("/sdcard/Android/data/$packageName_/files")
                 dst.mkdirs()
                 src.copyRecursively(dst, overwrite = true)
+                // The game's own app reads these files, and the shared storage keeps the modes: they have to be
+                // readable by everyone (the copy's owner is this app)
+                dst.walkTopDown().forEach { f ->
+                    f.setReadable(true, false)
+                    if (f.isDirectory) f.setExecutable(true, false)
+                }
                 ui.post { toast("数据包已复制到 ${dst.absolutePath}") }
             } catch (e: Exception) {
                 ui.post { toast("复制失败：${e.message}") }
