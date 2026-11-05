@@ -181,19 +181,36 @@ linux-arm64 版随 APK 打包**（`build_nx_extract.py` ✓），手机上直接
 **症状**：`nx_extract` 报 `System.ArgumentException: Offset must be a multiple of 16`
 （`SectorStorage.ValidateSize` ✓），解包在 RomFS 那一步停住 ✓。
 
-**原因**：`Aes128CtrStorage` 的扇区是 16 字节 ✓，`SectorStorage.ValidateSize` 要求读取的偏移对齐 ✓。
-改版（重新打包）的 dump 里 RomFS 区域的偏移不是 16 的倍数 ✗ → LibHac 直接抛异常 ✗。
+**原因（2026-11-05 查明，之前判断错了）**：**不是 dump 坏了，是工具挑错了 NCA** ✓。
+重打包的卡带 dump（"super XCI"）把**本体和更新合并进了同一个包**：里面有两套完整 NCA ——
+本体那套是 **卡带分布**（GameCard），更新那套是**下载分布**（Download），两套的 program NCA
+**title ID 完全相同**（更新的 NCA 头里带的是本体的 ID）✓。
 
-**试过的改法**（在 LibHac 源码里，`git.ryujinx.app/projects/LibHac.git` ✓）：
-把对齐检查去掉 ✓ → 报错变成 `OverflowException`（RomFS 字典的长度是垃圾 ✗）→ 因为
-**CTR 的密钥流只从块边界开始才是对的** ✗：把读取改成"读覆盖的块、解密、再切片" ✗ → 还是垃圾 ✗。
-→ **这个 dump 的 RomFS 区域本身是坏的 ✗**（不是工具太严 ✗）。
+`nx_extract` 原来用"title ID 最小"挑 program NCA，两个 ID 一样时保留了**先遇到**的那个 ——
+正好是那个 24.9 MB 的**更新** NCA ✓。更新的数据段是 BKTR **补丁**，不是 RomFS ✓，
+当本体读就是一堆垃圾偏移 → `Offset must be a multiple of 16` ✓。
 
-**结论**：改版 dump 的问题要在 dump 那边解决 ✗（重新导出/重新打包 ✓），
-工具这边不要为了这种文件放松校验 ✗（放松后只是把"崩掉"换成"读出垃圾" ✗）。
-另外，`--allow-damaged` 是给**哈希校验失败**用的 ✗，跟这个无关 ✗。
+**改法**（`dm/tools/nx_extract/Program.cs`）：
+- `PickGame`：**卡带分布**的 program NCA 才是本体（NSP 没有卡带 NCA，回落到原来那套）✓；
+- `PickUpdate`：同包里**下载分布**、title ID 相同的那个 program NCA 才是更新 ✓；
+- `PickControl`：控制数据按**分布**取 —— 属于更新的那份才带着更新版的版本号 ✓
+  （本体卡带那份是 1.0.0，更新那份是 1.0.1 ✓）。
+- 合并读取用 `OpenStorageWithPatch`（本体 + 更新补丁）✓：本体 3159 个文件 → 合并后 3162 个
+  （更新加了 3 个 bgyml/eui 参数，改了 1 个 rsizetable）✓。
 
-**判断文件坏没坏的通用办法**：把文件拉到电脑上，用同一套 LibHac 跑一遍 ✓ → 两边一样报错就是文件的问题 ✓。
+**porter 侧**（`scripts/build_ipa_from_nsp.py`）：`scan_nsps` 看一个 dump 里的 cnmt 有没有
+`…800` 的那个（更新的 title ID）✓ —— 有就说明更新在包里，它**只算一个版本** ✓，
+版本号取文件名的 `[v<N>]` 标记（profile 注册了才用）✓，否则取 profile 注册的最新更新 ✓
+（提取后按 build ID 核对）✓。没有这一段时，porter 会把它当成 v0 本体，走"派生 profile"
+那条路（重建全部 shader 表）✓。
+
+**教训**：报错像"文件坏了"时，先把包里的 NCA 逐个列出来看（分布类型、内容类型、title ID、
+FS 头）✓ —— 同一个 title ID 出现两次、而其中一份是补丁，就是合并更新的 dump ✓。
+
+**另外**：`--allow-damaged` 是给**哈希校验失败**用的 ✓，跟这个无关 ✓。
+
+**判断文件坏没坏的通用办法**：把文件拉到电脑上，用同一套 LibHac 跑一遍 ✓ → 两边一样报错就是文件的问题 ✓
+（但先按上面那条把 NCA 逐个看清楚 ✓：报的错可能来自工具挑错了文件 ✓）。
 
 ---
 
@@ -207,6 +224,64 @@ linux-arm64 版随 APK 打包**（`build_nx_extract.py` ✓），手机上直接
 - 每秒刷新一次状态栏（经过时间 ✓）；
 - 日志区固定高度、自己滚动 ✓；
 - **「取消移植」按钮**（把 guest 进程和它起的 dotnet / clang 一起杀掉 ✓，否则它们会继续占着 CPU ✓）。
+
+---
+
+## 15. 一个语法错误就让**所有** Android host 编译失败（2026-11-05）
+
+**症状**：`porter port` 走到第 6 步"host"就停：
+
+```
+[6/8] host · NDK 27.2.12479018 …
+✗ [6/8] host (0:00)
+  File "nxnative/dm/android/build.py", line 37
+    _res = next(iter(sorted(...))))), None)
+SyntaxError: unmatched ')'
+```
+
+**原因**：Python 的语法错误是**解析期**的，跟那行代码在不分支里跑无关 ✓ ——
+只要文件里有一处括号不配对，整个文件就 import 不了 ✓，**任何机器上**的 Android host 编译都挂 ✓。
+这一行是 `next(iter(...))` 的 `, None)` 写到了括号外面（2026-11-04 的 `2534756` 带入 ✓）。
+
+**改法**：一行修好 ✓。**教训**：改完 `dm/android/` 或 `dm/tools/` 下的 Python，
+先 `python3 -m py_compile <file>` ✓ 再跑移植（一步就编译，比跑到第 6 步才发现快得多 ✓）。
+
+---
+
+## 16. 改了"链工具"却不更新链版本头 → 仓库自带测试失败，Metal host 找不到库（2026-11-05）
+
+**症状**：`pytest nxnative/dm/tools/tests` 里 `test_nsp_chain.py` 挂 4 条 ✓；
+报错是 `dm/gfx/nvn/dmsh_chain.h is stale` ✓。
+
+**原因**：shader 翻译链有一个版本号 V（`dmsh_chain.py` 算出来）✓，它由链上的那些文件
+（`dmsh_*.py`、`dmsh_xlate/Program.cs`、`ios_metal.py`、`dmsh_chain.lock`）的内容哈希出来 ✓。
+改了链上的文件却不跑 `dmsh_chain.py --header`，头里就还是旧的 V ✓（`v0.3.0` 那次提交就是这样 ✓）：
+头写着 `07a4fa82de4a`，工具算出来是 `f6f2dc1d1903` ✓。
+
+**后果**：Metal/iOS 的 host 只加载 `b-<V>/` 那个目录 ✓ —— 头是旧 V、库是按新 V 建的 ✓，
+host 就找不到库（日志里 `[RED] shader library directory .../b-07a4fa82de4a does not exist` ✓）✓。
+Android/Vulkan 这条路不打这个头（shader 打包成 `shaders.dmsv`）✓，所以手机端看不出来 ✓。
+
+**改法**：`python3 nxnative/dm/gfx/tools/dmsh_chain.py --header` ✓ 然后把
+`dm/gfx/nvn/dmsh_chain.h` 跟改动一起提交 ✓（`AGENTS.md` 的第 1 条 ✓）。
+**代价**：V 变了 → 所有游戏的 shader 库要重建（每个游戏一次全量 `dmsh_build.py`）✓。
+
+---
+
+## 17. 打包顺序：资产会被清空，预编译的工具和它的权限都会丢（2026-11-05）
+
+**症状**：手机上 `nx_extract` 跑不起来（"Permission denied" ✓）或根本没有这个工具 ✓；
+APK 里 `assets/tool/tools/nx_extract/` 是空的 ✓。
+
+**原因**：`build_assets.py` 会 `rmtree` 整个资产目录再重建 ✓ → 预编译给手机的
+linux-arm64 `nx_extract`（`build_nx_extract.py` 写进同一个目录）✓ 会被一起删掉 ✓。
+而且 APK 的 assets **不带权限位** ✓：权限写在 `modes.json` 里 ✓，
+不在表里的文件在手机上落成 0644 ✓ → 那个可执行文件不可执行 ✓（坑 2 ✓）。
+
+**改法**：
+- `build_apk.sh` 在**资产之后**才编 `nx_extract` ✓；
+- `build_nx_extract.py` 把自己那些文件的权限写进 `modes.json` ✓（`nx_extract` 是 0755 ✓）；
+- 资产里跳过 `bin/`、`obj/`（本地编译残留，不该进手机 ✓）。
 
 ---
 
@@ -237,3 +312,97 @@ adb shell "run-as com.nx.android cat /data/data/com.nx.android/files/nx2a/log.tx
 
 **判断是文件的问题还是工具的问题**：把游戏文件拉到电脑上，用同一套 LibHac 跑一遍
 （`dotnet publish -r osx-arm64` 交叉编译 `nx_extract` ✓）→ 两边一样报错就是文件本身的问题 ✓。
+
+---
+
+## 18. 手机没有 /dev/shm → `multiprocessing` 的进程池起不来（2026-11-06）
+
+**症状**：第 4 阶段（shader split）报
+`FileNotFoundError: [Errno 2] No such file or directory`，栈在
+`multiprocessing/synchronize.py` 的 `SemLock.__init__` ✓。
+
+**原因**：**Android 根本没有 /dev/shm** ✓（`ls /dev/shm` → No such file ✓），
+而 POSIX 信号量写死要它 ✓。`ProcessPoolExecutor` 建进程池时先建一把锁 → 失败 ✓。
+
+**改法**：`dm/gfx/tools/shader_split.py` 的 `pool_map()` 先试进程池 ✓，
+起不来就在本进程里串行做同样的活 ✓（打一行 note ✓）。
+慢，但能过 ✓（这个游戏的 12,691 个 shader 串行也没多久 ✓）。
+
+---
+
+## 19. 手机的 .NET SDK 读 NuGet 设置会永远卡住 → C# 的工具只能随包预编译（2026-11-06）
+
+**症状**：第 5 阶段（Vulkan shaders）在手机上编 shader 翻译器时，
+`dotnet build` 挂 5 分钟被杀，日志只有 `Build FAILED. 0 Warning(s) 0 Error(s)` ✓；
+手动跑 `dotnet restore` 停在 `Determining projects to restore...` ✓，
+`dotnet nuget locals all --list` 也挂 ✓（线程停在 `wait_for_partner` ✓）。
+
+**原因**：**手机的 .NET SDK 读自己的 NuGet 设置就卡住** ✓（空项目也一样 ✓，
+所以与工程、包、网络都无关 ✓ —— 连显式 `--source` 给本地目录也照挂 ✓）。
+加上手机**还原 NuGet 包需要网络**（`nuget.org` 被重定向到国内镜像 ✓，
+而 repo 自己的坑 11 就写着"手机的 .NET SDK 编不了 C#" ✓）。
+
+**改法**：**翻译器跟 nx_extract 一样，随 APK 预编译** ✓
+（`packaging/android-apk/build_nx_extract.py` 现在也编 `dmsh_xlate` ✓，
+放到资产的 `tool/tools/dmsh_xlate/` ✓；
+`porter/pipeline.py` 的 `translator()` 优先用它 ✓：`NX2A_DMSH_XLATE` 或工具树里的那份 ✓）。
+
+---
+
+## 20. `fix_globalization.py` 不在仓库里 → SDK 的 runtimeconfig 没打补丁（2026-11-06）
+
+**症状**：`dotnet` 在手机上 `Aborted`（FailFast）✓；
+`.NET 9+` 只设环境变量不够，**每个 runtimeconfig 都要声明** ✓。
+
+**原因**：`Env.kt` 找的是 `tool/tools/fix_globalization.py` ✓，
+但**这个脚本在仓库里根本没有** ✓（它只在 `.cache` 里 ✓，
+而 `.cache` 重建时就没了 ✓）→ App 的 `fixGlobalization()` 直接跳过 ✓ → SDK 的 36 个
+runtimeconfig 全是默认值 ✓ → MSBuild 的 worker 一崩就"0 errors"✓。
+
+**改法**：把脚本写进仓库（`packaging/android-apk/fix_globalization.py` ✓），
+`build_assets.py` 把它和 `patch_interp.py` 一起放进资产的 `tool/tools/` ✓。
+手机上直接跑一次（36 个 runtimeconfig ✓）。
+
+---
+
+## 21. 工具链自己的库不在 `LD_LIBRARY_PATH` 里 → glslc 起不来（2026-11-06）
+
+**症状**：第 6 阶段（host）报
+`glslc ... returned non-zero exit status 127` ✓；
+手动跑报 `error while loading shared libraries: libshaderc.so.1: cannot open shared object file` ✓。
+
+**原因**：glslc 的 RPATH 指向**别的 App** 的目录（`/data/data/ro.cobrabm.fexdroid/files/...` ✓，
+那是工具链当初打包时用的路径 ✓），loader 一路试到最后去试设备的 `/lib` ✗（App 读不到 ✓）→ EACCES ✓。
+
+**改法**：`porter/pipeline.py` 给工具的运行环境加上工具链自己的 `lib` 目录 ✓
+（`$NX2A_REPO/toolchain/lib` ✓，排在 `LD_LIBRARY_PATH` 最前 ✓）。
+
+---
+
+## 22. 编译器包装脚本的 `#!/bin/sh` 在手机上指向 Android 的 shell（2026-11-06）
+
+**症状**：第 6 阶段每个源文件都失败：
+`CANNOT LINK EXECUTABLE "/bin/sh": ".../rootfs/usr/lib/aarch64-linux-gnu/libc.so" has bad ELF magic` ✓。
+
+**原因**：`dm/android/build.py` 在 ARM64 主机（手机 ✓）上把编译器包成一个
+`#!/bin/sh` 的脚本 ✓ —— 手机的 `/bin/sh` 是 **Android 的 shell** ✓，
+它去加载 `LD_LIBRARY_PATH` 里的 **rootfs 的 libc** ✗ → "bad ELF magic" ✓
+（这条报错看着像链接器坏了，其实是那个 shell 起不来 ✓）。
+
+**改法**：不写包装脚本，**把 `--sysroot` / `-resource-dir` / `-rtlib` 直接放在命令行上** ✓
+（`CC_EXTRA` ✓，编译和链接都用 ✓）。
+
+---
+
+## 23. 给安装器递 APK 的 provider：路径只取最后一段、而且没导出（2026-11-06）
+
+**症状**：App 的「安装 APK」点了之后，系统安装器说
+"解析软件包时出现问题" ✓（APK 本身是好的 ✓，aapt2 能解析 ✓）。
+
+**原因**：`ApkProvider` 用 `uri.lastPathSegment` 取路径 ✓ →
+只剩文件名、目录丢了 ✓ → 打开的是错文件 ✓ → 安装器读到空 ✓。
+而且 provider 是 `exported="false"` ✓ → 安装器（另一个 uid ✓）根本读不到 ✓。
+
+**改法**：用 `uri.path`（整条路径 ✓）；provider 导出 ✓，
+但**只发 App 自己刚做的那个 APK** ✓（静态字段记着那个路径 ✓，别的路径一律拒绝 ✓）——
+导出一个能读任意路径的 provider 就成了漏洞 ✓。
