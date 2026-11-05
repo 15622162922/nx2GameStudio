@@ -32,9 +32,15 @@ static class P {
         KeySet ks = ExternalKeyReader.ReadKeyFile(a[0]);
         if (a[1] == "--aoc") return Aoc(ks, a[2], a[3]);
         var basePkg = OpenNsp(ks, a[1]); var updPkg = a[2] == "-" ? null : OpenNsp(ks, a[2]);
-        Nca baseProg = Pick(basePkg, NcaContentType.Program) ?? throw new Exception("no Program NCA in the base NSP");
-        Nca updProg = updPkg == null ? null : Pick(updPkg, NcaContentType.Program, baseProg.Header.TitleId) ?? throw new Exception("no Program NCA of the base game's program in the update NSP");
-        Nca ctrl = Pick(updPkg ?? basePkg, NcaContentType.Control, baseProg.Header.TitleId);
+        // A package can hold the game's update as well (a cartridge dump rebuilt with the update merged in): the game is
+        // the GameCard NCA, the update the Download one, whose RomFS is a patch (BKTR) over the game's. Reading the
+        // patch as if it were the game gives a RomFS that cannot be read (its bucket tree's offsets do not fit).
+        Nca baseProg = PickGame(basePkg) ?? throw new Exception("no Program NCA in the base NSP");
+        Nca updProg = updPkg == null ? PickUpdate(basePkg, baseProg)
+                                     : Pick(updPkg, NcaContentType.Program, baseProg.Header.TitleId) ?? throw new Exception("no Program NCA of the base game's program in the update NSP");
+        // the control data of the update, when there is one: it holds the version that is packed
+        Nca ctrl = updProg != null ? PickControl(updPkg ?? basePkg, baseProg.Header.TitleId, (byte)updProg.Header.DistributionType)
+                                   : Pick(basePkg, NcaContentType.Control, baseProg.Header.TitleId);
         Console.WriteLine($"title {baseProg.Header.TitleId:x16}" + (updProg != null ? $", update {updProg.Header.TitleId:x16}" : ""));
         string outDir = a[3], cmpDir = a.Length > 4 ? a[4] : null;
         if (ctrl != null) {   // control data (NACP): display version and game name; a raw copy goes to <output dir>/control.nacp for naming the app
@@ -122,6 +128,34 @@ static class P {
     static Nca Pick(List<Nca> l, NcaContentType t, ulong? id = null) {
         Nca r = null;
         foreach (Nca n in l) if (n.Header.ContentType == t && (id == null ? r == null || n.Header.TitleId < r.Header.TitleId : n.Header.TitleId == id)) r = n;
+        return r;
+    }
+
+    // The game itself, not its update: a cartridge dump rebuilt with the update merged in holds the game's card NCA
+    // (card distribution) beside the update's download NCA, and both carry the game's title ID, so the title ID alone
+    // does not tell them apart. The card NCA is the game's; the download one is a patch (BKTR) over it.
+    static Nca PickGame(List<Nca> l) {
+        Nca r = null;
+        foreach (Nca n in l) if (n.Header.ContentType == NcaContentType.Program && n.Header.DistributionType == DistributionType.GameCard && (r == null || n.Header.TitleId < r.Header.TitleId)) r = n;
+        return r ?? Pick(l, NcaContentType.Program);   // an NSP: its program NCA is the game (downloaded, but not a patch)
+    }
+
+    // The update inside the same package, when there is one (a cartridge dump rebuilt with the update merged in): its
+    // download NCA of that title. A package whose only program NCA is the game's own (an NSP) has no update in it.
+    static Nca PickUpdate(List<Nca> l, Nca game) {
+        Nca r = null;
+        foreach (Nca n in l) if (n != game && n.Header.ContentType == NcaContentType.Program && n.Header.DistributionType == DistributionType.Download && n.Header.TitleId == game.Header.TitleId) r = n;
+        return r;
+    }
+
+    // The control data with that title ID and that distribution (the update's control holds its version: the game's
+    // own control holds the version of the card). A dump whose controls all carry one distribution has none of that
+    // distribution: then any control of that title is taken.
+    static Nca PickControl(List<Nca> l, ulong id, byte distr) {
+        Nca r = null;
+        foreach (Nca n in l) if (n.Header.ContentType == NcaContentType.Control && n.Header.TitleId == id && (byte)n.Header.DistributionType == distr) r = n;
+        if (r != null) return r;
+        foreach (Nca n in l) if (n.Header.ContentType == NcaContentType.Control && n.Header.TitleId == id) r = n;
         return r;
     }
 

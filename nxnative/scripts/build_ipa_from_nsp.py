@@ -429,6 +429,14 @@ def meta_title(f, at, hk):
     return struct.unpack_from('<Q', p, 0x10)[0] if p[:4] in (b'NCA3', b'NCA2') and p[5] == 1 else None
 
 
+def meta_titles(path, hk=None):
+    """The title IDs of the content meta NCAs in a dump: the base game …000, its update …800, its DLC …1000 and up. A cartridge
+    dump rebuilt with the update merged in holds both the base game's and the update's (the game's card NCAs beside the update's)"""
+    if not (hk and aes_ecb(hk[:16])): return []
+    with open(path, 'rb') as f:
+        return [t for n, o in dump_files(f) if n.endswith(('.nca', '.ncz')) and (t := meta_title(f, o, hk)) is not None]
+
+
 def title_of(path, hk=None):
     """The ticket name (the first 16 digits of the rights ID = title ID), else the content meta NCA's header (hk: prod.keys' header_key; an untagged cartridge dump has no ticket:
     "hr-bdlwa.xci", issue #28), else [title ID] in the file name. A file name's tag can be wrong (FFT's base NSP is tagged …0001, its ticket is …0000)"""
@@ -436,11 +444,16 @@ def title_of(path, hk=None):
         files = dump_files(f)
         for n, _ in files:
             if re.match(r'[0-9A-Fa-f]{32}\.tik$', n): return int(n[:16], 16)
-        if hk and aes_ecb(hk[:16]):   # the smallest when a card holds more than one title: the base game …000 before its update …800 and DLC
-            tids = [t for n, o in files if n.endswith(('.nca', '.ncz')) and (t := meta_title(f, o, hk)) is not None]
-            if tids: return min(tids)
+    tids = meta_titles(path, hk)
+    if tids: return min(tids)   # the smallest when a card holds more than one title: the base game …000 before its update …800 and DLC
     m = re.search(r'\[([0-9A-Fa-f]{16})\]', path.name)
     return int(m.group(1), 16) if m else None
+
+
+def holds_update(path, app, hk=None):
+    """Whether the dump holds the game's update inside it (a cartridge dump rebuilt with the update merged in: its content meta NCAs hold the
+    base game's title ID and the update's …800 beside it). nx_extract merges the two into one RomFS, so the dump is one version, not two"""
+    return any((t & 0xFFF) == 0x800 and _app_of_tid(t) == app for t in meta_titles(path, hk))
 
 
 def version_of(path):
@@ -491,6 +504,9 @@ def scan_nsps(nsp_dir, exts=('nsp', 'xci'), keys=None, base=None):
     if len(fams) > 1: raise BuildError('more than one game in the folder, keep one game per folder: ' + ', '.join(f'{t:016X}' for t in fams))
     app, fam = next(iter(fams.items()))
     if fam['base'] is None: raise BuildError(f'no base game NSP found in {nsp_dir} (title ID {app:016X})')
+    if fam['base'] is not None and holds_update(fam['base'], app, hk):   # the dump holds the game's update inside it (a cartridge dump rebuilt with it)
+        fam['merged'] = True
+        say(f'{fam["base"].name} holds the update inside it (a cartridge dump rebuilt with it): it is one version')
     return app, fam
 
 
@@ -501,11 +517,19 @@ def vnum(ver):   # 'v655360' → 655360
 def nsp_versions(fam, builds):
     """The versions the folder holds: {version: its update NSP, or None for v0 (the base game alone)}. An update is known by the [v<N>] tag in its file name; a single update without one
     is taken for the newest update the profile registers (its build IDs are checked once extracted), and is left out when the profile registers none or other updates are there"""
+    reg = sorted((b for b in builds if b != 'v0'), key=vnum)
+    if fam.get('merged'):
+        # The base dump holds its update inside it: nx_extract merges the two, so the file is one version. Its number is the
+        # [v<N>] tag of the file when the profile registers it, else the newest update the profile registers (checked after the extraction)
+        tag = version_of(fam['base'])
+        if tag is not None and f'v{tag}' in reg: return {f'v{tag}': None}
+        if reg: return {reg[-1]: None}
+        say('[RED] the game file holds an update inside it, but the profile registers no update: it is taken as v0')
+        return {'v0': None}
     out = {'v0': None}
     for v, p in fam['updates']:
         if v is not None: out[f'v{v}'] = p
     loose = [p for v, p in fam['updates'] if v is None]
-    reg = sorted((b for b in builds if b != 'v0'), key=vnum)
     if loose and len(fam['updates']) == 1 and reg: out[reg[-1]] = loose[0]
     elif loose: say(f'[RED] leaving out update NSPs without a version tag ([v<N>]) in their name: {", ".join(p.name for p in loose)}')
     return out
