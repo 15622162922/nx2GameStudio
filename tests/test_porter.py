@@ -161,6 +161,25 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
+    def test_cjk_font(self):   # the Chinese and Korean stand-in: the Latin base with the CJK glyphs merged in (Mario vs. Donkey Kong's Chinese menus drew '?' without it, and with the CJK font alone the game crashed on a null glyph)
+        try: from fontTools.ttLib import TTFont
+        except ImportError: self.skipTest('no fontTools')
+        from types import SimpleNamespace
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_cjk_'))
+        try:
+            port = SimpleNamespace(aw=t / 'android', logs=t / 'logs', env=dict(os.environ, PYTHONUTF8='1'), package='org.nx2a.test',
+                                   data_dir=lambda: t / 'out-data')
+            env, files = pipeline.Port.cjk_font(port)
+            self.assertEqual(env, [f'DM_SHARED_FONT_CJK={t / "out-data"}/cjk.ttf']); self.assertEqual(list(files), ['cjk.ttf'])
+            f = TTFont(files['cjk.ttf'])
+            cmap = f.getBestCmap()
+            self.assertTrue({0x4E00, 0x4E2D, 0x6587} <= set(cmap))   # 一, 中, 文
+            self.assertTrue({0x41, 0x61, 0x30} <= set(cmap))         # A, a, 0
+            self.assertEqual(f['post'].formatType, 2.0)             # the glyph names, which the game builds its glyph table from
+            self.assertEqual(f['head'].unitsPerEm, 2048)
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
 
 class Experimental(unittest.TestCase):
     def test_ios_profile_copied_with_experimental_android_tsv(self):   # an iOS-only profile is copied out of the repository, never edited in place

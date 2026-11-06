@@ -5,6 +5,8 @@
 # 108 s of game sound and no clipping, and its movie sound matched Cutscene02.mp4's AAC track sample for sample (correlation 1.000). What it needed from the core: render_cond on the Vulkan backend (its levels were black), AAC through MediaCodec
 # (silent movies), the AAC output size the SDK hands out, and display-timed presents (one frame in ten went out a vsync late).
 # The movie player keeps the outputs it acquires in a ring of 32 entries: more audio slots than that overflow it (hle_movie.c DM_MOVIE_AUDIO_SLOTS)
+# The game's own font archives are the same for every language (the four Font*.bfarc.zs have one MD5), so its Chinese text comes from the shared font (types 1-4): the host's stand-in for
+# those has to have the console's shape (dm/tools/cjk_font.py), or the game's own glyph lookup misses and it crashes on the null glyph (main+0x428d1c).
 status	playable
 tested	v65536 Lenovo Legion Y700 TB322FC (Snapdragon 8 Elite, Adreno 830, Android 16)
 package	org.nx2a.mariovsdonkeykong

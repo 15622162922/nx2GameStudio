@@ -83,8 +83,18 @@ Y700 / 骁龙 8 Elite / 3040×1904）：
 **改法**：中文和韩文的类型（1–4 ✓）单独用**有 CJK 字形的字体** ✓：
 `DM_SHARED_FONT_CJK` ✓（或 `$DM_FONT_DIR/cjk.ttf` ✓）。
 移植器在打包时把一款这样的字体放进数据包 ✓（`dm/tools/cjk_font.py` ✓）——
-用的是**随工具走的那一份** ✓（`dm/tools/DroidSansFallbackFull.ttf` ✓，AOSP 的 ✓，Apache-2.0 ✓），
-所以每台机器都有 ✓。
+它用**两份随工具走的字体** ✓（都在 Apache-2.0 ✓）：**拉丁底座**
+`dm/tools/OpenSans-Regular.ttf` ✓（模拟器（yuzu 系）里替身的真机共享字体 ✓，形状和真机的一样 ✓）
+**加上 DroidSansFallbackFull.ttf 的汉字** ✓（AOSP 的 ✓，取 GB2312 一级的 3755 个常用字 ✓）。
+
+**为什么不能直接把 DroidSansFallback 塞进去** ✓（踩过的坑 ✓）：游戏**自己解析**共享字体 ✓
+并按 **`post` 表里的字形名**建字形表 ✓（马力欧 vs. 咚奇刚 ✓，SDK 15 ✓）——
+直接给它一款"自己的"字体 ✓（DroidSansFallback ✓）时**每个字形都查不到** ✓，
+游戏不解空指针就崩 ✓（`main+0x428d1c` ✓，addr=0x38 ✓，
+和塞尔达传说 `main+0x8b37c` 同一个形状 ✓）。
+**所以字体必须是"真机那种形状"** ✓ —— 一款普通的 TrueType 字体 ✓、
+字形名放在 `post` 表 2.0 里 ✓ —— 再把汉字**合并进**这样的底座 ✓，
+游戏的解析就过了 ✓，中文也画出来了 ✓ ✓。
 
 **字体的路径**：env.txt 里的 `DM_SHARED_FONT_CJK` ✓ 和 `DM_SHARED_FONT_EXT` ✓ 指的是
 **数据包自己的目录** ✓（`<输出目录>/<名字>-data/` ✓）—— 现在数据包**就地读取** ✓，
