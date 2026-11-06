@@ -75,18 +75,24 @@ void vk_init(void) {
     // against 22-27 ms here on Qualcomm's driver. A driver that does not load, or offers no Vulkan 1.3 GPU, leaves the system's
     const char *drv = getenv("DM_VK_DRIVER"); void *lib = NULL;
     if (drv && *drv) {
-        Dl_info di; char dir[512] = "", dirs[520] = "";   // the APK's extracted libraries (mkapk.py: extractNativeLibs), where adrenotools finds its hooks and the driver
+        Dl_info di; char dir[512] = "", dirs[520] = "";   // the APK's extracted libraries (mkapk.py: extractNativeLibs), where adrenotools finds its hooks
         if (dladdr((void *)vk_init, &di) && di.dli_fname && strrchr(di.dli_fname, '/')) {
             snprintf(dir, sizeof dir, "%.*s", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname); snprintf(dirs, sizeof dirs, "%s/", dir); }
+        // The driver: a library of the APK's (the porter packed it), or a path of its own (the one the player imported in the game's
+        // launcher, in the app's own folder). adrenotools loads it from that folder, in a linker namespace of its own.
+        char drvdir[512] = "", drvname[256] = "";
+        const char *slash = strrchr(drv, '/');
+        if (slash) { snprintf(drvdir, sizeof drvdir, "%.*s/", (int)(slash - drv), drv); snprintf(drvname, sizeof drvname, "%s", slash + 1); }
+        else { snprintf(drvdir, sizeof drvdir, "%s", dirs); snprintf(drvname, sizeof drvname, "%s", drv); }
         void *at = dlopen("libadrenotools.so", RTLD_NOW | RTLD_LOCAL);
         void *(*open_vk)(int, int, const char *, const char *, const char *, const char *, const char *, void **) =
             at ? (void *(*)(int, int, const char *, const char *, const char *, const char *, const char *, void **))dlsym(at, "adrenotools_open_libvulkan") : NULL;
         if (!open_vk || !*dir) VKLOG("[RED] DM_VK_DRIVER %s: no libadrenotools in the APK (%s); the system's driver instead", drv, at ? "no adrenotools_open_libvulkan" : dlerror());
-        else if (!(lib = open_vk(RTLD_NOW | RTLD_LOCAL, 1 /* ADRENOTOOLS_DRIVER_CUSTOM */, NULL, dir, dirs, drv, NULL, NULL)))
-            VKLOG("[RED] DM_VK_DRIVER %s: adrenotools could not load it from %s; the system's driver instead", drv, dir);
+        else if (!(lib = open_vk(RTLD_NOW | RTLD_LOCAL, 1 /* ADRENOTOOLS_DRIVER_CUSTOM */, NULL, dir, drvdir, drvname, NULL, NULL)))
+            VKLOG("[RED] DM_VK_DRIVER %s: adrenotools could not load it from %s; the system's driver instead", drv, drvdir);
         else if (!(p_vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(lib, "vkGetInstanceProcAddr")) || !drv_has_gpu(p_vkGetInstanceProcAddr)) {
             VKLOG("[RED] DM_VK_DRIVER %s: no Vulkan 1.3 GPU through it; the system's driver instead", drv); lib = NULL; }   // (left loaded: a driver does not always unload cleanly)
-        else VKLOG("Vulkan driver %s through adrenotools, not the system's (%s)", drv, dir);
+        else VKLOG("Vulkan driver %s through adrenotools, not the system's (%s)", drvname, drvdir);
     }
     if (!lib) {
         if (!(lib = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL))) die("[vk] libvulkan.so: %s", dlerror());

@@ -692,11 +692,12 @@ class Port:
     def data(self):
         PROG.stage('data pack', step='button-icon font')
         font_env, font_files = self.button_font()
+        cjk_env, cjk_files = self.cjk_font()
         dst = self.data_dir()
         man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=self.game / 'RomFS', shaders=self.dmsv,
                              aoc=self.aoc, language=self.lang, package=self.package, env=self.fps_env + font_env + (['DM_VK_MT_REPLAY=1'] if self.o.mt_replay else [])
-                             + ([f'DM_VK_DRIVER={self.o.vulkan_driver.name}'] if self.o.vulkan_driver else []), settings=TOUCH_SETTINGS if self.o.touch else None,
-                             files={**self.fps_files, **font_files}, text=self.lists(),
+                             + ([f'DM_VK_DRIVER={self.o.vulkan_driver.name}'] if self.o.vulkan_driver else []) + cjk_env, settings=TOUCH_SETTINGS if self.o.touch else None,
+                             files={**self.fps_files, **font_files, **cjk_files}, text=self.lists(),
                              progress=lambda what: PROG.set(step=f'linking {what}'))
         self.data_path = dst; self.result['data'] = str(dst)
         PROG.end(f'{man["files"]:,} files, {man["bytes"] / 2**30:.1f} GB')
@@ -710,6 +711,20 @@ class Port:
             langs.append(f'{code}\t{name}')
         return {'languages.txt': '\n'.join(langs) + ('\n' if langs else ''),
                 'drivers.txt': ''.join(f'{d.name}\n' for d in self.drivers())}
+
+    def cjk_font(self):
+        """The Chinese and Korean system font (the shared font types 1-4): the host has none of the console's own, and the
+        system's Latin font has no CJK glyphs, so a game in Chinese drew its menus as "?" (dm/host/hle_sdk16.c).
+        dm/tools/cjk_font.py finds a font with the CJK glyphs on the machine that ports and writes it into the pack.
+        Returns (env.txt rows, pack files); none without fontTools or a font with CJK glyphs"""
+        out = self.aw / 'cjk.ttf'
+        try:
+            nsp.run([PY, DM / 'tools/cjk_font.py', str(out)], self.logs / 'cjk_font.log', env=self.env)
+        except Exception as e:
+            say(f'[RED] the Chinese font: {e}: the game\'s Chinese text will draw as "?"')
+            return [], {}
+        if not out.is_file(): return [], {}
+        return [f'DM_SHARED_FONT_CJK={datapack.files_folder(self.package)}/cjk.ttf'], {'cjk.ttf': out}
 
     def button_font(self):
         """The stand-in for the system's Nintendo extension shared font: the controller-button icons in game text (U+E0E0 = A; Super Mario Bros. Wonder's menus showed '?' without it), which

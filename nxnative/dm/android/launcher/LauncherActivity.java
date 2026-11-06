@@ -57,18 +57,33 @@ public class LauncherActivity extends Activity {
     private static final String S_NONE = "\uFF08\u672A\u627E\u5230\uFF09";                    // (not found)
     private static final String S_NO_PACK = "\u627E\u4E0D\u5230\u6570\u636E\u5305";              // the pack is not there
     private static final String S_UNREADABLE = "\uFF08\u8BFB\u4E0D\u5230\uFF1A\u8BF7\u6388\u4E88\u5B58\u50A8\u8BBF\u95EE\u6743\u9650\uFF09";  // (cannot read it: give the access)
+    private static final String S_PICK_DRIVER = "\u9009\u62E9\u9A71\u52A8\u6587\u4EF6\uFF08\u4ECE\u6587\u4EF6\u7BA1\u7406\u9009\uFF09";      // the driver file (from the file manager)
+    private static final String S_IMPORTED = "\uFF08\u5DF2\u5BFC\u5165\uFF09";          // (imported)
+    private static final String S_PICK_FAIL = "\u5BFC\u5165\u9A71\u52A8\u5931\u8D25\uFF1A";   // the import failed
     private static final String S_WRITE = "\u5199\u5165 env.txt \u5931\u8D25\uFF1A";            // the write failed
     private static final String S_START_FAIL = "\u542F\u52A8\u6E38\u620F\u5931\u8D25\uFF1A";  // the start failed
     private static final String S_NO_SETTINGS = "\u8FD9\u53F0\u8BBE\u5907\u6CA1\u6709\u53EF\u7528\u7684\u6743\u9650\u8BBE\u7F6E\u9875";
 
     private static final String SYSTEM_DRIVER = "";        // the device's own driver (no DM_VK_DRIVER)
 
+    private static final int PICK_DRIVER = 42;               // the file manager's answer
+    // The Switch's languages, for a pack made before the launcher (the pack's own list is better)
+    private static final String[][] LANGUAGES = {
+        {"en-US", "American English"}, {"en-GB", "British English"}, {"ja", "Japanese"}, {"fr", "French"},
+        {"de", "German"}, {"es-419", "Latin American Spanish"}, {"es", "Spanish"}, {"it", "Italian"},
+        {"nl", "Dutch"}, {"fr-CA", "Canadian French"}, {"pt", "Portuguese"}, {"ru", "Russian"},
+        {"ko", "Korean"}, {"zh-Hant", "Traditional Chinese"}, {"zh-Hans", "Simplified Chinese"}, {"pt-BR", "Brazilian Portuguese"}};
+    // The host's own libraries: the rest of the APK's are the Vulkan drivers it carries
+    private static final String[] HOST_LIBS = {"libdmhost.so", "libadrenotools.so", "libhook_impl.so", "libmain_hook.so",
+        "libfile_redirect_hook.so", "libgsl_alloc_hook.so"};
+
     private File pack;                                      // the folder with the game's files
     private Spinner language;
     private Spinner driver;
     private TextView info;
     private final List<String> languageCodes = new ArrayList<>();
-    private final List<String> driverNames = new ArrayList<>();
+    private final List<String> driverLabels = new ArrayList<>();   // what the player sees
+    private final List<String> driverValues = new ArrayList<>();   // what goes into env.txt
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +110,11 @@ public class LauncherActivity extends Activity {
         language = addSpinner(page, S_LANGUAGE);
         driver = addSpinner(page, S_DRIVER);
         title.setText(gameName());
+
+        Button pick = new Button(this);
+        pick.setText(S_PICK_DRIVER);
+        pick.setOnClickListener(v -> pickDriver());
+        page.addView(pick);
 
         if (!packReadable()) {
             Button grant = new Button(this);
@@ -157,24 +177,36 @@ public class LauncherActivity extends Activity {
             languageCodes.add(parts[0]);
             languages.add(parts.length > 1 && !parts[1].isEmpty() ? parts[0] + "  " + parts[1] : parts[0]);
         }
-        if (languages.isEmpty()) { languages.add("en-US"); languageCodes.add("en-US"); }
+        if (languages.isEmpty()) {          // a pack made before the launcher: the console's languages
+            for (String[] l : LANGUAGES) { languageCodes.add(l[0]); languages.add(l[0] + "  " + l[1]); }
+        }
         String[] env = env();
         language.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, languages));
         int at = languageCodes.indexOf(env[0]);
         language.setSelection(at < 0 ? 0 : at);
 
         List<String> drivers = new ArrayList<>();
-        driverNames.clear();
+        driverLabels.clear();
+        driverValues.clear();
         drivers.add(S_SYSTEM);
-        driverNames.add(SYSTEM_DRIVER);
-        for (String line : readLines(new File(pack == null ? new File("/dev/null") : pack, "drivers.txt"))) {
-            String name = line.trim();
+        driverLabels.add(S_SYSTEM);
+        driverValues.add(SYSTEM_DRIVER);
+        // the drivers the APK carries (the pack's list, else the APK's own libraries)
+        for (String name : apkDrivers()) {
             if (name.isEmpty() || name.equals(SYSTEM_DRIVER)) continue;
             drivers.add(name);
-            driverNames.add(name);
+            driverLabels.add(name);
+            driverValues.add(name);
+        }
+        // the ones the player imported (in the app's own folder: the host loads them from there)
+        for (File f : importedDrivers()) {
+            if (driverValues.contains(f.getAbsolutePath())) continue;
+            drivers.add(f.getName());
+            driverLabels.add(f.getName() + " " + S_IMPORTED);
+            driverValues.add(f.getAbsolutePath());
         }
         driver.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, drivers));
-        int dr = driverNames.indexOf(env[1]);
+        int dr = driverValues.indexOf(env[1]);
         driver.setSelection(dr < 0 ? 0 : dr);
         driver.setVisibility(drivers.size() > 1 ? View.VISIBLE : View.GONE);
     }
@@ -185,7 +217,7 @@ public class LauncherActivity extends Activity {
     private void launch() {
         if (pack == null) { toast(S_NO_PACK); return; }
         String lang = languageCodes.isEmpty() ? "en-US" : languageCodes.get(language.getSelectedItemPosition());
-        String drv = driverNames.isEmpty() ? SYSTEM_DRIVER : driverNames.get(driver.getSelectedItemPosition());
+        String drv = driverValues.isEmpty() ? SYSTEM_DRIVER : driverValues.get(driver.getSelectedItemPosition());
         if (!writeEnv(lang, drv)) { toast(S_WRITE + pack.getAbsolutePath()); return; }
         try {
             startActivity(new Intent(this, android.app.NativeActivity.class));
@@ -228,6 +260,132 @@ public class LauncherActivity extends Activity {
             else if (t.startsWith("DM_VK_DRIVER=")) drv = t.substring("DM_VK_DRIVER=".length()).trim();
         }
         return new String[]{lang, drv};
+    }
+
+    // ---- the drivers ----------------------------------------------------------------------------------
+
+    /** The Vulkan drivers the APK carries: the pack's list, else the APK's own libraries (the host's are not drivers) */
+    private List<String> apkDrivers() {
+        List<String> out = new ArrayList<>();
+        for (String line : readLines(new File(pack == null ? new File("/dev/null") : pack, "drivers.txt"))) {
+            String name = line.trim();
+            if (!name.isEmpty()) out.add(name);
+        }
+        if (!out.isEmpty()) return out;
+        File libs = new File(getApplicationInfo().nativeLibraryDir);
+        File[] fs = libs.listFiles();
+        if (fs == null) return out;
+        for (File f : fs) {
+            String name = f.getName();
+            if (!name.endsWith(".so")) continue;
+            boolean host = false;
+            for (String h : HOST_LIBS) if (h.equals(name)) host = true;
+            if (!host) out.add(name);
+        }
+        return out;
+    }
+
+    /** The drivers the player imported into the app's own folder */
+    private List<File> importedDrivers() {
+        List<File> out = new ArrayList<>();
+        File[] fs = new File(getFilesDir(), "drivers").listFiles();
+        if (fs == null) return out;
+        for (File f : fs) if (f.isFile() && f.getName().endsWith(".so")) out.add(f);
+        return out;
+    }
+
+    /** The system file manager: the player picks a driver library, and it is copied into the app's own folder */
+    private void pickDriver() {
+        try {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(i, PICK_DRIVER);
+        } catch (Exception e) {
+            toast(S_PICK_FAIL + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PICK_DRIVER || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        try {
+            Uri uri = data.getData();
+            String name = fileName(uri);
+            File dir = new File(getFilesDir(), "drivers");
+            dir.mkdirs();
+            String lower = name.toLowerCase();
+            if (lower.endsWith(".zip")) {
+                // the drivers come as archives (Mesa's Turnip for Adreno: libvulkan_freedreno.so in a zip)
+                unzip(uri, dir);
+            } else if (name.endsWith(".so")) {
+                copy(uri, new File(dir, name));
+            } else {
+                toast(S_PICK_FAIL + name);
+                return;
+            }
+            refresh();
+            for (File f : importedDrivers()) {
+                int at = driverValues.indexOf(f.getAbsolutePath());
+                if (at >= 0) driver.setSelection(at);
+            }
+        } catch (Exception e) {
+            toast(S_PICK_FAIL + e.getMessage());
+        }
+    }
+
+    /** The file behind a content URI, copied into the app's own folder */
+    private void copy(Uri uri, File dst) throws Exception {
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             java.io.OutputStream out = new FileOutputStream(dst, false)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
+        dst.setReadable(true, false);
+        dst.setExecutable(true, false);   // the linker wants the executable bit
+    }
+
+    /** An archive of the driver, unpacked into the app's own folder (the entries' own folders are dropped: the driver is one file) */
+    private void unzip(Uri uri, File dir) throws Exception {
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             java.util.zip.ZipInputStream zin = new java.util.zip.ZipInputStream(in)) {
+            java.util.zip.ZipEntry e;
+            while ((e = zin.getNextEntry()) != null) {
+                if (e.isDirectory()) continue;
+                String n = e.getName();
+                int slash = n.lastIndexOf('/');
+                if (slash >= 0) n = n.substring(slash + 1);
+                if (n.isEmpty() || n.contains("/")) continue;
+                File dst = new File(dir, n);
+                try (java.io.OutputStream out = new FileOutputStream(dst, false)) {
+                    byte[] buf = new byte[8192];
+                    int k;
+                    while ((k = zin.read(buf)) > 0) out.write(buf, 0, k);
+                }
+                dst.setReadable(true, false);
+                dst.setExecutable(true, false);
+            }
+        }
+    }
+
+    /** The name of the file behind a content URI */
+    private String fileName(Uri uri) {
+        try (android.database.Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                int col = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (col >= 0) {
+                    String n = c.getString(col);
+                    if (n != null && !n.isEmpty()) return n;
+                }
+            }
+        } catch (Exception e) { /* no name: the path's own */ }
+        String p = uri.getPath();
+        if (p == null) return "driver.so";
+        int slash = p.lastIndexOf('/');
+        return slash >= 0 ? p.substring(slash + 1) : "driver.so";
     }
 
     // ---- where the files are -------------------------------------------------------------------------

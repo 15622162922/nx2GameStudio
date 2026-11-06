@@ -57,6 +57,19 @@ App 启动刷新工具时带上它 ✓。
 点「▶ 启动游戏」→ 改写数据包的 `env.txt`（`DM_LANG` ✓ `DM_VK_DRIVER` ✓）✓
 → `startActivity(NativeActivity)` ✓。
 
+## 玩家自己带驱动
+
+驱动不用打包进 APK ✓：**页面上的「选择驱动文件」按钮** ✓ 打开**系统文件管理器** ✓，
+玩家挑一个文件 ✓（Mesa 的 Turnip 就是 `libvulkan_freedreno.so` ✓，下载下来是 **zip** ✓，
+选 zip 的话**自动解开** ✓），它被**复制进 App 的私有目录** ✓（`files/drivers/` ✓）✓，
+然后出现在驱动列表里 ✓。
+
+选中的驱动写进 `env.txt` 的是**完整路径** ✓（`DM_VK_DRIVER=/data/user/0/<包名>/files/drivers/xxx.so` ✓）——
+宿主（`dm/android/gfx_vk_core.c` ✓）看见路径里的斜杠 ✓，就把那个目录交给 adrenotools ✓
+（它在自己的 linker namespace 里按名字加载那个库 ✓），hook 的库**仍然**在 APK 的 lib 目录里 ✓ ✓。
+
+加载失败（驱动不匹配 ✓、没有 Vulkan 1.3 的 GPU ✓）时**自动回落到系统的驱动** ✓ ✓。
+
 ## 手机上怎么带驱动
 
 - **App**（`android/app/.../Screen.kt` ✓）：**Vulkan 驱动文件夹** ✓（默认 `/sdcard/Switch/Drivers` ✓）。
