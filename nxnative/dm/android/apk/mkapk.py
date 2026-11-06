@@ -36,6 +36,9 @@ ICON_ID = 0x7f010000   # drawable/icon in resources.arsc (res_table)
 MANIFEST = ('manifest', [(False, 'package', PKG), (True, 'versionCode', ARGS.version_code), (True, 'versionName', ARGS.version_name)], [
     ('uses-sdk', [(True, 'minSdkVersion', MIN_SDK), (True, 'targetSdkVersion', TARGET_SDK)], []),
     ('uses-permission', [(True, 'name', 'android.permission.VIBRATE')], []),   # rumble and the touch gamepad's taps (a normal permission: granted at install)
+    # the game's files live where the player puts them (the front end asks for the folder on the first start):
+    # reading a folder on the shared storage needs the all-files access, which the player gives once per game
+    ('uses-permission', [(True, 'name', 'android.permission.MANAGE_EXTERNAL_STORAGE')], []),
     ('application', [(True, 'label', LABEL)] + ([(True, 'icon', ('ref', ICON_ID))] if ARGS.icon else []) + [(True, 'hasCode', False), (True, 'debuggable', not ARGS.release), (True, 'isGame', True), (True, 'extractNativeLibs', True),
         (True, 'appCategory', 0),   # a game (appCategory game = 0, and the older isGame): Android's game mode and game dashboard, and the device maker's game tools, apply to it
         # no predictive back: from target SDK 36 the system takes the back gesture itself and finishes the activity, which ends the game (front_android.c on_destroy), without

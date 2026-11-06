@@ -121,7 +121,208 @@ static void act_finish(ANativeActivity *a) {
     if (m) (*E)->CallVoidMethod(E, a->clazz, m);
     if (!m || (*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [saves] Activity.finish() failed: the app ends itself"); _exit(0); }
 }
-static void on_resume(ANativeActivity *a) { if (g_quit) { act_finish(a); return; } go_foreground(); }
+// ---- where the game's files are: the folder the player picks ----
+// The data pack (the files the porter made) is in a folder the player chooses on the first start: the game asks with the
+// system folder picker and keeps the path in its own folder, so the picker comes up only until there is one. Reading a
+// folder on the shared storage needs the all-files access, which the player gives once (the manifest asks for it).
+#define DS_DIR_FILE "data_dir.txt"      // in the app's own folder: the path the player picked
+#define DS_MAX_URIS 16
+static char g_data_dir[700];           // the folder with the game's files
+static int g_host_up;                  // the host is running (the setup is over)
+
+static int jni_all_files(ANativeActivity *a) {   // Environment.isExternalStorageManager()
+    JNIEnv *E = a->env;
+    jclass c = (*E)->FindClass(E, "android/os/Environment");
+    if (!c) { (*E)->ExceptionClear(E); return 0; }
+    jmethodID m = (*E)->GetStaticMethodID(E, c, "isExternalStorageManager", "()Z");
+    if (!m) { (*E)->ExceptionClear(E); return 0; }
+    jboolean r = (*E)->CallStaticBooleanMethod(E, c, m);
+    if ((*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); return 0; }
+    return r ? 1 : 0;
+}
+
+static void jni_toast(ANativeActivity *a, const char *msg) {
+    JNIEnv *E = a->env;
+    jclass c = (*E)->FindClass(E, "android/widget/Toast");
+    if (!c) { (*E)->ExceptionClear(E); return; }
+    jmethodID make = (*E)->GetStaticMethodID(E, c, "makeText", "(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;");
+    jmethodID show = (*E)->GetMethodID(E, c, "show", "()V");
+    if (!make || !show) { (*E)->ExceptionClear(E); return; }
+    jobject t = (*E)->CallStaticObjectMethod(E, c, make, a->clazz, (*E)->NewStringUTF(E, msg), 0);
+    if (t) (*E)->CallVoidMethod(E, t, show);
+    if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
+}
+
+static void jni_all_files_settings(ANativeActivity *a) {   // the settings page of the all-files access, for this app
+    JNIEnv *E = a->env;
+    jclass cls = (*E)->GetObjectClass(E, a->clazz);
+    jmethodID getPkg = (*E)->GetMethodID(E, cls, "getPackageName", "()Ljava/lang/String;");
+    char buf[300]; buf[0] = 0;
+    if (getPkg) {
+        jstring pkg = (*E)->CallObjectMethod(E, a->clazz, getPkg);
+        if (pkg) {
+            const char *c = (*E)->GetStringUTFChars(E, pkg, NULL);
+            if (c) { snprintf(buf, sizeof buf, "package:%s", c); (*E)->ReleaseStringUTFChars(E, pkg, c); }
+        }
+    }
+    jclass uriCls = (*E)->FindClass(E, "android/net/Uri");
+    jmethodID parse = uriCls ? (*E)->GetStaticMethodID(E, uriCls, "parse", "(Ljava/lang/String;)Landroid/net/Uri;") : NULL;
+    jobject uri = (uriCls && parse && buf[0]) ? (*E)->CallStaticObjectMethod(E, uriCls, parse, (*E)->NewStringUTF(E, buf)) : NULL;
+    jclass intentCls = (*E)->FindClass(E, "android/content/Intent");
+    jmethodID ctor = intentCls ? (*E)->GetMethodID(E, intentCls, "<init>", "(Ljava/lang/String;)V") : NULL;
+    jobject intent = (intentCls && ctor) ? (*E)->NewObject(E, intentCls, ctor, (*E)->NewStringUTF(E, "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION")) : NULL;
+    if (intent && uri) {
+        jmethodID setData = (*E)->GetMethodID(E, intentCls, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;");
+        if (setData) (*E)->CallObjectMethod(E, intent, setData, uri);
+    }
+    jmethodID start = (*E)->GetMethodID(E, cls, "startActivity", "(Landroid/content/Intent;)V");
+    if (start && intent) (*E)->CallVoidMethod(E, a->clazz, start, intent);
+    if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
+}
+
+static void jni_pick_folder(ANativeActivity *a) {   // the system folder picker (ACTION_OPEN_DOCUMENT_TREE)
+    JNIEnv *E = a->env;
+    jclass cls = (*E)->GetObjectClass(E, a->clazz);
+    jclass intentCls = (*E)->FindClass(E, "android/content/Intent");
+    jmethodID ctor = intentCls ? (*E)->GetMethodID(E, intentCls, "<init>", "(Ljava/lang/String;)V") : NULL;
+    jobject intent = (intentCls && ctor) ? (*E)->NewObject(E, intentCls, ctor, (*E)->NewStringUTF(E, "android.intent.action.OPEN_DOCUMENT_TREE")) : NULL;
+    if (intent) {
+        jmethodID addFlags = (*E)->GetMethodID(E, intentCls, "addFlags", "(I)Landroid/content/Intent;");
+        if (addFlags) (*E)->CallObjectMethod(E, intent, addFlags, 0x01 | 0x40);   // read + persistable
+        jmethodID start = (*E)->GetMethodID(E, cls, "startActivityForResult", "(Landroid/content/Intent;I)V");
+        if (start) (*E)->CallVoidMethod(E, a->clazz, start, intent, 1);
+    }
+    if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
+}
+
+static int jni_tree_uris(ANativeActivity *a, char out[][400], int max) {   // the folders the app holds a grant for
+    JNIEnv *E = a->env;
+    int n = 0;
+    jclass cls = (*E)->GetObjectClass(E, a->clazz);
+    jmethodID getRes = (*E)->GetMethodID(E, cls, "getContentResolver", "()Landroid/content/ContentResolver;");
+    jobject res = getRes ? (*E)->CallObjectMethod(E, a->clazz, getRes) : NULL;
+    jmethodID getPerms = res ? (*E)->GetMethodID(E, (*E)->GetObjectClass(E, res), "getPersistedUriPermissions", "()[Landroid/content/UriPermission;") : NULL;
+    jobjectArray arr = (res && getPerms) ? (*E)->CallObjectMethod(E, res, getPerms) : NULL;
+    if (!arr) { if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E); return 0; }
+    jsize total = (*E)->GetArrayLength(E, arr);
+    for (jsize i = 0; i < total && n < max; i++) {
+        jobject perm = (*E)->GetObjectArrayElement(E, arr, i);
+        if (!perm) continue;
+        jmethodID getUri = (*E)->GetMethodID(E, (*E)->GetObjectClass(E, perm), "getUri", "()Landroid/net/Uri;");
+        if (!getUri) { (*E)->ExceptionClear(E); continue; }
+        jobject uri = (*E)->CallObjectMethod(E, perm, getUri);
+        jmethodID toStr = uri ? (*E)->GetMethodID(E, (*E)->GetObjectClass(E, uri), "toString", "()Ljava/lang/String;") : NULL;
+        jstring s = (uri && toStr) ? (*E)->CallObjectMethod(E, uri, toStr) : NULL;
+        if (s) {
+            const char *c = (*E)->GetStringUTFChars(E, s, NULL);
+            if (c) { snprintf(out[n], 400, "%s", c); (*E)->ReleaseStringUTFChars(E, s, c); n++; }
+        }
+        if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
+    }
+    return n;
+}
+
+static int uri_to_path(const char *uri, char *out, size_t cap) {   // a tree URI is the path in disguise
+    // content://com.android.externalstorage.documents/tree/primary%3ASwitch%2FPorts%2FName -> /storage/emulated/0/Switch/Ports/Name
+    const char *t = strstr(uri, "/tree/");
+    if (!t) return 0;
+    t += 6;
+    char dec[600]; size_t o = 0;
+    for (const char *p = t; *p && o + 1 < sizeof dec; p++) {
+        if (*p == '%' && p[1] && p[2]) {
+            char h[3] = {p[1], p[2], 0};
+            dec[o++] = (char)strtol(h, NULL, 16);
+            p += 2;
+        } else dec[o++] = *p;
+    }
+    dec[o] = 0;
+    char *colon = strchr(dec, ':');
+    if (!colon) return 0;
+    *colon = 0;
+    if (!strcmp(dec, "primary")) snprintf(out, cap, "/storage/emulated/0/%s", colon + 1);
+    else snprintf(out, cap, "/storage/%s/%s", dec, colon + 1);
+    return 1;
+}
+
+static int data_dir_valid(const char *dir) {   // the data pack's own marker: every pack has one
+    char p[800]; snprintf(p, sizeof p, "%s/nx2a-data.json", dir);
+    struct stat st;
+    return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static void data_dir_save(ANativeActivity *a, const char *dir) {
+    char p[800]; snprintf(p, sizeof p, "%s/%s", a->internalDataPath, DS_DIR_FILE);
+    FILE *f = fopen(p, "w");
+    if (!f) return;
+    fprintf(f, "%s\n", dir); fclose(f);
+}
+
+static int data_dir_load(ANativeActivity *a, char *out, size_t cap) {   // the folder from last time
+    char p[800]; snprintf(p, sizeof p, "%s/%s", a->internalDataPath, DS_DIR_FILE);
+    FILE *f = fopen(p, "r");
+    if (!f) return 0;
+    char line[700] = {0};
+    if (!fgets(line, sizeof line, f)) { fclose(f); return 0; }
+    fclose(f);
+    char *nl = strchr(line, '\n'); if (nl) *nl = 0;
+    if (!line[0]) return 0;
+    snprintf(out, cap, "%s", line);
+    return 1;
+}
+
+// The folder the player picked: a granted tree whose folder holds a data pack, and is not the one we have already.
+static int data_pick(ANativeActivity *a) {
+    char uris[DS_MAX_URIS][400]; int n = jni_tree_uris(a, uris, DS_MAX_URIS);
+    char saved[700]; saved[0] = 0;
+    int saved_ok = data_dir_load(a, saved, sizeof saved) && data_dir_valid(saved);
+    for (int i = 0; i < n; i++) {
+        char path[700];
+        if (!uri_to_path(uris[i], path, sizeof path)) continue;
+        if (!data_dir_valid(path)) continue;
+        if (saved_ok && !strcmp(path, saved)) continue;
+        data_dir_save(a, path);
+        snprintf(g_data_dir, sizeof g_data_dir, "%s", path);
+        return 1;
+    }
+    return 0;
+}
+
+// The setup before the game starts: the folder with the files, the access to the shared storage, and the picker.
+static int data_setup(ANativeActivity *a) {
+    if (g_data_dir[0] && data_dir_valid(g_data_dir)) return 1;
+    // the older layout: the pack in the app's own external folder (where the porter's copy step put it) is the
+    // app's own directory: it needs no permission, and the games that were ported before keep working
+    if (a->externalDataPath && data_dir_valid(a->externalDataPath)) {
+        snprintf(g_data_dir, sizeof g_data_dir, "%s", a->externalDataPath);
+        return 1;
+    }
+    char saved[700]; saved[0] = 0;
+    if (data_dir_load(a, saved, sizeof saved) && data_dir_valid(saved)) {
+        snprintf(g_data_dir, sizeof g_data_dir, "%s", saved);
+        return 1;
+    }
+    if (!jni_all_files(a)) {   // the shared storage needs the all-files access; the player gives it once
+        jni_toast(a, "请允许存储访问，然后重新打开游戏");
+        jni_all_files_settings(a);
+        return 0;
+    }
+    jni_toast(a, "选择数据包所在文件夹");
+    jni_pick_folder(a);
+    return 0;
+}
+
+static void host_start(ANativeActivity *act);   // the host and the game (below)
+
+static void on_resume(ANativeActivity *a) {
+    if (g_quit) { act_finish(a); return; }
+    if (!g_host_up) {   // the player is coming back from the settings or the picker
+        data_pick(a);
+        if (!data_setup(a)) return;
+        host_start(a);
+        return;
+    }
+    go_foreground();
+}
 static void on_destroy(ANativeActivity *a) { (void)a; _exit(0); }   // one game per process
 
 // ---- input ----
@@ -865,7 +1066,12 @@ __attribute__((visibility("default"))) void ANativeActivity_onCreate(ANativeActi
     act->callbacks->onPause = on_pause; act->callbacks->onResume = on_resume; act->callbacks->onWindowFocusChanged = on_window_focus; act->callbacks->onDestroy = on_destroy;
     ANativeActivity_setWindowFlags(act, AWINDOW_FLAG_KEEP_SCREEN_ON | AWINDOW_FLAG_FULLSCREEN, 0);
     static int started; if (started++) return;   // a second onCreate (configuration change) keeps the running game
-    snprintf(g_root, sizeof g_root, "%s", act->externalDataPath ? act->externalDataPath : act->internalDataPath);
+    if (!data_setup(act)) return;   // the player has to give the access and pick the folder: the game waits for it
+    host_start(act);
+}
+
+static void host_start(ANativeActivity *act) {
+    snprintf(g_root, sizeof g_root, "%s", g_data_dir[0] ? g_data_dir : (act->externalDataPath ? act->externalDataPath : act->internalDataPath));
     char p[700];
     snprintf(p, sizeof p, "%s/log.txt", g_root); char prev[720]; snprintf(prev, sizeof prev, "%s/log.prev.txt", g_root); rename(p, prev);
     if (!freopen(p, "w", stderr)) __android_log_print(ANDROID_LOG_ERROR, "dmhost", "cannot write %s", p);
@@ -894,4 +1100,5 @@ __attribute__((visibility("default"))) void ANativeActivity_onCreate(ANativeActi
     if (stk != MAP_FAILED) { mprotect(stk, guard, PROT_NONE); pthread_attr_setstack(&at, stk + guard, ssz); } else pthread_attr_setstacksize(&at, ssz);
     if (pthread_create(&t, &at, host_thread, NULL)) LOG("[RED] cannot start the host thread"); else pthread_detach(t);
     pthread_attr_destroy(&at);
+    g_host_up = 1;
 }
