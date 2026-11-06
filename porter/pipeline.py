@@ -303,8 +303,9 @@ class Port:
                 ups = [p for _, p in sorted(self.fam['updates'], key=lambda u: u[0] or 0)[-1:]]   # the survey reads the base game and the newest update
                 m = self.unpack([self.fam['base'], *ups])
                 fam = dict(self.fam, base=m[self.fam['base']], updates=[(v, m.get(p, p)) for v, p in self.fam['updates']])
-                facts = nsp.survey(self.o.folder, self.app, fam, self.o.keys, NXNATIVE, PY, self.env)
-                facts['survey'] = f'<NSP folder>/{tid}_survey/survey.md'
+                # the survey's scratch is in the port's own folder: the shared storage cannot run programs
+                facts = nsp.survey(self.o.folder, self.app, fam, self.o.keys, NXNATIVE, PY, self.env, work_root=self.work)
+                facts['survey'] = str(self.work / f'{tid}_survey/survey.md')
                 nsp.write_profile(d, self.app, facts)
             self.provisional = True
             say('[RED] provisional game profile: values guessed from the survey, the game may not start')

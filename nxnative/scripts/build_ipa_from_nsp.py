@@ -556,8 +556,13 @@ def can_clone(d):   # whether this volume supports APFS clones (nx_extract uses 
 
 
 # ---- Survey of a new game (when no game profile matches) ----
-def survey(nsp_dir, app, fam, keys, repo, py, env):
-    work = nsp_dir / f'{app:016X}_survey'; logs, ex = work / 'logs', work / 'extract'
+def survey(nsp_dir, app, fam, keys, repo, py, env, work_root=None):
+    """The scratch of the survey: where the extractor is put and what it reads.
+
+    The work folder is the port's own, not the game's folder: the phone's shared storage is mounted noexec, so a
+    program that is copied next to the game on the SD card cannot be started (the tools have to run from the app's
+    own folder). On a desktop the game's folder is the default."""
+    work = (work_root or nsp_dir) / f'{app:016X}_survey'; logs, ex = work / 'logs', work / 'extract'
     say(f'no game profile for {app:016X}: surveying first')
     PROG.plan(4)   # nx_extract, the manifest, the code modules (reading them, then the rewrite-site census), the imports
     PROG.stage('survey: build nx_extract')
