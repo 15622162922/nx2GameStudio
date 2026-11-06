@@ -44,9 +44,17 @@ class Options:
     jobs: int = field(default_factory=lambda: os.cpu_count() or 8)
 
 
-# --vulkan-driver: libadrenotools and its hooks (dm/android/build.py --adrenotools, from dm/third_party/libadrenotools), which load the driver for the app
-# (gfx_vk_core.c vk_init); the APK carries them beside it
+# The Vulkan driver loader: the game APK carries it, so a driver the player imports into the game app's own folder can be
+# loaded (dm/android/gfx_vk_core.c, DM_VK_DRIVER). The phone has no C++ compiler, so the loader is built for it here
+# (packaging/android-apk/build_adrenotools.py) and shipped in the app's assets; on a computer the host builds it
+# (dm/android/build.py --adrenotools).
 ADRENOTOOLS_LIBS = ('libadrenotools.so', 'libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', 'libgsl_alloc_hook.so')
+
+
+def prebuilt_loader():
+    """The driver loader built for the phone (the tool tree's tools/adrenotools), when it is there"""
+    d = DM.parent.parent / 'tools' / 'adrenotools'
+    return sorted(d.glob('*.so')) if d.is_dir() else []
 
 
 def launcher_dex():
@@ -637,7 +645,7 @@ class Port:
         PROG.stage('host', step=f'NDK {self.tools["ndk"].name}')
         out = self.aw / ('host-debug' if self.o.debug else 'host')
         nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out, '--lib', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
-                + (['--adrenotools'] if self.drivers() else []), self.logs / 'android_host.log', env=self.env)
+                + (['--adrenotools'] if (self.drivers() and not prebuilt_loader()) else []), self.logs / 'android_host.log', env=self.env)
         self.so = out / 'libdmhost.so'
         if not self.so.is_file(): raise BuildError(f'build.py made no {self.so}')
         PROG.end(f'{self.so.stat().st_size / 2**20:.1f} MB')
@@ -654,7 +662,7 @@ class Port:
                  '--data-root', str(self.data_dir()),
                  '--version-code', str(code), '--version-name', self.display]
                 + (['--landscape'] if self.ap.landscape else []) + (['--icon', icon] if icon else []) + self.theme() + ([] if self.o.debug else ['--release'])
-                + [a for f in (self.drivers() + [self.so.parent / n for n in ADRENOTOOLS_LIBS] if self.drivers() else []) for a in ('--extra-so', str(f))]
+                + [a for f in (self.drivers() + self.loader_libs()) for a in ('--extra-so', str(f))]
                 + (['--dex', str(dex)] if (dex := launcher_dex()) else []),
                 self.logs / 'android_apk.log', env=self.env)
         self.result['apk'] = str(self.apk_path)
@@ -686,6 +694,14 @@ class Port:
         if self.o.vulkan_driver_dir:
             out += sorted(f for f in self.o.vulkan_driver_dir.glob('*.so') if f.is_file())
         return out
+
+    def loader_libs(self):
+        """The driver loader the game APK carries: the one built for the phone (the tool tree's tools/adrenotools), else the
+        one the host build made (dm/android/build.py --adrenotools, when the port has a driver of its own). The APK needs it
+        even without a driver: the game's own page lets the player import one later, and the host loads it through it"""
+        pre = prebuilt_loader()
+        if pre: return pre
+        return [self.so.parent / n for n in ADRENOTOOLS_LIBS] if self.drivers() else []
 
     def data_dir(self):
         """Where the data pack goes (and where the game reads its files from): the pack's own name in the output folder"""

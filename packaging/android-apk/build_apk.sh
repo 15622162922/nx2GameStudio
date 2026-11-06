@@ -50,6 +50,9 @@ else
     python3 "$here/build_assets.py" --out "$cache/assets" --payload "$cache/payload-arm64.tar.gz" --toolchain "$cache/toolchain"
     # nx_extract for the phone, built here (the phone's .NET SDK cannot): after the assets, which it joins
     python3 "$here/build_nx_extract.py" || echo "   (no nx_extract for the phone: the .NET SDK is missing)"
+    # the Vulkan driver loader the game APK carries (the phone has no C++ compiler): built here, after the assets, which it joins
+    python3 "$here/build_adrenotools.py" --out "$cache/assets/tool/tools/adrenotools" \
+        || echo "   (no driver loader for the phone: a driver the player imports will not load)"
     # The phone runs the C# tools but cannot build them: without them it would try to build the shader
     # translator itself and wait for a network that is not there.
     for t in "$cache/assets/tool/tools/nx_extract/nx_extract" "$cache/assets/tool/tools/dmsh_xlate/dmsh_xlate.dll"; do
