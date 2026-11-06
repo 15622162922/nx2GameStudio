@@ -230,8 +230,6 @@ private fun PathsCard(win: MainActivity) {
         PathField("输出目录", win.out, { win.out = it }, { win.pickOutput() })
         PathField("游戏文件（NSP / XCI / NSZ / XCZ）", win.game, { win.game = it }, { win.pickGame() },
             placeholder = "选游戏文件；同目录的更新和 DLC 会自动带上")
-        PathField("Vulkan 驱动文件夹", win.driverDir, { win.driverDir = it }, { win.pickDriverDir() },
-            placeholder = "里面的 .so 都会被打进游戏，游戏里可以选")
     }
 }
 

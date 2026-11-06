@@ -70,12 +70,14 @@ App 启动刷新工具时带上它 ✓。
 
 加载失败（驱动不匹配 ✓、没有 Vulkan 1.3 的 GPU ✓）时**自动回落到系统的驱动** ✓ ✓。
 
-## 手机上怎么带驱动
+## 驱动从哪来
 
-- **App**（`android/app/.../Screen.kt` ✓）：**Vulkan 驱动文件夹** ✓（默认 `/sdcard/Switch/Drivers` ✓）。
-- **PC GUI**（`gui/app.py` ✓）：**Vulkan driver folder** ✓。
-- **命令行**（`porter/cli.py` ✓）：`--vulkan-driver-dir <目录>` ✓（里面的 `.so` 全部打进 APK ✓）。
-  只有一个驱动时用旧的 `--vulkan-driver <文件>` ✓（它现在是第一个 ✓，也是 env.txt 的默认值 ✓）。
+**玩家自己在游戏里选** ✓（上面的「玩家自己带驱动」✓）—— 不用重新移植 ✓，
+所以手机 App 里**没有**驱动文件夹的选项 ✓。
+
+打包进去也可以 ✓（命令行 ✓）：`--vulkan-driver-dir <目录>` ✓（里面的 `.so` 全部打进 APK ✓，
+游戏页面上就有它们 ✓）；单个驱动用 `--vulkan-driver <文件>` ✓（它也是 env.txt 的默认值 ✓）。
+桌面 GUI（`gui/app.py` ✓）有对应的输入框 ✓。
 
 ## 已知的坑
 
