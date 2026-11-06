@@ -70,6 +70,22 @@ App 启动刷新工具时带上它 ✓。
 
 加载失败（驱动不匹配 ✓、没有 Vulkan 1.3 的 GPU ✓）时**自动回落到系统的驱动** ✓ ✓。
 
+**加载器（`libadrenotools.so` ✓ + 4 个 hook ✓）要一直在游戏 APK 里** ✓ ——
+没有它 ✓，玩家导入的驱动根本加载不了 ✓（日志里一句
+`[RED] DM_VK_DRIVER ...: no libadrenotools in the APK` ✓，然后安静地换系统驱动 ✓）。
+2026-11-06 踩过 ✓：**移植时只有"这次自带了驱动"才把加载器打进 APK** ✓
+（`porter/pipeline.py` ✓ 的 `drivers()` ✓），而 11:00 的重构（952ada9 ✓）
+把手机 App 的"驱动文件夹"去掉了 ✓（理由是对的 ✓：导入驱动不用再移植一次 ✓）→
+手机的移植从此不带驱动 ✓ → **APK 里再没有加载器** ✓ → 导入的驱动一直是死的 ✓。
+
+现在**游戏 APK 总是带着加载器** ✓（`porter/pipeline.py` ✓ 的 `loader_libs()` ✓）：
+- 手机上用的是**预编好的** ✓（`packaging/android-apk/build_adrenotools.py` ✓，
+  跟 nx_extract 一个路子 ✓：手机编不了 C++ ✓），
+  在 App 的资产里 ✓（`tool/tools/adrenotools/` ✓，1.3 MB ✓）
+- 电脑上照旧从源码编 ✓（`dm/android/build.py --adrenotools` ✓）
+
+启动器的驱动列表里**不会**出现这 5 个库 ✓（`HOST_LIBS` ✓ 里列着 ✓）。
+
 ## 驱动从哪来
 
 **玩家自己在游戏里选** ✓（上面的「玩家自己带驱动」✓）—— 不用重新移植 ✓，
