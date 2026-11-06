@@ -1,0 +1,85 @@
+# Builds the phone app (the APK) on GitHub: the payload (the rootfs the phone runs the tools with), the build tools,
+# the app's assets and the APK itself (packaging/android-apk/build_apk.sh). The desktop bundles are the other
+# workflows' (release-windows.yml, release-macos.yml).
+#
+# The payload is a private release (NixPort/nixport-rootfs): the build needs a token with read access to it in the
+# repository's secret NIXPORT_TOKEN (a fine-grained token with that one repository). Everything else is public.
+#
+# The APK is the run's artifact (nx2android-android-apk), and a published release gets it as an asset.
+name: Android app
+
+on:
+  workflow_dispatch:   # a build of the branch, kept as the run's artifact
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'packaging/android-apk/**'
+      - 'porter/**'
+      - 'nxnative/**'
+      - '.github/workflows/android-apk.yml'
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # the release's assets (the APK)
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'   # the Python the build scripts run on
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'       # the Android Gradle plugin's Java
+      - uses: android-actions/setup-android@v3
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'   # the extractor and the shader translator are C#
+      - name: the SDK parts the build needs
+        run: |
+          sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;27.3.13750724"
+          yes | sdkmanager --licenses > /dev/null
+      # the payload and the build tools do not depend on the repository: they are fetched once and kept
+      - uses: actions/cache@v4
+        with:
+          path: |
+            packaging/android-apk/.cache/payload-arm64.tar.gz
+            packaging/android-apk/.cache/toolchain
+            packaging/android-apk/.cache/debs
+            packaging/android-apk/.cache/nuget
+          key: nx2a-android-payload-v1
+      - name: the token for the private payload release
+        run: |
+          if [ -z "$NIXPORT_TOKEN" ]; then
+            echo "::error::the secret NIXPORT_TOKEN is missing (a token with read access to NixPort/nixport-rootfs)"
+            exit 1
+          fi
+        env:
+          NIXPORT_TOKEN: ${{ secrets.NIXPORT_TOKEN }}
+      - name: the tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover tests
+      - name: the app
+        run: |
+          export DOTNET="$(which dotnet)"
+          bash packaging/android-apk/build_apk.sh debug
+        env:
+          GH_TOKEN: ${{ secrets.NIXPORT_TOKEN }}   # the private payload release
+      - name: the APK
+        run: ls -la android/app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nx2android-android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+      - if: github.event_name == 'release'
+        run: gh release upload "${{ github.event.release.tag_name }}" android/app/build/outputs/apk/debug/app-debug.apk --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
