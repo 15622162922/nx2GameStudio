@@ -312,10 +312,20 @@ static int data_setup(ANativeActivity *a) {
     }
     char baked[700]; baked[0] = 0;
     baked_data_dir(a, baked, sizeof baked);
-    if (baked[0] && data_dir_valid(baked)) {   // where the port put the pack
-        snprintf(g_data_dir, sizeof g_data_dir, "%s", baked);
-        data_dir_save(a, baked);
-        return 1;
+    if (baked[0]) {
+        // The pack is where the port put it, on the shared storage: reading it needs the all-files access, and
+        // without it the shared storage denies even a stat() of the folder (quietly, so the game would fall back
+        // to an old pack). The access comes first, then the folder.
+        if (!jni_all_files(a)) {
+            jni_toast(a, "请允许存储访问，然后重新打开游戏");
+            jni_all_files_settings(a);
+            return 0;
+        }
+        if (data_dir_valid(baked)) {   // where the port put the pack
+            snprintf(g_data_dir, sizeof g_data_dir, "%s", baked);
+            data_dir_save(a, baked);
+            return 1;
+        }
     }
     // the older layout: the pack in the app's own external folder (where the porter's copy step put it) is the
     // app's own directory: it needs no permission, and the games that were ported before keep working
