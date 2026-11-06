@@ -318,7 +318,6 @@ private fun ResultCard(win: MainActivity) {
         Text(win.apkPath, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { win.install() }, modifier = Modifier.weight(1f)) { Text("安装 APK") }
-            OutlinedButton(onClick = { win.copyData() }, modifier = Modifier.weight(1f)) { Text("复制数据包") }
         }
     }
 }

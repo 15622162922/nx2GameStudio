@@ -425,27 +425,6 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Copies the data pack into the game's own folder, where the game reads it */
-    fun copyData() {
-        if (dataPath.isEmpty() || packageName_.isEmpty()) return
-        Thread {
-            try {
-                val src = File(dataPath)
-                val dst = File("/sdcard/Android/data/$packageName_/files")
-                dst.mkdirs()
-                src.copyRecursively(dst, overwrite = true)
-                // The game's own app reads these files, and the shared storage keeps the modes: they have to be
-                // readable by everyone (the copy's owner is this app)
-                dst.walkTopDown().forEach { f ->
-                    f.setReadable(true, false)
-                    if (f.isDirectory) f.setExecutable(true, false)
-                }
-                ui.post { toast("数据包已复制到 ${dst.absolutePath}") }
-            } catch (e: Exception) {
-                ui.post { toast("复制失败：${e.message}") }
-            }
-        }.start()
-    }
-
     // ---- the log --------------------------------------------------------------------------------------------
 
     /**
