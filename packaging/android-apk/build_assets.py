@@ -53,18 +53,23 @@ def copy_tree(src: Path, dst: Path, skip=SKIP_DIRS):
             if not target.exists(): target.symlink_to(link)
 
 
-def nuget_packages(target: Path):
+def nuget_packages(target: Path, cache: Path = None):
     """The NuGet packages the tools need, as a local source: the phone has no network, and a restore that
-    waits for a name server that never answers looks like a build that never ends."""
+    waits for a name server that never answers looks like a build that never ends.
+    A copy in the cache is used when there is one: the download needs the network."""
     print('>> the NuGet packages (the phone builds offline)')
     packages = target / 'packages'
     packages.mkdir(parents=True, exist_ok=True)
     for name, version in NUGET:
         f = packages / f'{name.lower()}.{version}.nupkg'
         if not f.exists():
-            url = f'https://www.nuget.org/api/v2/package/{name}/{version}'
-            with urllib.request.urlopen(url) as r, open(f, 'wb') as out:
-                shutil.copyfileobj(r, out, 1 << 20)
+            local = (cache / f.name) if cache else None
+            if local and local.exists():
+                shutil.copy2(local, f)
+            else:
+                url = f'https://www.nuget.org/api/v2/package/{name}/{version}'
+                with urllib.request.urlopen(url) as r, open(f, 'wb') as out:
+                    shutil.copyfileobj(r, out, 1 << 20)
         print(f'   {f.name}')
     # the restore looks here and nowhere else: no name server, no timeout
     (target / 'NuGet.config').write_text(
@@ -73,9 +78,14 @@ def nuget_packages(target: Path):
     return target
 
 
-def wheels(target: Path):
-    """The Python modules, as the aarch64 wheels for the rootfs's Python (3.13)"""
+def wheels(target: Path, cache: Path = None):
+    """The Python modules, as the aarch64 wheels for the rootfs's Python (3.13).
+    A copy in the cache is used when there is one: the download needs the network."""
     if target.exists(): return target
+    if cache and cache.exists():
+        print(f'>> the Python modules (from {cache})')
+        shutil.copytree(cache, target)
+        return target
     print('>> the Python modules (aarch64 wheels for Python 3.13)')
     tmp = Path(str(target) + '.tmp')
     shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True)
@@ -187,7 +197,7 @@ def main():
     shutil.copy2(REPO / 'packaging/android-apk/patch_interp.py', tool / 'tools/patch_interp.py')
     shutil.copy2(REPO / 'packaging/android-apk/fix_globalization.py', tool / 'tools/fix_globalization.py')
     # the C# tools are built on the phone: the NuGet packages they restore have to be there (no network)
-    nuget_packages(tool / 'nxnative' / 'dm' / 'tools' / 'nx_extract')
+    nuget_packages(tool / 'nxnative' / 'dm' / 'tools' / 'nx_extract', cache / 'nuget')
     # nx_extract itself: built here for linux-arm64, because the phone's .NET SDK cannot build it (its
     # globalization mode stops the SDK, and a restore needs the network)
     nx = tool / 'tools' / 'nx_extract'
@@ -196,7 +206,7 @@ def main():
     else:
         print(f'>> nx_extract (linux-arm64) at {nx}')
     if not a.no_wheels:
-        wheels(tool / 'pylibs')
+        wheels(tool / 'pylibs', cache / 'pylibs')
 
     toolchain = Path(a.toolchain) if a.toolchain else cache / 'toolchain'
     if not toolchain.exists(): raise SystemExit(f'{toolchain} is missing (run build_toolchain.py first)')
@@ -224,6 +234,17 @@ def main():
                 modes[f'{tree}/{p.relative_to(root)}'] = p.stat().st_mode & 0o777
     (out / 'modes.json').write_text(json.dumps(modes))
     print(f'>> the modes of {len(modes)} file(s)')
+
+    # the build's stamp: the app compares it with the one the tree was unpacked with, and copies the tree again
+    # when it changed (the tree is big: the games' profiles alone are a third of it)
+    stamp = hashlib.sha256()
+    for tree in ('tool', 'toolchain'):
+        root = out / tree
+        if not root.exists(): continue
+        for p in sorted(root.rglob('*')):
+            if p.is_file():
+                stamp.update(f'{p.relative_to(root)}:{p.stat().st_size}\n'.encode())
+    (out / 'build-id').write_text(stamp.hexdigest() + '\n')
 
     manifest = {'schema': 'nx2a.phone-assets.v1',
                 'rootfs': 'rootfs.pkg',

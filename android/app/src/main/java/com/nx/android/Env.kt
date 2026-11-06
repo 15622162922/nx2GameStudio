@@ -227,15 +227,26 @@ class Env(private val ctx: Context) {
 
     /**
      * The tools that are small and change with the app: the prebuilt C# tools (the extractor, the shader
-     * translator) and the porter's own scripts. They are copied again on every start, so that an app update
-     * brings the new ones: a phone that has an older prebuilt translator would try to build one itself, and
-     * wait for a network that is not there (the .NET SDK on the phone cannot restore the packages).
+     * translator), the porter's own scripts and the shared scripts they use. They are copied again on every
+     * start, so that an app update brings the new ones: a phone that has an older prebuilt translator would try
+     * to build one itself, and wait for a network that is not there.
      */
     fun refreshTools() {
         if (!ready) return      // the environment is not there yet: the unpack brings everything
         try {
             copyAssets("tool/tools", File(tool, "tools"))
             copyAssets("tool/porter", File(tool, "porter"))
+            copyAssets("tool/nxnative/scripts", File(tool, "nxnative/scripts"))
+            copyAssets("tool/nxnative/dm/tools", File(tool, "nxnative/dm/tools"))
+            // the sources the port compiles: the host (dm/android), its gfx tools and the host's core
+            copyAssets("tool/nxnative/dm/android", File(tool, "nxnative/dm/android"))
+            copyAssets("tool/nxnative/dm/gfx", File(tool, "nxnative/dm/gfx"))
+            copyAssets("tool/nxnative/dm/host", File(tool, "nxnative/dm/host"))
+            // the build's stamp: when it changes, the whole tree is copied again (the games' profiles are big)
+            if (buildIdChanged()) {
+                Log.i(TAG, "the assets are newer than the tree: copying it again")
+                copyAssets("tool", tool)
+            }
             fixGlobalization()
             patchInterpreters()
             check()
@@ -243,6 +254,19 @@ class Env(private val ctx: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "the tools were not refreshed: ${e.message}")
         }
+    }
+
+    /** The build's stamp in the assets, against the one the tree was unpacked with */
+    private fun buildIdChanged(): Boolean {
+        val want = try {
+            ctx.assets.open("build-id").use { it.readBytes().toString(Charsets.UTF_8).trim() }
+        } catch (e: Exception) { return false }
+        if (want.isEmpty()) return false
+        val mark = File(files, ".nx2a-build")
+        val have = if (mark.exists()) mark.readText().trim() else ""
+        if (have == want) return false
+        mark.writeText(want)
+        return true
     }
 
     /**
