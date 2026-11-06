@@ -130,7 +130,7 @@ class DataPack(unittest.TestCase):
             o = t / 'out-data'
             self.assertTrue((o / 'mods/main.patched.bin').is_file()); self.assertTrue((o / 'RomFS/Data/a.bin').is_file()); self.assertTrue((o / 'aoc/1/d.bin').is_file())
             env = (o / 'env.txt').read_text()
-            self.assertIn('DM_LANG=ja', env); self.assertIn('DM_AOC_DIR=/sdcard/Android/data/org.nx2a.neo/files/aoc', env)
+            self.assertIn('DM_LANG=ja', env); self.assertIn(f'DM_AOC_DIR={t / "out-data"}/aoc', env)   # the pack's own folder
             self.assertEqual((o / 'settings.txt').read_text(), 'docked=0\noverlay=1\nrumble=1\n')
             self.assertEqual((man['files'], man['bytes'], man['dlc'], man['requires']), (4, 35, [1], ['bcn']))   # the installer checks requires
             self.assertEqual(datapack.read_manifest(o)['package'], 'org.nx2a.neo')
@@ -150,9 +150,10 @@ class DataPack(unittest.TestCase):
         from types import SimpleNamespace
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_font_'))
         try:
-            port = SimpleNamespace(aw=t / 'android', logs=t / 'logs', env=dict(os.environ, PYTHONUTF8='1'), package='org.nx2a.test')
+            port = SimpleNamespace(aw=t / 'android', logs=t / 'logs', env=dict(os.environ, PYTHONUTF8='1'), package='org.nx2a.test',
+                                   data_dir=lambda: t / 'out-data')
             env, files = pipeline.Port.button_font(port)
-            self.assertEqual(env, ['DM_SHARED_FONT_EXT=/sdcard/Android/data/org.nx2a.test/files/nintendo_ext.ttf']); self.assertEqual(list(files), ['nintendo_ext.ttf'])
+            self.assertEqual(env, [f'DM_SHARED_FONT_EXT={t / "out-data"}/nintendo_ext.ttf']); self.assertEqual(list(files), ['nintendo_ext.ttf'])
             cmap = TTFont(files['nintendo_ext.ttf']).getBestCmap()
             self.assertTrue({0xE0E0, 0xE0E1, 0xE0E4, 0xE0E5, 0xE0EF, 0xE100} <= set(cmap))   # A, B, L, R, +, stick
             made = files['nintendo_ext.ttf'].stat().st_mtime_ns

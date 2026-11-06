@@ -51,7 +51,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     for name, body in (text or {}).items(): (tmp / name).write_text(body, encoding='utf-8', newline='\n'); n += 1; b += len(body.encode('utf-8'))
     rows = [f'# Written by nx2android\'s porter for {profile.name} ({profile.id}); KEY=VALUE per line, read by the app at launch',
             f'DM_LANG={language}']
-    if aoc: rows.append(f'DM_AOC_DIR={files_folder(package)}/aoc')
+    if aoc: rows.append(f'DM_AOC_DIR={dst}/aoc')   # the pack's own folder: the app's files folder is not filled any more
     rows += profile.env + list(env)
     (tmp / 'env.txt').write_text('\n'.join(rows) + '\n', encoding='utf-8', newline='\n')
     if sets := {**profile.settings, **(settings or {})}: (tmp / 'settings.txt').write_text(''.join(f'{k}={v}\n' for k, v in sets.items()), encoding='utf-8', newline='\n')

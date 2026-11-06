@@ -86,6 +86,17 @@ Y700 / 骁龙 8 Elite / 3040×1904）：
 用的是**随工具走的那一份** ✓（`dm/tools/DroidSansFallbackFull.ttf` ✓，AOSP 的 ✓，Apache-2.0 ✓），
 所以每台机器都有 ✓。
 
+**字体的路径**：env.txt 里的 `DM_SHARED_FONT_CJK` ✓ 和 `DM_SHARED_FONT_EXT` ✓ 指的是
+**数据包自己的目录** ✓（`<输出目录>/<名字>-data/` ✓）—— 现在数据包**就地读取** ✓，
+App 自己的外部目录**不再被填充** ✓（早先的版本指那里 ✓，于是字体找不到 ✓，
+日志里一句 `[RED] no Chinese shared font` ✓）。
+
+**按钮图标的字体**（`nintendo_ext.ttf` ✓，按键图标在游戏文字里画成 "?" ✓）需要一款**粗体**字体 ✓：
+Windows 用 Arial Rounded Bold ✓，macOS 用 "Arial Rounded Bold" ✓，
+**Android 用 `/system/fonts/DroidSans-Bold.ttf`** ✓（或 Roboto-Bold ✓ / SourceSansPro-Bold ✓）——
+没列上这些路径时手机上会说 `[RED] no bold system font for the letters` ✓，
+按键图标就都是 "?" ✓ ✓。
+
 **注意字体的格式** ✓：字形必须是 TrueType 的 **glyf** 表 ✓（拉丁字体天天在读的那种 ✓）——
 Android 10 以后系统自带的 `NotoSansCJK-Regular.ttc` ✓ 是 **CFF2**（轮廓在 CFF2 里 ✓），
 SDK 的字体引擎**读不了** ✓（抽出来也是 CFF2 ✓）✓，所以**不用它** ✓。

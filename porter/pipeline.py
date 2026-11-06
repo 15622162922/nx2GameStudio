@@ -15,7 +15,9 @@ from porter.upstream import BuildError, PROG, android_profile, game, nacp, nsp, 
 PY = sys.executable
 # The letters of the button-icon font (make_ext_font.py knocks them out of the icons): a bold system font of the machine that ports, never shipped in the repository
 LETTER_FONTS = [f'{os.environ.get("WINDIR", "C:/Windows")}/Fonts/{f}' for f in ('ARLRDBD.TTF', 'arialbd.ttf')] + [
-    '/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf']
+    '/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+    # Android's own bold fonts (a phone has no Arial): the letters are knocked out of a solid plate, so any bold font does
+    '/system/fonts/Roboto-Bold.ttf', '/system/fonts/DroidSans-Bold.ttf', '/system/fonts/SourceSansPro-Bold.ttf']
 
 
 @dataclass
@@ -724,7 +726,7 @@ class Port:
             say(f'[RED] the Chinese font: {e}: the game\'s Chinese text will draw as "?"')
             return [], {}
         if not out.is_file(): return [], {}
-        return [f'DM_SHARED_FONT_CJK={datapack.files_folder(self.package)}/cjk.ttf'], {'cjk.ttf': out}
+        return [f'DM_SHARED_FONT_CJK={self.data_dir()}/cjk.ttf'], {'cjk.ttf': out}
 
     def button_font(self):
         """The stand-in for the system's Nintendo extension shared font: the controller-button icons in game text (U+E0E0 = A; Super Mario Bros. Wonder's menus showed '?' without it), which
@@ -741,7 +743,7 @@ class Port:
             nsp.rmtree(kf); d.mkdir(parents=True, exist_ok=True)
             nsp.run([PY, DM / 'tools/make_ext_font.py', ttf, letters], self.logs / 'make_ext_font.log', env=self.env)
             kf.write_text(f'{key}\n')
-        return [f'DM_SHARED_FONT_EXT={datapack.files_folder(self.package)}/nintendo_ext.ttf'], {'nintendo_ext.ttf': ttf}
+        return [f'DM_SHARED_FONT_EXT={self.data_dir()}/nintendo_ext.ttf'], {'nintendo_ext.ttf': ttf}
 
     # ---- install (optional) ----
     def install(self):
