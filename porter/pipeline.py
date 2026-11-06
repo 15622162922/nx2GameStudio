@@ -3,7 +3,7 @@
 # the rewrite for DM_TARGET=android, the Vulkan shader bundle, the host built with the player's NDK, the APK, the data pack and the install.
 # Work files go where upstream's NSP script puts them, <game folder>/<title ID>_build/ (extract/, aoc/, shader/, logs/ are shared with an iOS build of the same folder),
 # with the Android ones in its android/ folder.
-import importlib.util, os, re, shutil, sys
+import importlib.util, os, re, shutil, socket, sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -154,6 +154,24 @@ def inspect(folder, keys=None):
     if pack not in builds:
         info['reason'] = (info['reason'] + '; ' if info['reason'] else '') + f'{pack} is not a version the profile was brought up on ({", ".join(builds)}): it is packed from a derived profile, without that version\'s fixes'
     return info
+
+
+def _has_network(host='api.nuget.org', port=443, timeout=3):
+    """Whether the packages can be fetched: a restore that waits for a name server that never answers looks like
+    a build that never ends"""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _packages_cached():
+    """The NuGet packages the shader translator needs, already in the cache: the restore does not need the network
+    then"""
+    root = Path(os.environ.get('NUGET_PACKAGES', str(Path.home() / '.nuget' / 'packages')))
+    return all((root / p).is_dir() for p in
+               ('humanizer', 'msgpack.cli', 'gommon', 'microsoft.io.recyclablememorystream'))
 
 
 class Port:
@@ -571,6 +589,12 @@ class Port:
         A build made for the phone (NX2A_DMSH_XLATE) is used as it is: the phone's .NET SDK cannot restore the packages (no network) and its NuGet settings
         read never ends, so the phone does not build the translator but runs one that was built for it"""
         pre = os.environ.get('NX2A_DMSH_XLATE') or (NXNATIVE.parent / 'tools' / 'dmsh_xlate')   # the build shipped with the phone
+        if not Path(pre).is_dir() and not _has_network() and not _packages_cached():
+            # without the prebuilt the translator has to be built here, and the restore needs the network: on the
+            # phone that is a wait of minutes for a name server that never answers
+            raise BuildError('the prebuilt shader translator is missing and the packages cannot be restored '
+                             '(no network): the app was built without the C# tools (build_nx_extract.py needs '
+                             'the .NET SDK)')
         if Path(pre).is_dir():
             src = Path(pre)
             if not (src / 'dmsh_xlate.dll').is_file(): raise BuildError(f'NX2A_DMSH_XLATE has no dmsh_xlate.dll: {src}')
