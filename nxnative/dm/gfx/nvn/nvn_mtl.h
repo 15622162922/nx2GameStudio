@@ -9,6 +9,7 @@ void mtl_init(void);
 void mtl_vbuf_stats(uint64_t *resolve, uint64_t *reuse, uint64_t *set, uint64_t *skip);
 void mtl_set_depth_zero(int on);          // NVN depth mode: 1 = near is 0 (D3D / Metal), 0 = near is -w (GL, NVN's default); picks the vertex shaders' entry point (see shader_load in nvn_mtl.m)
 void mtl_set_origin_lower_left(int on);   // NVN window origin: 1 = lower left (GL, NVN's default), 0 = upper left (D3D / Metal); see nvn_mtl.m
+// (the modes are the console's own: NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT = 0, UPPER_LEFT = 1, and NVN_DEPTH_MODE_NEAR_IS_MINUS_W = 0, NEAR_IS_ZERO = 1; see gfx/nvn/include/nvn.h)
 void bf_want_note(const char *key);
 
 // Memory pool: [mem, mem+size) is expanded outward to page boundaries to build a zero-copy buffer; look up the buffer and offset by GPU address (= CPU address)
