@@ -14,8 +14,8 @@ The font is made of two of the fonts that come with the tools (both Apache-2.0):
   * OpenSans-Regular.ttf, the Latin base: the console's own shared fonts are like this (a plain TrueType font
     with its glyph names in a "post" table of format 2.0), and a game that reads the font the console's way
     expects that shape;
-  * DroidSansFallbackFull.ttf (AOSP's), for the CJK glyphs themselves: the 3755 commonest simplified Chinese
-    characters (GB2312 level 1) and the ASCII ones.
+  * DroidSansFallbackFull.ttf (AOSP's), for the CJK glyphs themselves: the 6763 characters of GB2312
+    (the 3755 commonest simplified Chinese ones and 2914 more) and the ASCII ones.
 
 The two are merged into one font, the CJK ones scaled to the base's units per em. A game parses this font
 itself: Mario vs. Donkey Kong (1.0.1, SDK 15) draws its Chinese text from the shared font and builds its glyph
@@ -28,7 +28,7 @@ Where the font comes from:
 
 Nothing found: no font is written and the port says so (the game's Chinese text then draws as "?").
 """
-import argparse, os, shutil, sys
+import argparse, hashlib, os, shutil, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -37,10 +37,12 @@ SHIPPED = HERE / 'DroidSansFallbackFull.ttf'     # the CJK glyphs (Apache-2.0)
 CANDIDATES = [str(BASE), '/system/fonts/DroidSansFallback.ttf', '/System/Library/Fonts/Supplemental/Arial Unicode.ttf']
 
 
-def gb2312_level1():
-    """The 3755 commonest simplified Chinese characters (GB2312 level 1), as code points"""
+def gb2312():
+    """The 6763 characters of GB2312 (level 1: the 3755 commonest ones, level 2: 2914 more), as code points.
+    Level 2 is in it too: a game's text has characters out of the commonest ones (Mario vs. Donkey Kong's
+    title has one: 咚), and a character the font does not have draws as "?"."""
     out = set()
-    for hi in range(0xB0, 0xD8):
+    for hi in range(0xB0, 0xF7):
         for lo in range(0xA1, 0xFF):
             try:
                 out.add(ord(bytes([hi, lo]).decode('gb2312')))
@@ -58,7 +60,7 @@ def cjk_face(src: Path, out: Path, units: int) -> bool:
     except ImportError:
         print(f'>> no fontTools (pip install fonttools): {src} cannot be read', file=sys.stderr)
         return False
-    uni = set(range(0x20, 0x7f)) | gb2312_level1() | set(range(0x3000, 0x3040)) | set(range(0xff00, 0xff60))
+    uni = set(range(0x20, 0x7f)) | gb2312() | set(range(0x3000, 0x3040)) | set(range(0xff00, 0xff60))
     try:
         f = TTFont(str(src))
         o = subset.Options()
@@ -102,6 +104,19 @@ def build(base: Path, cjk: Path, out: Path) -> bool:
     return True
 
 
+def inputs_key(base: Path) -> str:
+    """A stamp of what the font is made of (this tool, the Latin base, the CJK glyphs), so a font made by
+    another tool, with another base or before this tool's own change is not kept"""
+    h = hashlib.sha256()
+    for p in (Path(__file__), base, SHIPPED):
+        try:
+            st = p.stat()
+            h.update(f'{p.name}:{st.st_size}:{int(st.st_mtime)}\n'.encode())
+        except OSError:
+            h.update(f'{p.name}:-\n'.encode())
+    return h.hexdigest()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('out')
@@ -109,9 +124,6 @@ def main():
     a = ap.parse_args()
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if out.is_file() and out.stat().st_size > 0:
-        print(f'>> the Chinese font is already there: {out}')
-        return 0
     given = Path(a.font).expanduser() if a.font else None
     if given and not given.is_file():
         print(f'>> no such font: {given}', file=sys.stderr)
@@ -123,8 +135,14 @@ def main():
     if not SHIPPED.is_file():
         print(f'>> the CJK glyphs are missing: {SHIPPED}', file=sys.stderr)
         return 1
+    key = inputs_key(base)
+    kf = out.with_suffix('.key')
+    if out.is_file() and out.stat().st_size > 0 and kf.is_file() and kf.read_text().strip() == key:
+        print(f'>> the Chinese font is already there: {out}')
+        return 0
     if not build(base, SHIPPED, out):
         return 1
+    kf.write_text(key + '\n')
     print(f'>> the Chinese font: {base} + {SHIPPED.name} -> {out} ({out.stat().st_size:,} bytes)')
     return 0
 

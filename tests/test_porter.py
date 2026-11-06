@@ -173,10 +173,18 @@ class DataPack(unittest.TestCase):
             self.assertEqual(env, [f'DM_SHARED_FONT_CJK={t / "out-data"}/cjk.ttf']); self.assertEqual(list(files), ['cjk.ttf'])
             f = TTFont(files['cjk.ttf'])
             cmap = f.getBestCmap()
-            self.assertTrue({0x4E00, 0x4E2D, 0x6587} <= set(cmap))   # 一, 中, 文
+            self.assertTrue({0x4E00, 0x4E2D, 0x6587} <= set(cmap))   # three CJK code points
+            self.assertIn(0x549A, cmap)                              # a GB2312 level 2 character (the game's title has one: it drew as '?')
             self.assertTrue({0x41, 0x61, 0x30} <= set(cmap))         # A, a, 0
             self.assertEqual(f['post'].formatType, 2.0)             # the glyph names, which the game builds its glyph table from
             self.assertEqual(f['head'].unitsPerEm, 2048)
+            # the font is made again when the tool or the fonts change: a font left by another tool was kept once, and the game crashed on it
+            key = files['cjk.ttf'].with_suffix('.key')
+            self.assertTrue(key.is_file())
+            made = files['cjk.ttf'].stat().st_mtime_ns
+            key.write_text('stale\n')
+            pipeline.Port.cjk_font(port)
+            self.assertNotEqual(files['cjk.ttf'].stat().st_mtime_ns, made)   # made again
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
