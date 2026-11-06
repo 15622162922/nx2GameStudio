@@ -82,6 +82,10 @@ Y700 / 骁龙 8 Elite / 3040×1904）：
 
 **改法**：中文和韩文的类型（1–4 ✓）单独用**有 CJK 字形的字体** ✓：
 `DM_SHARED_FONT_CJK` ✓（或 `$DM_FONT_DIR/cjk.ttf` ✓）。
-移植器在打包时找一款这样的字体放进数据包 ✓（`dm/tools/cjk_font.py` ✓）：
-Android 10 以后系统只有 `NotoSansCJK-Regular.ttc` ✓（**一个字体集** ✓），
-工具用 fontTools **取出简体中那一张** ✓（手机上 18 秒 ✓）✓。
+移植器在打包时把一款这样的字体放进数据包 ✓（`dm/tools/cjk_font.py` ✓）——
+用的是**随工具走的那一份** ✓（`dm/tools/DroidSansFallbackFull.ttf` ✓，AOSP 的 ✓，Apache-2.0 ✓），
+所以每台机器都有 ✓。
+
+**注意字体的格式** ✓：字形必须是 TrueType 的 **glyf** 表 ✓（拉丁字体天天在读的那种 ✓）——
+Android 10 以后系统自带的 `NotoSansCJK-Regular.ttc` ✓ 是 **CFF2**（轮廓在 CFF2 里 ✓），
+SDK 的字体引擎**读不了** ✓（抽出来也是 CFF2 ✓）✓，所以**不用它** ✓。

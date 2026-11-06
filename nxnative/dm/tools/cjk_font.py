@@ -13,20 +13,24 @@ DM_SHARED_FONT_CJK at it:
 
 Where the font comes from:
   1. the file given (--font, or $DM_CJK_FONT)
-  2. /system/fonts/DroidSansFallback.ttf (Android before 10: a plain TTF with the CJK glyphs)
-  3. /system/fonts/NotoSansCJK-Regular.ttc (Android 10 and later: a collection of CJK faces; the Simplified
-     Chinese one is taken out of it, as the font engine takes one font, not a collection)
+  2. DroidSansFallbackFull.ttf beside this script: it comes with the tools (Apache-2.0, AOSP's), so every port
+     has one whatever the machine runs
+  3. /system/fonts/DroidSansFallback.ttf (Android before 10: the same font, on the device)
+  4. /System/Library/Fonts/Supplemental/Arial Unicode.ttf (macOS)
+
+The font must have its outlines in the TrueType tables (glyf), like the Latin fonts the font engine reads every
+day: Android's own CJK font since Android 10 is a collection of CFF outlines (a .ttc), which the font engine
+does not read, so it is not used here.
 
 Nothing found: no font is written and the port says so (the game's Chinese text then draws as "?").
 """
 import argparse, os, shutil, sys
 from pathlib import Path
 
-CANDIDATES = ['/system/fonts/DroidSansFallback.ttf',
-              '/system/fonts/NotoSansCJK-Regular.ttc',
-              '/system/fonts/NotoSansSC-Regular.otf',
-              '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-              '/System/Library/Fonts/PingFang.ttc']
+SHIPPED = Path(__file__).resolve().parent / 'DroidSansFallbackFull.ttf'   # comes with the tools (Apache-2.0)
+CANDIDATES = [str(SHIPPED),
+              '/system/fonts/DroidSansFallback.ttf',
+              '/System/Library/Fonts/Supplemental/Arial Unicode.ttf']
 # The face of a CJK collection the Simplified Chinese one
 SC_NAMES = ('Noto Sans CJK SC', 'Source Han Sans SC', 'PingFang SC', 'Arial Unicode MS')
 
