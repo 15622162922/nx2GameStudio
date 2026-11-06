@@ -60,6 +60,9 @@ class MainActivity : ComponentActivity() {
         loadState()
         setContent { AppScreen(this) }
         refresh()
+        // the small tools come with the app: an update brings new ones, and the phone has to get them
+        // (a phone with an old prebuilt translator would try to build one and wait for a network)
+        Thread { env.refreshTools() }.start()
     }
 
     override fun onResume() {

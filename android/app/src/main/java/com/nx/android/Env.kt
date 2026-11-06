@@ -226,6 +226,26 @@ class Env(private val ctx: Context) {
     }
 
     /**
+     * The tools that are small and change with the app: the prebuilt C# tools (the extractor, the shader
+     * translator) and the porter's own scripts. They are copied again on every start, so that an app update
+     * brings the new ones: a phone that has an older prebuilt translator would try to build one itself, and
+     * wait for a network that is not there (the .NET SDK on the phone cannot restore the packages).
+     */
+    fun refreshTools() {
+        if (!ready) return      // the environment is not there yet: the unpack brings everything
+        try {
+            copyAssets("tool/tools", File(tool, "tools"))
+            copyAssets("tool/porter", File(tool, "porter"))
+            fixGlobalization()
+            patchInterpreters()
+            check()
+            Log.i(TAG, "the tools were refreshed")
+        } catch (e: Exception) {
+            Log.e(TAG, "the tools were not refreshed: ${e.message}")
+        }
+    }
+
+    /**
      * Rewrites the interpreter of the programs that are started directly (the compiler, the .NET SDK): Android
      * has no /lib, and the rootfs the payload carries was built for another app's path.
      */
