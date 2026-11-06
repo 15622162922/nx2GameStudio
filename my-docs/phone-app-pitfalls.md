@@ -406,3 +406,63 @@ runtimeconfig 全是默认值 ✓ → MSBuild 的 worker 一崩就"0 errors"✓�
 **改法**：用 `uri.path`（整条路径 ✓）；provider 导出 ✓，
 但**只发 App 自己刚做的那个 APK** ✓（静态字段记着那个路径 ✓，别的路径一律拒绝 ✓）——
 导出一个能读任意路径的 provider 就成了漏洞 ✓。
+
+---
+
+## 24. rootfs 是整个 Debian 用户态：706 MB 里九成没人加载（2026-11-06）
+
+**症状**：APK 905 MB ✓；其中 `rootfs.pkg` 一个就 218 MB ✓ —— 里面是完整的
+Debian 13 ARM64 用户态 ✓：mesa 的软件渲染和它的 LLVM（154 MB ✓）、z3 ✓、
+ffmpeg ✓、Vulkan 的软件驱动 ✓、X11 ✓、perl ✓、locale ✓、图标 ✓。
+
+**原因**：nixport 的 payload 里的 rootfs 是"给各种程序用的完整环境" ✓，
+但移植器真正跑的只有 **Python 3.13** ✓、**bash** ✓ 和它们需要的库 ✓
+（外加工具链和 C# 工具 ✓ —— 它们的库也在 rootfs 里 ✓，`LD_LIBRARY_PATH`
+指的就是 rootfs 的库目录 ✓）。
+
+**改法**：`packaging/android-apk/rootfs_trim.py` ✓ —— 按 ELF 的
+`.dynamic` 段算出**闭包** ✓（`DT_NEEDED` 递归 ✓，含 Python 的
+`lib-dynload` 扩展 ✓ 和它们的链接目标 ✓），只留闭包 ✓、Python 标准库 ✓、
+一批 coreutils ✓ 和少数数据文件 ✓；构建时校验闭包完整 ✓（缺一个库就
+**不让构建通过** ✓）。rootfs.pkg 218 MB → **24 MB** ✓，
+设备上 726 MB → **72 MB** ✓。
+
+**顺带**：软件渲染、X11、Tk 这些一去，Debian 的 `libtinfo`/`libncurses`
+也就不再把 X11 那条链拖进来了 ✓。
+
+---
+
+## 25. 增量打包会在 APK 里留下 192 MB 的死空间（2026-11-06）
+
+**症状**：APK 里所有条目压缩后合计只有 455 MB ✓，文件却有 648 MB ✓。
+
+**原因**：gradle 的打包器（zipflinger ✓）**复用旧的 APK 文件** ✓：
+根目录换小之后（rootfs.pkg 218 MB → 23 MB ✓），省出的空间没有被真正
+腾掉 ✓，而是被写成**空条目标记**（`PK\x03\x04` 的空头 ✓）盖住 ✓ ——
+安装时会跳过 ✓，但**下载和设备上的空间照占** ✓。
+
+**改法**：**干净重打**（`./gradlew clean :app:assembleDebug` ✓）✓
+→ 456 MB ✓。改资产之后（rootfs ✓、工具 ✓、dotnet ✓）都要 clean 一次 ✓。
+
+---
+
+## 26. 只跑 `build_assets.py` 会把随包的 C# 工具弄丢（2026-11-06）
+
+**症状**：手机上点「移植」，第 5 步（Vulkan shaders ✓）卡住 5 分钟 ✓，
+然后 `Build FAILED. 0 Error(s)` ✓；日志里只有 6 行 ✓（`-v quiet` ✓）。
+
+**原因**：`build_assets.py` 开头会**清空**输出目录 ✓，而
+`nx_extract` ✓ 和 **dmsh_xlate** ✓（shader 翻译器 ✓）是
+`build_nx_extract.py` 产的 ✓（它需要 .NET SDK ✓）。只跑前者 ✓ →
+两个工具都没了 ✓ → 手机只好**自己编译翻译器** ✓ → 还原
+Humanizer/MsgPack.Cli/Gommon 那四个 NuGet 包要**联网** ✓ →
+手机没网 ✓ → 重试到超时 ✓。手机的 .NET SDK 本来就编不了它们 ✓
+（坑 19 ✓：读 NuGet 设置会永远卡住 ✓）。
+
+**改法**：
+- `build_apk.sh` 在工具那步之后**校验**两个工具都在 ✓，缺了就 `die` ✓
+  （不再 `|| echo` 把失败吞掉 ✓）
+- pipeline 在手机上发现预编译翻译器缺失且**既没有网也没有缓存**时
+  **立刻报错** ✓（不再等 5 分钟 ✓）
+- App **每次启动**都重拷 `tool/tools` ✓ 和 `tool/porter` ✓
+  （App 更新后工具树不刷新 ✓ 这条也修了 ✓）
