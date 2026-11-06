@@ -122,6 +122,8 @@ static void act_finish(ANativeActivity *a) {
     if (!m || (*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [saves] Activity.finish() failed: the app ends itself"); _exit(0); }
 }
 // ---- where the game's files are: the folder the player picks ----
+static void host_start(ANativeActivity *act);   // the host and the game (below)
+
 // The data pack (the files the porter made) is in a folder the player chooses on the first start: the game asks with the
 // system folder picker and keeps the path in its own folder, so the picker comes up only until there is one. Reading a
 // folder on the shared storage needs the all-files access, which the player gives once (the manifest asks for it).
@@ -180,68 +182,81 @@ static void jni_all_files_settings(ANativeActivity *a) {   // the settings page 
     if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
 }
 
-static void jni_pick_folder(ANativeActivity *a) {   // the system folder picker (ACTION_OPEN_DOCUMENT_TREE)
+static jobject g_data_field;          // the path field of the dialog (a global reference)
+static int g_prompt_up;                // the dialog is on the screen
+
+static JNIEnv *jni_attach(ANativeActivity *a) {   // the JNI environment of this thread
+    JNIEnv *E = NULL;
+    JavaVMAttachArgs args; memset(&args, 0, sizeof args);
+    args.version = JNI_VERSION_1_6; args.name = "dmhost"; args.group = NULL;
+    if (!a->vm || (*a->vm)->AttachCurrentThread(a->vm, &E, &args) != JNI_OK) return NULL;
+    return E;
+}
+
+// The folder the pack is in, as the port wrote it into the APK (assets/nx2a-data.txt): the common case, and the
+// player does not have to choose anything.
+static void baked_data_dir(ANativeActivity *a, char *out, size_t cap) {
+    out[0] = 0;
+    AAssetManager *am = a->assetManager;
+    if (!am) return;
+    AAsset *as = AAssetManager_open(am, "nx2a-data.txt", AASSET_MODE_BUFFER);
+    if (!as) return;
+    off_t n = AAsset_getLength(as);
+    if (n > 0 && n < 600) {
+        char buf[600];
+        AAsset_read(as, buf, n);
+        buf[n] = 0;
+        char *nl = strchr(buf, '\n'); if (nl) *nl = 0;
+        snprintf(out, cap, "%s", buf);
+    }
+    AAsset_close(as);
+}
+
+// A small dialog with a text field: the path of the folder with the game's files. The system's folder picker cannot
+// be used here: a NativeActivity gets no onActivityResult, so the folder it returns never reaches the game.
+static void jni_path_prompt(ANativeActivity *a, const char *initial) {
     JNIEnv *E = a->env;
-    jclass cls = (*E)->GetObjectClass(E, a->clazz);
-    jclass intentCls = (*E)->FindClass(E, "android/content/Intent");
-    jmethodID ctor = intentCls ? (*E)->GetMethodID(E, intentCls, "<init>", "(Ljava/lang/String;)V") : NULL;
-    jobject intent = (intentCls && ctor) ? (*E)->NewObject(E, intentCls, ctor, (*E)->NewStringUTF(E, "android.intent.action.OPEN_DOCUMENT_TREE")) : NULL;
-    if (intent) {
-        jmethodID addFlags = (*E)->GetMethodID(E, intentCls, "addFlags", "(I)Landroid/content/Intent;");
-        if (addFlags) (*E)->CallObjectMethod(E, intent, addFlags, 0x01 | 0x40);   // read + persistable
-        jmethodID start = (*E)->GetMethodID(E, cls, "startActivityForResult", "(Landroid/content/Intent;I)V");
-        if (start) (*E)->CallVoidMethod(E, a->clazz, start, intent, 1);
+    jclass bCls = (*E)->FindClass(E, "android/app/AlertDialog$Builder");
+    jmethodID bCtor = bCls ? (*E)->GetMethodID(E, bCls, "<init>", "(Landroid/content/Context;)V") : NULL;
+    jobject builder = (bCls && bCtor) ? (*E)->NewObject(E, bCls, bCtor, a->clazz) : NULL;
+    jclass etCls = (*E)->FindClass(E, "android/widget/EditText");
+    jmethodID etCtor = etCls ? (*E)->GetMethodID(E, etCls, "<init>", "(Landroid/content/Context;)V") : NULL;
+    jobject field = (etCls && etCtor) ? (*E)->NewObject(E, etCls, etCtor, a->clazz) : NULL;
+    if (!builder || !field) { if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E); return; }
+    jmethodID setText = (*E)->GetMethodID(E, etCls, "setText", "(Ljava/lang/CharSequence;)V");
+    if (setText) (*E)->CallVoidMethod(E, field, setText, (*E)->NewStringUTF(E, initial));
+    if (g_data_field) (*E)->DeleteGlobalRef(E, g_data_field);
+    g_data_field = (*E)->NewGlobalRef(E, field);
+    jmethodID setTitle = (*E)->GetMethodID(E, bCls, "setTitle", "(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;");
+    if (setTitle) (*E)->CallObjectMethod(E, builder, setTitle, (*E)->NewStringUTF(E, "数据包文件夹"));
+    jmethodID setView = (*E)->GetMethodID(E, bCls, "setView", "(Landroid/view/View;)Landroid/app/AlertDialog$Builder;");
+    if (setView) (*E)->CallObjectMethod(E, builder, setView, field);
+    jmethodID setPos = (*E)->GetMethodID(E, bCls, "setPositiveButton", "(Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;");
+    if (setPos) (*E)->CallObjectMethod(E, builder, setPos, (*E)->NewStringUTF(E, "确定"), NULL);   // no listener: the button closes the dialog
+    jmethodID show = (*E)->GetMethodID(E, bCls, "show", "()Landroid/app/AlertDialog;");
+    if (show) (*E)->CallObjectMethod(E, builder, show);
+    if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
+    g_prompt_up = 1;
+}
+
+// What the field says now
+static int jni_field_text(ANativeActivity *a, char *out, size_t cap) {
+    if (!g_data_field) return 0;
+    JNIEnv *E = jni_attach(a);
+    if (!E) return 0;
+    int ok = 0;
+    jclass etCls = (*E)->FindClass(E, "android/widget/EditText");
+    jmethodID getText = etCls ? (*E)->GetMethodID(E, etCls, "getText", "()Landroid/text/Editable;") : NULL;
+    jobject ed = (etCls && getText) ? (*E)->CallObjectMethod(E, g_data_field, getText) : NULL;
+    jmethodID toStr = ed ? (*E)->GetMethodID(E, (*E)->GetObjectClass(E, ed), "toString", "()Ljava/lang/String;") : NULL;
+    jstring s = (ed && toStr) ? (*E)->CallObjectMethod(E, ed, toStr) : NULL;
+    if (s) {
+        const char *c = (*E)->GetStringUTFChars(E, s, NULL);
+        if (c) { snprintf(out, cap, "%s", c); (*E)->ReleaseStringUTFChars(E, s, c); ok = 1; }
     }
     if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
-}
-
-static int jni_tree_uris(ANativeActivity *a, char out[][400], int max) {   // the folders the app holds a grant for
-    JNIEnv *E = a->env;
-    int n = 0;
-    jclass cls = (*E)->GetObjectClass(E, a->clazz);
-    jmethodID getRes = (*E)->GetMethodID(E, cls, "getContentResolver", "()Landroid/content/ContentResolver;");
-    jobject res = getRes ? (*E)->CallObjectMethod(E, a->clazz, getRes) : NULL;
-    jmethodID getPerms = res ? (*E)->GetMethodID(E, (*E)->GetObjectClass(E, res), "getPersistedUriPermissions", "()[Landroid/content/UriPermission;") : NULL;
-    jobjectArray arr = (res && getPerms) ? (*E)->CallObjectMethod(E, res, getPerms) : NULL;
-    if (!arr) { if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E); return 0; }
-    jsize total = (*E)->GetArrayLength(E, arr);
-    for (jsize i = 0; i < total && n < max; i++) {
-        jobject perm = (*E)->GetObjectArrayElement(E, arr, i);
-        if (!perm) continue;
-        jmethodID getUri = (*E)->GetMethodID(E, (*E)->GetObjectClass(E, perm), "getUri", "()Landroid/net/Uri;");
-        if (!getUri) { (*E)->ExceptionClear(E); continue; }
-        jobject uri = (*E)->CallObjectMethod(E, perm, getUri);
-        jmethodID toStr = uri ? (*E)->GetMethodID(E, (*E)->GetObjectClass(E, uri), "toString", "()Ljava/lang/String;") : NULL;
-        jstring s = (uri && toStr) ? (*E)->CallObjectMethod(E, uri, toStr) : NULL;
-        if (s) {
-            const char *c = (*E)->GetStringUTFChars(E, s, NULL);
-            if (c) { snprintf(out[n], 400, "%s", c); (*E)->ReleaseStringUTFChars(E, s, c); n++; }
-        }
-        if ((*E)->ExceptionCheck(E)) (*E)->ExceptionClear(E);
-    }
-    return n;
-}
-
-static int uri_to_path(const char *uri, char *out, size_t cap) {   // a tree URI is the path in disguise
-    // content://com.android.externalstorage.documents/tree/primary%3ASwitch%2FPorts%2FName -> /storage/emulated/0/Switch/Ports/Name
-    const char *t = strstr(uri, "/tree/");
-    if (!t) return 0;
-    t += 6;
-    char dec[600]; size_t o = 0;
-    for (const char *p = t; *p && o + 1 < sizeof dec; p++) {
-        if (*p == '%' && p[1] && p[2]) {
-            char h[3] = {p[1], p[2], 0};
-            dec[o++] = (char)strtol(h, NULL, 16);
-            p += 2;
-        } else dec[o++] = *p;
-    }
-    dec[o] = 0;
-    char *colon = strchr(dec, ':');
-    if (!colon) return 0;
-    *colon = 0;
-    if (!strcmp(dec, "primary")) snprintf(out, cap, "/storage/emulated/0/%s", colon + 1);
-    else snprintf(out, cap, "/storage/%s/%s", dec, colon + 1);
-    return 1;
+    (*a->vm)->DetachCurrentThread(a->vm);
+    return ok;
 }
 
 static int data_dir_valid(const char *dir) {   // the data pack's own marker: every pack has one
@@ -270,35 +285,42 @@ static int data_dir_load(ANativeActivity *a, char *out, size_t cap) {   // the f
     return 1;
 }
 
-// The folder the player picked: a granted tree whose folder holds a data pack, and is not the one we have already.
-static int data_pick(ANativeActivity *a) {
-    char uris[DS_MAX_URIS][400]; int n = jni_tree_uris(a, uris, DS_MAX_URIS);
-    char saved[700]; saved[0] = 0;
-    int saved_ok = data_dir_load(a, saved, sizeof saved) && data_dir_valid(saved);
-    for (int i = 0; i < n; i++) {
+// The player writes the path into the dialog; this thread watches the field and starts the game when it holds a
+// folder with the data pack in it.
+static void *data_poll(void *arg) {
+    ANativeActivity *a = arg;
+    for (int i = 0; i < 1200; i++) {   // ten minutes
+        usleep(500000);
         char path[700];
-        if (!uri_to_path(uris[i], path, sizeof path)) continue;
-        if (!data_dir_valid(path)) continue;
-        if (saved_ok && !strcmp(path, saved)) continue;
+        if (!jni_field_text(a, path, sizeof path)) continue;
+        if (!path[0] || !data_dir_valid(path)) continue;
         data_dir_save(a, path);
         snprintf(g_data_dir, sizeof g_data_dir, "%s", path);
-        return 1;
+        host_start(a);
+        return NULL;
     }
-    return 0;
+    return NULL;
 }
 
-// The setup before the game starts: the folder with the files, the access to the shared storage, and the picker.
+// The setup before the game starts: where the files are, the access to the shared storage, and the dialog.
 static int data_setup(ANativeActivity *a) {
     if (g_data_dir[0] && data_dir_valid(g_data_dir)) return 1;
+    char saved[700]; saved[0] = 0;
+    if (data_dir_load(a, saved, sizeof saved) && data_dir_valid(saved)) {   // the folder of last time
+        snprintf(g_data_dir, sizeof g_data_dir, "%s", saved);
+        return 1;
+    }
+    char baked[700]; baked[0] = 0;
+    baked_data_dir(a, baked, sizeof baked);
+    if (baked[0] && data_dir_valid(baked)) {   // where the port put the pack
+        snprintf(g_data_dir, sizeof g_data_dir, "%s", baked);
+        data_dir_save(a, baked);
+        return 1;
+    }
     // the older layout: the pack in the app's own external folder (where the porter's copy step put it) is the
     // app's own directory: it needs no permission, and the games that were ported before keep working
     if (a->externalDataPath && data_dir_valid(a->externalDataPath)) {
         snprintf(g_data_dir, sizeof g_data_dir, "%s", a->externalDataPath);
-        return 1;
-    }
-    char saved[700]; saved[0] = 0;
-    if (data_dir_load(a, saved, sizeof saved) && data_dir_valid(saved)) {
-        snprintf(g_data_dir, sizeof g_data_dir, "%s", saved);
         return 1;
     }
     if (!jni_all_files(a)) {   // the shared storage needs the all-files access; the player gives it once
@@ -306,17 +328,17 @@ static int data_setup(ANativeActivity *a) {
         jni_all_files_settings(a);
         return 0;
     }
-    jni_toast(a, "选择数据包所在文件夹");
-    jni_pick_folder(a);
+    if (!g_prompt_up) {   // the dialog with the path
+        jni_toast(a, "数据包不在它应该在的地方，请填上它的文件夹");
+        jni_path_prompt(a, baked);
+        pthread_t w; if (!pthread_create(&w, NULL, data_poll, a)) pthread_detach(w);
+    }
     return 0;
 }
 
-static void host_start(ANativeActivity *act);   // the host and the game (below)
-
 static void on_resume(ANativeActivity *a) {
     if (g_quit) { act_finish(a); return; }
-    if (!g_host_up) {   // the player is coming back from the settings or the picker
-        data_pick(a);
+    if (!g_host_up) {   // the player is coming back from the settings
         if (!data_setup(a)) return;
         host_start(a);
         return;
@@ -1071,6 +1093,7 @@ __attribute__((visibility("default"))) void ANativeActivity_onCreate(ANativeActi
 }
 
 static void host_start(ANativeActivity *act) {
+    if (g_host_up) return;   // the dialog's thread and the resume can both get here
     snprintf(g_root, sizeof g_root, "%s", g_data_dir[0] ? g_data_dir : (act->externalDataPath ? act->externalDataPath : act->internalDataPath));
     char p[700];
     snprintf(p, sizeof p, "%s/log.txt", g_root); char prev[720]; snprintf(prev, sizeof prev, "%s/log.prev.txt", g_root); rename(p, prev);
