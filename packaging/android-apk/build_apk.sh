@@ -50,6 +50,11 @@ else
     python3 "$here/build_assets.py" --out "$cache/assets" --payload "$cache/payload-arm64.tar.gz" --toolchain "$cache/toolchain"
     # nx_extract for the phone, built here (the phone's .NET SDK cannot): after the assets, which it joins
     python3 "$here/build_nx_extract.py" || echo "   (no nx_extract for the phone: the .NET SDK is missing)"
+    # The phone runs the C# tools but cannot build them: without them it would try to build the shader
+    # translator itself and wait for a network that is not there.
+    for t in "$cache/assets/tool/tools/nx_extract/nx_extract" "$cache/assets/tool/tools/dmsh_xlate/dmsh_xlate.dll"; do
+        [[ -f $t ]] || die "the app's C# tools are missing: $t (build_nx_extract.py needs the .NET SDK: install it or set DOTNET=/path/to/dotnet)"
+    done
 fi
 
 # 4. the APK
