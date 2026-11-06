@@ -196,6 +196,18 @@ def main():
     # globalization fix (the phone's .NET has no ICU): both are run by the app, so they travel with it
     shutil.copy2(REPO / 'packaging/android-apk/patch_interp.py', tool / 'tools/patch_interp.py')
     shutil.copy2(REPO / 'packaging/android-apk/fix_globalization.py', tool / 'tools/fix_globalization.py')
+    # the launcher's dex: the game APK's launcher activity, the page the player picks the language and the driver on before the
+    # game starts. It is built here, on the computer (javac and d8): the phone has no JDK and no Android SDK, and the .NET
+    # SDK's globalization mode stops there too. Without it the game APKs have no launcher and the game is the entry.
+    dex = Path(__file__).resolve().parent / '.cache' / 'launcher.dex'
+    if not dex.is_file():
+        try:
+            subprocess.run([sys.executable, str(REPO / 'packaging/android-apk/build_launcher.py'), '--out', str(dex)], check=True)
+        except (subprocess.CalledProcessError, SystemExit) as e:
+            print(f'>> the launcher: not built ({e}): the game APKs get no launcher page')
+    if dex.is_file():
+        shutil.copy2(dex, tool / 'tools/launcher.dex')
+        print('>> the launcher (classes.dex)')
     # the C# tools are built on the phone: the NuGet packages they restore have to be there (no network)
     nuget_packages(tool / 'nxnative' / 'dm' / 'tools' / 'nx_extract', cache / 'nuget')
     # nx_extract itself: built here for linux-arm64, because the phone's .NET SDK cannot build it (its

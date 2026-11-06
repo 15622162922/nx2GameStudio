@@ -34,6 +34,7 @@ class Options:
     package: str = ''                  # the app's package instead of the profile's (a test install beside another build of the game)
     fps60: bool = False                # 60 fps: the profile's own frame-rate cap, else the build's FPSLocker-Warehouse config (porter/fpslocker.py)
     vulkan_driver: Path = None         # an arm64 Vulkan driver (Mesa's Turnip) packed in the APK and used instead of the system's (DM_VK_DRIVER, dm/android/gfx_vk_core.c)
+    vulkan_driver_dir: Path = None     # a folder of arm64 Vulkan drivers: the APK carries them all and the game's launcher lets the player pick one (drivers.txt)
     mt_replay: bool = False            # multithread replay: DM_VK_MT_REPLAY=1 in env.txt (dm/android/gfx_vk_dq.c), after the profile's env rows
     touch: bool = False                # a game played by touch: the on-screen gamepad starts hidden (TOUCH_SETTINGS), so it takes none of the game's touches
     vercode_offset: int = 0            # added to the APK's versionCode: a rebuild of the same game version installs over a build with a higher one (version_code)
@@ -44,6 +45,16 @@ class Options:
 # --vulkan-driver: libadrenotools and its hooks (dm/android/build.py --adrenotools, from dm/third_party/libadrenotools), which load the driver for the app
 # (gfx_vk_core.c vk_init); the APK carries them beside it
 ADRENOTOOLS_LIBS = ('libadrenotools.so', 'libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', 'libgsl_alloc_hook.so')
+
+
+def launcher_dex():
+    """The launcher's dex (the APK's launcher activity, the page the player picks the language and the driver on): built on the computer
+    (packaging/android-apk/build_launcher.py) and shipped in the tool tree; None when it was not built (the APK's game is then the entry)"""
+    for p in (DM.parent.parent / 'tools' / 'launcher.dex',                                    # the tool tree (the phone, the bundle)
+              NXNATIVE.parent / 'packaging/android-apk/.cache/launcher.dex',                 # a developer's checkout
+              NXNATIVE.parent / 'packaging/android-apk/.cache/assets/tool/tools/launcher.dex'):  # the built assets
+        if p.is_file(): return p
+    return None
 
 
 def app_stem(g, name):   # the file name of the APK and the data pack: the profile's iOS IPA name without .ipa (NeoTheWorldEndsWithYou)
@@ -194,6 +205,10 @@ class Port:
         if o.vulkan_driver:
             o.vulkan_driver = Path(o.vulkan_driver).expanduser().resolve()
             if not o.vulkan_driver.is_file() or o.vulkan_driver.suffix != '.so': raise BuildError(f'--vulkan-driver: not a .so library: {o.vulkan_driver}')
+        if o.vulkan_driver_dir:
+            o.vulkan_driver_dir = Path(o.vulkan_driver_dir).expanduser().resolve()
+            if not o.vulkan_driver_dir.is_dir(): raise BuildError(f'--vulkan-driver-dir: not a folder: {o.vulkan_driver_dir}')
+            if not self.drivers(): raise BuildError(f'--vulkan-driver-dir: no .so library in {o.vulkan_driver_dir}')
         keys = o.keys or self.cfg.get('keys')
         if not keys: raise BuildError('no prod.keys: give -k / --keys, or set it once with `porter config keys <path>`')
         o.keys = Path(keys).expanduser().resolve()
@@ -377,6 +392,7 @@ class Port:
         want = nsp.language_code(lang_in) if lang_in else 'en-US'
         if not want: raise BuildError(f'unknown game language {lang_in!r}')
         have = nacp.languages(self.game / 'control.nacp') or nacp.languages(self.base / 'control.nacp')
+        self.langs = have or ['en-US']
         self.lang = nsp.game_language(want, bool(lang_in), have)
         say(f'app: {self.app_name} {self.display} ({self.package}), game language {self.lang}')
 
@@ -619,7 +635,7 @@ class Port:
         PROG.stage('host', step=f'NDK {self.tools["ndk"].name}')
         out = self.aw / ('host-debug' if self.o.debug else 'host')
         nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out, '--lib', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
-                + (['--adrenotools'] if self.o.vulkan_driver else []), self.logs / 'android_host.log', env=self.env)
+                + (['--adrenotools'] if self.drivers() else []), self.logs / 'android_host.log', env=self.env)
         self.so = out / 'libdmhost.so'
         if not self.so.is_file(): raise BuildError(f'build.py made no {self.so}')
         PROG.end(f'{self.so.stat().st_size / 2**20:.1f} MB')
@@ -636,7 +652,8 @@ class Port:
                  '--data-root', str(self.data_dir()),
                  '--version-code', str(code), '--version-name', self.display]
                 + (['--landscape'] if self.ap.landscape else []) + (['--icon', icon] if icon else []) + self.theme() + ([] if self.o.debug else ['--release'])
-                + [a for f in ([self.o.vulkan_driver] + [self.so.parent / n for n in ADRENOTOOLS_LIBS] if self.o.vulkan_driver else []) for a in ('--extra-so', str(f))],
+                + [a for f in (self.drivers() + [self.so.parent / n for n in ADRENOTOOLS_LIBS] if self.drivers() else []) for a in ('--extra-so', str(f))]
+                + (['--dex', str(dex)] if (dex := launcher_dex()) else []),
                 self.logs / 'android_apk.log', env=self.env)
         self.result['apk'] = str(self.apk_path)
         PROG.end(f'{self.apk_path.name}, {self.apk_path.stat().st_size / 2**20:.1f} MB')
@@ -661,6 +678,13 @@ class Port:
         return dst
 
     # ---- data: the files the app reads from its files folder ----
+    def drivers(self):
+        """The Vulkan drivers the APK carries: --vulkan-driver first, then the folder's (the launcher's list)"""
+        out = [self.o.vulkan_driver] if self.o.vulkan_driver else []
+        if self.o.vulkan_driver_dir:
+            out += sorted(f for f in self.o.vulkan_driver_dir.glob('*.so') if f.is_file())
+        return out
+
     def data_dir(self):
         """Where the data pack goes (and where the game reads its files from): the pack's own name in the output folder"""
         return self.o.out / f'{app_stem(self.g, self.app_name)}-data'
@@ -672,10 +696,20 @@ class Port:
         man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=self.game / 'RomFS', shaders=self.dmsv,
                              aoc=self.aoc, language=self.lang, package=self.package, env=self.fps_env + font_env + (['DM_VK_MT_REPLAY=1'] if self.o.mt_replay else [])
                              + ([f'DM_VK_DRIVER={self.o.vulkan_driver.name}'] if self.o.vulkan_driver else []), settings=TOUCH_SETTINGS if self.o.touch else None,
-                             files={**self.fps_files, **font_files},
+                             files={**self.fps_files, **font_files}, text=self.lists(),
                              progress=lambda what: PROG.set(step=f'linking {what}'))
         self.data_path = dst; self.result['data'] = str(dst)
         PROG.end(f'{man["files"]:,} files, {man["bytes"] / 2**30:.1f} GB')
+
+    def lists(self):
+        """The launcher's lists: the languages the game supports (languages.txt) and the drivers the APK carries (drivers.txt).
+        The device's own driver is the first choice: a driver in the folder is only used when the player picks it (the page)"""
+        langs = []
+        for code in self.langs:
+            name = next((n for c, n in nacp.LANGUAGES if c == code), '')
+            langs.append(f'{code}\t{name}')
+        return {'languages.txt': '\n'.join(langs) + ('\n' if langs else ''),
+                'drivers.txt': ''.join(f'{d.name}\n' for d in self.drivers())}
 
     def button_font(self):
         """The stand-in for the system's Nintendo extension shared font: the controller-button icons in game text (U+E0E0 = A; Super Mario Bros. Wonder's menus showed '?' without it), which

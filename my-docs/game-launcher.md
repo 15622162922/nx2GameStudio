@@ -1,0 +1,74 @@
+# 游戏 APK 的启动页（LauncherActivity）
+
+每个游戏 APK 里都有一个**自己的启动页** ✓：桌面的图标点进去先看到它 ✓，
+显示游戏的信息、数据包的位置和语言与 Vulkan 驱动的选择 ✓，
+点「▶ 启动游戏」才跳到游戏的原生 Activity（`android.app.NativeActivity`）✓。
+
+## 为什么是它
+
+- 玩家点图标**不该直接进游戏** ✓：游戏要多-files 的路径、多语言、多驱动的选择 ✓，
+  这些以前要么在游戏里（原生对话框 ✓），要么根本没法选 ✓。
+- 之前试过 SAF 的文件夹选择器 ✓（`ACTION_OPEN_DOCUMENT_TREE` ✓）——
+  **原生 Activity 收不到 `onActivityResult`** ✓（AOSP 的 `NativeActivity.java` 没有覆盖它 ✓），
+  于是永远循环弹框 ✓。换成真正的 Java Activity 就没问题了 ✓（它有 `onActivityResult` ✓）。
+- 启动页和游戏**在同一个 APK、同一个 uid** ✓：它们共用内部目录 ✓
+  （游戏把记住的数据包路径写在 `files/data_dir.txt` ✓ —— 启动页读同一个文件 ✓）✓，
+  也共用存储权限 ✓（授权一次两边都有效 ✓）。
+
+## 构成
+
+| 件 | 在哪 | 干什么 |
+|---|---|---|
+| `LauncherActivity.java` | `nxnative/dm/android/launcher/` | 页面本身 ✓（纯代码建视图 ✓，没有 XML ✓，免 aapt ✓） |
+| `build_launcher.py` | `packaging/android-apk/` | 用 **javac + d8** 把 Java 编译成 `classes.dex` ✓ |
+| `mkapk.py --dex` | `nxnative/dm/android/apk/` | 把 dex 放进 APK ✓，清单改成 `hasCode=true` ✓，加启动页入口 ✓ |
+| `pipeline.py` | `porter/` | 找 dex ✓、传 `--dex` ✓、写 `languages.txt` / `drivers.txt` ✓ |
+
+**dex 在电脑上编译** ✓（和 `nx_extract` 一样 ✓）：手机上没有 JDK ✓，也没有 Android SDK ✓
+（手机的 .NET SDK 连自己的 globalization 模式都过不去 ✓）。
+`build_assets.py` 顺带把它编好 ✓，放进工具树的 `tool/tools/launcher.dex` ✓，
+App 启动刷新工具时带上它 ✓。
+
+## 清单长什么样
+
+```
+<application hasCode=true>                                  ← 原来 false（无代码的 APK ✓）
+  <activity com.nx2a.launcher.LauncherActivity>             ← 图标进这里 ✓
+    <intent-filter> MAIN + LAUNCHER ✓>
+  <activity android.app.NativeActivity>                     ← 启动页跳过去 ✓
+    <meta-data android.app.lib_name = dmhost ✓>             ← 不再是入口 ✓
+```
+
+**没有 dex 的老 APK 不变** ✓：`hasCode=false` ✓，`NativeActivity` 还是入口 ✓，
+已经装在手机上的老游戏照常玩 ✓。
+
+## 页面上的东西
+
+- **游戏名** ✓：数据包里的 `nx2a-data.json` 的 `name` ✓（移植器写的清单 ✓）。
+- **数据包位置** ✓：游戏记住的路径（`files/data_dir.txt` ✓）✓，
+  没有就用地��里烤进去的那个（`assets/nx2a-data.txt` ✓）✓。
+- **语言** ✓：游戏自己支持的语言（`control.nacp` 的 `SupportedLanguageFlag` ✓）✓，
+  写进数据包的 `languages.txt` ✓（一行 `代码<TAB>名字` ✓）。
+- **Vulkan 驱动** ✓：APK 里带的驱动（`drivers.txt` ✓）✓，
+  第一项是**系统自带** ✓；选了哪个就写 `DM_VK_DRIVER` ✓，加载失败自动回落系统的 ✓
+  （`dm/android/gfx_vk_core.c` 的 `vk_init` ✓）。
+- **存储权限** ✓：读不到数据包时给一个按钮 ✓，点开是系统的“所有文件访问”页 ✓。
+
+点「▶ 启动游戏」→ 改写数据包的 `env.txt`（`DM_LANG` ✓ `DM_VK_DRIVER` ✓）✓
+→ `startActivity(NativeActivity)` ✓。
+
+## 手机上怎么带驱动
+
+- **App**（`android/app/.../Screen.kt` ✓）：**Vulkan 驱动文件夹** ✓（默认 `/sdcard/Switch/Drivers` ✓）。
+- **PC GUI**（`gui/app.py` ✓）：**Vulkan driver folder** ✓。
+- **命令行**（`porter/cli.py` ✓）：`--vulkan-driver-dir <目录>` ✓（里面的 `.so` 全部打进 APK ✓）。
+  只有一个驱动时用旧的 `--vulkan-driver <文件>` ✓（它现在是第一个 ✓，也是 env.txt 的默认值 ✓）。
+
+## 已知的坑
+
+- **有些设备的 `Environment.isExternalStorageManager()` 会说谎** ✓（联想的 ROM ✓：
+  UID 的 op 是 allow ✓，App 自己的 op 是 default ✓，读 `/sdcard` 会被拒 ✓，
+  但那个函数返回 true ✓）。所以启动页**不看它** ✓，而是**直接读数据包的 `env.txt`** ✓
+  —— 读得到就是有权限 ✓，读不到就给授权按钮 ✓。
+- 启动页是**竖屏**的普通 Activity ✓，游戏的原生 Activity 才是横屏 ✓；
+  两者在同一个 task 里 ✓，横竖切换不会重建游戏 ✓。

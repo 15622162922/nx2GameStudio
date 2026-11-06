@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     var keys by mutableStateOf("/sdcard/switch/prod.keys")
     var out by mutableStateOf("/sdcard/Switch/Ports")
     var game by mutableStateOf("")
+    var driverDir by mutableStateOf("/sdcard/Switch/Drivers")
     var touch by mutableStateOf(false)
     var fps60 by mutableStateOf(false)
     var experimental by mutableStateOf(false)
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
         keys = prefs.getString("keys", keys) ?: keys
         out = prefs.getString("out", out) ?: out
         game = prefs.getString("game", game) ?: game
+        driverDir = prefs.getString("driverDir", driverDir) ?: driverDir
         touch = prefs.getBoolean("touch", touch)
         fps60 = prefs.getBoolean("fps60", fps60)
         experimental = prefs.getBoolean("experimental", experimental)
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
 
     private fun saveState() {
         prefs.edit().putString("keys", keys.trim()).putString("out", out.trim()).putString("game", game.trim())
+            .putString("driverDir", driverDir.trim())
             .putBoolean("touch", touch).putBoolean("fps60", fps60).putBoolean("experimental", experimental).apply()
     }
 
@@ -215,6 +218,9 @@ class MainActivity : ComponentActivity() {
         apkPath = ""; dataPath = ""
         hasResult = false
         val args = mutableListOf("-m", "porter", "port", f, "-k", k, "-o", out.trim(), "--progress", "json")
+        // the Vulkan drivers the game's launcher offers: a folder of .so libraries (the APK carries them all)
+        val drv = driverDir.trim()
+        if (drv.isNotEmpty()) args += listOf("--vulkan-driver-dir", drv)
         if (touch) args += "--touch"
         if (fps60) args += "--fps60"
         if (experimental) args += "--experimental"
@@ -345,6 +351,11 @@ class MainActivity : ComponentActivity() {
      * The game file: the folder is picked first (a real path on the card), then the game file in it. The
      * updates and the DLC next to it are found by the tool itself.
      */
+    /** The folder with the Vulkan drivers the game offers (the APK carries them all; the game's launcher picks one) */
+    fun pickDriverDir() {
+        pickFolder(driverDir) { path -> driverDir = path; saveState() }
+    }
+
     fun pickGame() {
         val start = game.trim().ifEmpty { "/sdcard" }
         pickFolder(start) { dir -> pickOwn(dir, false, true) { file -> game = file; saveState() } }

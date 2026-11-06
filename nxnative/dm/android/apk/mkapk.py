@@ -11,6 +11,8 @@ _p.add_argument('--extra-so', action='append', default=[], help='another arm64 l
 _p.add_argument('--icon', help='launcher icon (a PNG, used at its own size: nodpi)')
 _p.add_argument('--asset', action='append', default=[], metavar='NAME=FILE', help='a file the app reads with AAssetManager as NAME (assets/NAME in the APK): the gamepad theme')
 _p.add_argument('--data-root', default='', help='where the data pack is: the game reads its files from there (assets/nx2a-data.txt)')
+_p.add_argument('--dex', default='', help='a classes.dex for the launcher: the icon opens it, and it starts the game')
+_p.add_argument('--launcher-activity', default='com.nx2a.launcher.LauncherActivity', help='the launcher activity in the dex')
 _p.add_argument('--release', action='store_true', help='not debuggable')
 _p.add_argument('--version-code', type=int, default=1, help='versionCode: a later port of the game must have a higher one to install over it')
 _p.add_argument('--version-name', default='1.0', help='versionName: the version the player sees (the game\'s display version)'); ARGS = _p.parse_args()
@@ -40,16 +42,22 @@ MANIFEST = ('manifest', [(False, 'package', PKG), (True, 'versionCode', ARGS.ver
     # the game's files live where the player puts them (the front end asks for the folder on the first start):
     # reading a folder on the shared storage needs the all-files access, which the player gives once per game
     ('uses-permission', [(True, 'name', 'android.permission.MANAGE_EXTERNAL_STORAGE')], []),
-    ('application', [(True, 'label', LABEL)] + ([(True, 'icon', ('ref', ICON_ID))] if ARGS.icon else []) + [(True, 'hasCode', False), (True, 'debuggable', not ARGS.release), (True, 'isGame', True), (True, 'extractNativeLibs', True),
+    ('application', [(True, 'label', LABEL)] + ([(True, 'icon', ('ref', ICON_ID))] if ARGS.icon else []) + [(True, 'hasCode', bool(ARGS.dex)), (True, 'debuggable', not ARGS.release), (True, 'isGame', True), (True, 'extractNativeLibs', True),
         (True, 'appCategory', 0),   # a game (appCategory game = 0, and the older isGame): Android's game mode and game dashboard, and the device maker's game tools, apply to it
         # no predictive back: from target SDK 36 the system takes the back gesture itself and finishes the activity, which ends the game (front_android.c on_destroy), without
         # dispatching KEYCODE_BACK; opted out, the gesture comes as the Back key, which opens the front end's menu
         (True, 'enableOnBackInvokedCallback', False)], [
-        ('activity', [(True, 'name', 'android.app.NativeActivity'), (True, 'exported', True), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [
-            ('meta-data', [(True, 'name', 'android.app.lib_name'), (True, 'value', LIB)], []),
+        # the launcher (when the APK carries one): the icon opens it, and it starts the game
+        *([('activity', [(True, 'name', ARGS.launcher_activity), (True, 'exported', True), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [
             ('intent-filter', [], [
                 ('action', [(True, 'name', 'android.intent.action.MAIN')], []),
-                ('category', [(True, 'name', 'android.intent.category.LAUNCHER')], [])])])])])
+                ('category', [(True, 'name', 'android.intent.category.LAUNCHER')], [])])])] if ARGS.dex else []),
+        # the game itself: the launcher starts it; without a launcher the icon opens it directly
+        ('activity', [(True, 'name', 'android.app.NativeActivity'), (True, 'exported', True), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [
+            ('meta-data', [(True, 'name', 'android.app.lib_name'), (True, 'value', LIB)], [])] + ([] if ARGS.dex else [
+            ('intent-filter', [], [
+                ('action', [(True, 'name', 'android.intent.action.MAIN')], []),
+                ('category', [(True, 'name', 'android.intent.category.LAUNCHER')], [])])]))])])
 
 def axml(root):
     # string pool: attribute names that carry resource IDs come first, in resource-map order
@@ -215,6 +223,7 @@ def main():
         ARGS.asset.append(f'nx2a-data.txt={tmp}')
     entries += [(f'assets/{n}', open(f, 'rb').read(), 4) for n, _, f in (x.partition('=') for x in ARGS.asset)]   # stored, as every entry: AAsset reads them in place
     if ARGS.icon: entries += [('resources.arsc', res_table('res/drawable-nodpi-v4/icon.png'), 4), ('res/drawable-nodpi-v4/icon.png', open(ARGS.icon, 'rb').read(), 4)]
+    if ARGS.dex: entries += [('classes.dex', open(ARGS.dex, 'rb').read(), 4)]   # the launcher
     z, cd, eocd = build_zip(entries)
     apk = sign_v2(z, cd, eocd, k, crt)
     open(out, 'wb').write(apk)

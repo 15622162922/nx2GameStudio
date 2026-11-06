@@ -483,3 +483,20 @@ Humanizer/MsgPack.Cli/Gommon 那四个 NuGet 包要**联网** ✓ →
 启动时先检查“所有文件访问” ✓，没有就打开系统授权页 ✓（玩家授权后重开 ✓），
 然后才去查那个路径 ✓。没有烤入路径的老游戏 ✓ 走旧布局 ✓，不受影响 ✓，
 也不会去要权限 ✓。
+
+---
+
+## 28. 有些设备的 `isExternalStorageManager()` 说谎（2026-11-06）
+
+**症状**：游戏 APK 的启动页显示"数据包：/sdcard/Switch/Ports/xxx-data" ✓，
+但**读不到里面的文件** ✓ —— 语言列表只剩兜底的一个 ✓，env.txt 也读不到 ✓。
+
+**原因**：联想的 ROM（Y700 ✓）上，`appops get <包名> MANAGE_EXTERNAL_STORAGE` 顯示
+**UID 的 op 是 allow ✓**，**App 自己的 op 是 default ✓**，
+读共享存储被拒（`rejectTime` ✓）—— 但 `Environment.isExternalStorageManager()`
+**返回 true** ✓（它看的是 UID 那层 ✓）。权限页面**已经开着** ✓，授权也没用 ✓
+（本来就"有" ✓）。
+
+**改法**：**别信那个函数** ✓ —— 直接读数据包的 `env.txt` ✓，
+读得到就是有权限 ✓，读不到就显示"（读不到：请授予存储访问权限）"✓ 并给出授权按钮 ✓。
+（游戏的原生那一侧一样：坑 27 的"权限先要、路径后查" ✓。）
