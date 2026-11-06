@@ -118,9 +118,11 @@ static font_t font_get(int type) {
 // ScalableFontEngine::LoadFont takes the TTF itself, so a game that imports Decode (and gets the header, font_skip below) but hands the address straight to LoadFont gets it past the header:
 //   The Legend of Zelda: Echoes of Wisdom (1.1.0, SDK 20.5.1) records shared fonts as type 0, calls no Decode for them, and with the header LoadFont failed with 403 and SetFont with 301 on every font,
 //   every glyph lookup then returned null and main+0x8b37c crashed at address 0x38 (GitHub PR #55). Only the host's own BFTTF bases qualify; Decode's result (base + 8), game-owned font data and NULL pass as is.
+//   The Chinese and Korean fonts (types 1-4) are the host's own bases too: Mario vs. Donkey Kong (1.0.1, SDK 15) hands the type 1-4 address straight to LoadFont, so with the header on the Chinese font
+//   LoadFont failed with 403, every glyph lookup returned null and main+0x428d1c crashed at address 0x38 (the same shape as Zelda's).
 static const void *font_payload(const void *p) {
     pthread_mutex_lock(&font_mu);
-    const void *r = p && (p == std_f.p || p == ext_f.p) ? (const uint8_t *)p + 8 : p;
+    const void *r = p && (p == std_f.p || p == ext_f.p || p == cjk_f.p) ? (const uint8_t *)p + 8 : p;
     pthread_mutex_unlock(&font_mu);
     return r;
 }
