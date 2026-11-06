@@ -94,19 +94,34 @@ def wheels(target: Path):
     return target
 
 
-def payload_rootfs(payload: Path, out: Path):
-    """The rootfs out of the payload: the release gives a tarball with the rootfs inside"""
+# The programs outside the rootfs that the closure needs: the build tools and the C# tools. They are Linux
+# binaries too, and the libraries they want are the rootfs's.
+ROOTFS_EXT = ['toolchain/clang/bin/clang', 'toolchain/clang/bin/ld.lld', 'toolchain/clang/bin/llvm-strip',
+              'toolchain/bin/glslc', 'tool/nxnative/dm/gfx/tools/dmsh_xlate_bin/dmsh_xlate',
+              'tool/tools/nx_extract/nx_extract', 'tool/tools/dmsh_xlate/dmsh_xlate']
+
+
+def payload_rootfs(payload: Path, out: Path, assets: Path):
+    """The rootfs out of the payload: the release gives a tarball with the rootfs inside.
+
+    The rootfs is a whole Debian userland (a gigabyte unpacked) and the porter runs a small part of it: the
+    software renderer, the video codecs, the X11 stack and the locales are never loaded. It is trimmed to the
+    closure of the programs that are started (rootfs_trim.py) before it goes into the app."""
     print(f'>> the rootfs out of {payload.name}')
     # the name matters: the build expands an asset called *.tar.gz, and the app wants the stream as it is
     target = out / 'rootfs.pkg'
     if target.exists(): return target
-    with tarfile.open(payload, 'r:gz') as t:
-        member = next((m for m in t.getmembers() if m.name.endswith('rootfs-arm64.tar')), None)
-        if not member: raise SystemExit(f'{payload}: no rootfs-arm64.tar inside')
-        src = t.extractfile(member)
-        import gzip
-        with gzip.open(target, 'wb', compresslevel=6) as f:
-            shutil.copyfileobj(src, f, 1 << 20)
+    trimmed = out / 'rootfs-trim.tar'
+    cmd = [sys.executable, str(Path(__file__).resolve().parent / 'rootfs_trim.py'),
+           '--rootfs', str(payload), '--out', str(trimmed), '--ext-dir', str(assets),
+           '--ext-search', 'toolchain/lib']
+    for e in ROOTFS_EXT:
+        cmd += ['--ext', e]
+    subprocess.run(cmd, check=True)
+    import gzip
+    with trimmed.open('rb') as src, gzip.open(target, 'wb', compresslevel=6) as f:
+        shutil.copyfileobj(src, f, 1 << 20)
+    trimmed.unlink()
     return target
 
 
@@ -160,7 +175,6 @@ def main():
 
     payload = Path(a.payload) if a.payload else cache / 'payload-arm64.tar.gz'
     if not payload.exists(): raise SystemExit(f'{payload} is missing (fetch it from the nixport payload release)')
-    payload_rootfs(payload, out)
 
     tool = out / 'tool'
     (tool / 'tools').mkdir(parents=True, exist_ok=True)
@@ -188,6 +202,9 @@ def main():
     if not toolchain.exists(): raise SystemExit(f'{toolchain} is missing (run build_toolchain.py first)')
     print('>> the build tools')
     copy_tree(toolchain, out / 'toolchain')
+
+    # the rootfs is trimmed against the tool tree and the build tools: they have to be there first
+    payload_rootfs(payload, out, out)
 
     # The .NET SDK: the extractor and the shader translator are C# and are built with it. Shipping it makes the
     # first run work offline; downloading it (the porter's own path) keeps the APK small.
