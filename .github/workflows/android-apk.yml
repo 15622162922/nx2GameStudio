@@ -37,7 +37,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'       # the Android Gradle plugin's Java
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'   # the extractor and the shader translator are C#
