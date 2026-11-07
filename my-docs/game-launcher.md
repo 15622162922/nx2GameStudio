@@ -21,7 +21,7 @@
 |---|---|---|
 | `LauncherActivity.java` | `nxnative/dm/android/launcher/` | 页面本身 ✓（纯代码建视图 ✓，没有 XML ✓，免 aapt ✓） |
 | `build_launcher.py` | `packaging/android-apk/` | 用 **javac + d8** 把 Java 编译成 `classes.dex` ✓ |
-| `mkapk.py --dex` | `nxnative/dm/android/apk/` | 把 dex 放进 APK ✓，清单改成 `hasCode=true` ✓，加启动页入口 ✓ |
+| `mkapk.py --dex` | `nxnative/dm/android/apk/` | 把 dex 放进 APK ✓，清单改成 `hasCode=true` ✓，加启动页入口 ✓，给启动页加**主题** ✓（去标题栏 ✓） |
 | `pipeline.py` | `porter/` | 找 dex ✓、传 `--dex` ✓、写 `languages.txt` / `drivers.txt` ✓ |
 
 **dex 在电脑上编译** ✓（和 `nx_extract` 一样 ✓）：手机上没有 JDK ✓，也没有 Android SDK ✓
@@ -46,7 +46,7 @@ App 启动刷新工具时带上它 ✓。
 
 - **游戏名** ✓：数据包里的 `nx2a-data.json` 的 `name` ✓（移植器写的清单 ✓）。
 - **数据包位置** ✓：游戏记住的路径（`files/data_dir.txt` ✓）✓，
-  没有就用地��里烤进去的那个（`assets/nx2a-data.txt` ✓）✓。
+  没有就用地理里烤进去的那个（`assets/nx2a-data.txt` ✓）✓。
 - **语言** ✓：游戏自己支持的语言（`control.nacp` 的 `SupportedLanguageFlag` ✓）✓，
   写进数据包的 `languages.txt` ✓（一行 `代码<TAB>名字` ✓）。
 - **Vulkan 驱动** ✓：APK 里带的驱动（`drivers.txt` ✓）✓，
@@ -56,6 +56,70 @@ App 启动刷新工具时带上它 ✓。
 
 点「▶ 启动游戏」→ 改写数据包的 `env.txt`（`DM_LANG` ✓ `DM_VK_DRIVER` ✓）✓
 → `startActivity(NativeActivity)` ✓。
+
+## 页面长什么样（2026-11-06 改的）
+
+以前是个**竖屏**的普通 Activity ✓，系统默认主题（**有顶上的标题栏** ✓），
+一列从上到下的控件 ✓。现在改成：
+
+```
+┌────────────────────────────────────────────┐
+│ ░ 游戏图标放大+模糊+压暗 = 背景 ░            │  ← 半透明状态栏盖在上面
+│                                            │
+│   ┌──────┐   ╭────────────────────╮        │
+│   │ 图标 │   │ 游戏名（大字）        │        │
+│   │ 圆角 │   │ 数据包/版本/TitleID  │        │
+│   │+阴影 │   │ 游戏语言    [ ▾ ]    │        │
+│   └──────┘   │ Vulkan 驱动  [ ▾ ]   │        │
+│              │ [选择驱动文件] [授权]   │        │
+│              │ ▶ 启动游戏（白色药丸）   │        │
+│              ╰── 深色半透明圆角卡片 ──╯        │
+└────────────────────────────────────────────┘
+```
+
+- **没有标题栏** ✓：清单里给启动页加了 `android:theme` ✓，
+  指向平台的 `@android:style/Theme.Material.NoActionBar` ✓（`0x0103022e` ✓，
+  `nxnative/dm/android/apk/mkapk.py` ✓ 的 `THEME_NO_TITLE` ✓）——
+  **不是 Fullscreen 那个** ✓：它会把状态栏藏起来 ✓，
+  而这里要的是状态栏**半透明**盖在背景上 ✓。游戏的原生 Activity 不受影响 ✓。
+- **默认横屏** ✓：Activity 里 `setRequestedOrientation(SENSOR_LANDSCAPE)` ✓，
+  任何游戏都是横的 ✓（清单里横屏游戏本来就有 ✓，这里再加一道保险 ✓）。
+- **左边 logo** ✓：APK 里自己的图标 ✓（`res/drawable-nodpi-v4/icon.png` ✓，
+  移植器烤进去的 ✓）✓，页面用 `getIdentifier("icon", ...)` 取 ✓。
+  **不用存储权限** ✓ —— 数据包在授权前读不到 ✓，页面得先能用 ✓。
+  APK 里没有图标（移植时没有 Pillow ✓）→ 背景是纯深色渐变 ✓，
+  左边用游戏名顶着 ✓，页面照常用 ✓。
+- **背景** ✓：同一张图标 ✓，先**箱式模糊**（三趟 ✓，256 px 的图 ✓，几毫秒 ✓）✓，
+  裁成屏幕的比例放大 ✓，上面盖一层黑纱 ✓（`C_SCRIM` ✓）。
+  Android 12（API 31 ✓）以上再加平台自己的 `RenderEffect` ✓。
+  第一次是「缩小再放大」✓ —— 那**不算模糊** ✓，边还是硬的 ✓（棋盘格测出来的 ✓）✓。
+- **磨砂玻璃卡片** ✓：`GradientDrawable` ✓ 的深色半透明圆角卡片 ✓ + 一圈淡边 ✓，
+  按钮是药丸 ✓（`RippleDrawable` ✓，按下去有水波 ✓）。纯代码 ✓，没有 XML ✓。
+- **语言和驱动不是平台的下拉框** ✓：是自己画的字段 ✓（左边当前值 ✓，右边一个小三角 ✓，
+  底下是同一张玻璃纸 ✓），点开是 `ListPopupWindow` ✓ 自己画的列表 ✓。
+  为什么不用平台的 `Spinner` ✓：
+  - 它的弹窗用**主题的** `popupBackground` ✓ —— 平台默认主题是浅色的 ✓，
+    弹窗成了浅底 ✓，我们白色的字**看不见了** ✓；
+  - 它**多高就多高** ✓ —— 16 个语言铺了半个屏 ✓。
+  现在：弹窗底是**不透明的深色** ✓（卡片后面的字不会透过来 ✓），
+  行高 46 dp ✓（手指点得着 ✓），当前选中的是**一条通栏** ✓（不是圆角小块 ✓），
+  弹窗固定 252 dp ✓（约六行 ✓），其余**滚动** ✓。
+- **半透明系统栏** ✓：edge-to-edge ✓（API 30 ✓ 以上 `setDecorFitsSystemWindows(false)` ✓，
+  以下用老的 `SYSTEM_UI_FLAG_LAYOUT_*` ✓），状态栏/导航栏透明 ✓，
+  页面用 `OnApplyWindowInsetsListener` ✓ 躲开它们 ✓。
+
+**踩过的坑**：
+
+- `getWindow().getInsetsController()` 在 `setContentView` **之前**调用会 **NPE** ✓
+  （decor view 还没有 ✓）—— edge-to-edge 的活儿要放在 `setContentView` **之后** ✓。
+- 图标的阴影用 `Paint.setShadowLayer` ✓ 画出来的是**方框** ✓（整个矩形 ✓）✓；
+  改成把圆角矩形设成 view 的 outline ✓，平台自己的阴影（`setElevation` ✓）
+  就跟着圆角走了 ✓。
+- `ArrayAdapter` 的构造器**不能传 null 的 Context** ✓ —— 它里面 `new ArraySet(context)` ✓
+  会 NPE ✓，页面直接闪退 ✓。
+- **清单里要有主题** ✓：没有 `android:theme` ✓ 的 APK ✓ 跑在平台默认主题上 ✓，
+  弹窗就是浅色的 ✓ —— 换 dex 不够 ✓，**清单也要重新生成** ✓。
+
 
 ## 玩家自己带驱动
 
@@ -74,7 +138,7 @@ App 启动刷新工具时带上它 ✓。
 没有它 ✓，玩家导入的驱动根本加载不了 ✓（日志里一句
 `[RED] DM_VK_DRIVER ...: no libadrenotools in the APK` ✓，然后安静地换系统驱动 ✓）。
 2026-11-06 踩过 ✓：**移植时只有"这次自带了驱动"才把加载器打进 APK** ✓
-（`porter/pipeline.py` ✓ 的 `drivers()` ✓），而 11:00 的重构（952ada9 ✓）
+（`porter/pipeline.py` ✓ 的 `drivers()` ✓），而 11:00 的重构（1cb6aa5 ✓）
 把手机 App 的"驱动文件夹"去掉了 ✓（理由是对的 ✓：导入驱动不用再移植一次 ✓）→
 手机的移植从此不带驱动 ✓ → **APK 里再没有加载器** ✓ → 导入的驱动一直是死的 ✓。
 
@@ -101,5 +165,6 @@ App 启动刷新工具时带上它 ✓。
   UID 的 op 是 allow ✓，App 自己的 op 是 default ✓，读 `/sdcard` 会被拒 ✓，
   但那个函数返回 true ✓）。所以启动页**不看它** ✓，而是**直接读数据包的 `env.txt`** ✓
   —— 读得到就是有权限 ✓，读不到就给授权按钮 ✓。
-- 启动页是**竖屏**的普通 Activity ✓，游戏的原生 Activity 才是横屏 ✓；
-  两者在同一个 task 里 ✓，横竖切换不会重建游戏 ✓。
+- 启动页和游戏的原生 Activity 现在**都是横屏** ✓（启动页在代码里要横屏 ✓，
+  游戏的原生 Activity 是清单里定的 ✓）；两者在同一个 task 里 ✓，
+  横竖切换不会重建游戏 ✓。
