@@ -28,12 +28,17 @@ CONFIG_CHANGES = (0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020 | 0x0040 |
 
 # ---------------- binary XML ----------------
 ATTR_IDS = {  # android: attribute resource IDs (frameworks/base/core/res/res/values/public.xml)
-    'label': 0x01010001, 'icon': 0x01010002, 'name': 0x01010003, 'hasCode': 0x0101000c, 'debuggable': 0x0101000f, 'exported': 0x01010010,
+    'theme': 0x01010000, 'label': 0x01010001, 'icon': 0x01010002, 'name': 0x01010003, 'hasCode': 0x0101000c, 'debuggable': 0x0101000f, 'exported': 0x01010010,
     'configChanges': 0x0101001f, 'screenOrientation': 0x0101001e, 'value': 0x01010024, 'minSdkVersion': 0x0101020c, 'versionCode': 0x0101021b,
     'versionName': 0x0101021c, 'targetSdkVersion': 0x01010270, 'isGame': 0x010103f4, 'extractNativeLibs': 0x010104ea, 'appCategory': 0x01010545,
     'enableOnBackInvokedCallback': 0x0101066c}
 T_REF, T_STRING, T_INT_DEC, T_INT_HEX, T_BOOL = 0x01, 0x03, 0x10, 0x11, 0x12
 ICON_ID = 0x7f010000   # drawable/icon in resources.arsc (res_table)
+# android.R.style.Theme_Material_NoActionBar (android.jar's android.R.style): the platform's dark theme with no title bar and no action
+# bar. The launcher activity wears it, so the page fills the screen and draws its own glass over it (the game's own activity keeps the
+# platform's default theme). A reference to a platform style, so the APK needs no theme of its own. Not the "Fullscreen" variant: that
+# hides the status bar, and the page wants the bars translucent over its backdrop.
+THEME_NO_TITLE = 0x0103022e
 
 # (tag, [(ns_android?, name, value)], children)
 MANIFEST = ('manifest', [(False, 'package', PKG), (True, 'versionCode', ARGS.version_code), (True, 'versionName', ARGS.version_name)], [
@@ -48,7 +53,7 @@ MANIFEST = ('manifest', [(False, 'package', PKG), (True, 'versionCode', ARGS.ver
         # dispatching KEYCODE_BACK; opted out, the gesture comes as the Back key, which opens the front end's menu
         (True, 'enableOnBackInvokedCallback', False)], [
         # the launcher (when the APK carries one): the icon opens it, and it starts the game
-        *([('activity', [(True, 'name', ARGS.launcher_activity), (True, 'exported', True), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [
+        *([('activity', [(True, 'name', ARGS.launcher_activity), (True, 'exported', True), (True, 'theme', ('ref', THEME_NO_TITLE)), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [
             ('intent-filter', [], [
                 ('action', [(True, 'name', 'android.intent.action.MAIN')], []),
                 ('category', [(True, 'name', 'android.intent.category.LAUNCHER')], [])])])] if ARGS.dex else []),
