@@ -16,7 +16,7 @@ class PortRunner(private val env: Env, private val onLine: (String) -> Unit) {
         touch: Boolean, fps60: Boolean, experimental: Boolean,
         onEnd: () -> Unit,
     ): Thread {
-        val args = mutableListOf("-m", "porter", "port", gameFile, "-k", keys, "-o", out, "--progress", "json")
+        val args = mutableListOf("-m", "porter", "port", gameFile, "-k", keys, "-o", out, "--progress", "json", "--app")
         if (touch) args += "--touch"
         if (fps60) args += "--fps60"
         if (experimental) args += "--experimental"

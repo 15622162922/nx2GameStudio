@@ -6,19 +6,37 @@
 #include "overlay_layout.h"
 #include <android/asset_manager.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
 
 __attribute__((weak)) AAssetManager *dm_front_assets(void) { return NULL; }
+__attribute__((weak)) const char *dm_front_root(void);   // front_android.c: the pack (the player's path has no APK assets, the theme comes from its overlay/)
 
-static uint8_t *asset(const char *name, size_t *n) {   // the whole asset, NUL-terminated (malloc), NULL when the APK has none
-    AAssetManager *am = dm_front_assets(); AAsset *a = am ? AAssetManager_open(am, name, AASSET_MODE_BUFFER) : NULL;
-    if (!a) return NULL;
-    off_t len = AAsset_getLength(a); uint8_t *b = malloc((size_t)len + 1);
-    if (b && AAsset_read(a, b, (size_t)len) != len) { free(b); b = NULL; }
-    AAsset_close(a); if (b) { b[len] = 0; *n = (size_t)len; }
+static uint8_t *file_asset(const char *path, size_t *n) {
+    FILE *f = fopen(path, "rb"); if (!f) return NULL;
+    fseek(f, 0, SEEK_END); long len = ftell(f); fseek(f, 0, SEEK_SET);
+    if (len < 0 || len > 32 << 20) { fclose(f); return NULL; }
+    uint8_t *b = malloc((size_t)len + 1);
+    if (b && fread(b, 1, (size_t)len, f) != (size_t)len) { free(b); b = NULL; }
+    fclose(f); if (b) { b[len] = 0; *n = (size_t)len; }
     return b;
+}
+
+static uint8_t *asset(const char *name, size_t *n) {   // the whole asset, NUL-terminated (malloc), NULL when there is none
+    *n = 0;
+    AAssetManager *am = dm_front_assets(); AAsset *a = am ? AAssetManager_open(am, name, AASSET_MODE_BUFFER) : NULL;
+    if (a) {
+        off_t len = AAsset_getLength(a); uint8_t *b = malloc((size_t)len + 1);
+        if (b && AAsset_read(a, b, (size_t)len) != len) { free(b); b = NULL; }
+        AAsset_close(a); if (b) { b[len] = 0; *n = (size_t)len; }
+        return b;
+    }
+    const char *root = dm_front_root();   // the player's pack carries the theme as plain files (overlay/ beside the data)
+    char p[800];
+    if (root && root[0] && snprintf(p, sizeof p, "%s/%s", root, name) < (int)sizeof p) return file_asset(p, n);
+    return NULL;
 }
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }

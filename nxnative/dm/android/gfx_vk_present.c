@@ -721,11 +721,17 @@ static uint64_t pace_desired(double period) {   // the frame's desired present t
     g_pace_target = t;
     return t - g_refresh_ns / 2;
 }
-static void present_window(vkimg_t *im, const int crop[4], double period, uint64_t ticket) {   // period: the game's frame period (s); < 0 for a redraw (ticket 0)
+// One presented image: the source (a game frame's window texture, or one of the frame generation's images),
+// its picture rect inside the source, fitted into the swapchain, with the overlay drawn on top — the gamepad,
+// the menus and the frame-rate counter travel on EVERY presented image, the frame generation's included, or
+// they would flicker at the game's own rate. with_meta: the game frame's extras (the sRGB pick on the first
+// present, the picture-rect report for the touch mapping); a generated frame follows what it chose, and never
+// flips (the chain was fed the texture already upright). period < 0: a redraw (ticket 0).
+static VkFormat im_meta_srgb;   // the game frame's sRGB pick: a generated frame follows it (present_window sets it)
+static void present_one(VkImage src, int cx, int cy, int cw, int ch, int flip, double period, uint64_t ticket, int with_meta) {
     uint32_t k = g_pi++ % 8;
     vkWaitForFences(V.dev, 1, &g_pfence[k], 1, UINT64_MAX);
-    VkFormat want = im->fmt == VK_FORMAT_R8G8B8A8_SRGB || im->fmt == VK_FORMAT_B8G8R8A8_SRGB || im->fmt == VK_FORMAT_A8B8G8R8_SRGB_PACK32 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-    if (want != g_want) { g_want = want; swap_destroy(); if (!swap_make()) return; }   // once, at the first present of the other kind
+    if (with_meta && im_meta_srgb != g_want) { g_want = im_meta_srgb; swap_destroy(); if (!swap_make()) return; }   // once, at the first present of the other kind
     uint32_t idx; VkResult r = vkAcquireNextImageKHR(V.dev, g_swap, UINT64_MAX, g_acq[k], VK_NULL_HANDLE, &idx);
     if (r == VK_ERROR_OUT_OF_DATE_KHR) { swap_destroy(); if (!swap_make()) return; r = vkAcquireNextImageKHR(V.dev, g_swap, UINT64_MAX, g_acq[k], VK_NULL_HANDLE, &idx); }
     if (r < 0) { VKRED_ONCE(90, "vkAcquireNextImageKHR: %d", r); return; }
@@ -736,12 +742,11 @@ static void present_window(vkimg_t *im, const int crop[4], double period, uint64
     barrier(cb, g_simg[idx], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VkClearColorValue black = {{0, 0, 0, 1}}; VkImageSubresourceRange rg = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     vkCmdClearColorImage(cb, g_simg[idx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &rg);
-    int cx = crop ? crop[0] : 0, cy = crop ? crop[1] : 0, cw = crop && crop[2] ? crop[2] : (int)im->w, ch = crop && crop[3] ? crop[3] : (int)im->h;
     double s = fmin((double)g_sext.width / cw, (double)g_sext.height / ch); int dw = (int)(cw * s), dh = (int)(ch * s), dx = ((int)g_sext.width - dw) / 2, dy = ((int)g_sext.height - dh) / 2;
-    vk_pic_set((float)dx / g_sext.width, (float)dy / g_sext.height, (float)dw / g_sext.width, (float)dh / g_sext.height);
+    if (with_meta) vk_pic_set((float)dx / g_sext.width, (float)dy / g_sext.height, (float)dw / g_sext.width, (float)dh / g_sext.height);
     VkImageBlit b = {{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {{cx, cy, 0}, {cx + cw, cy + ch, 1}}, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {{dx, dy, 0}, {dx + dw, dy + dh, 1}}};
-    if (vk_window_bottom_up()) { b.srcOffsets[0].y = cy + ch; b.srcOffsets[1].y = cy; }   // lower-left origin: the window image is stored bottom-up (gfx_vk_exec.c)
-    vkCmdBlitImage(cb, im->img, VK_IMAGE_LAYOUT_GENERAL, g_simg[idx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
+    if (flip && vk_window_bottom_up()) { b.srcOffsets[0].y = cy + ch; b.srcOffsets[1].y = cy; }   // lower-left origin: the window image is stored bottom-up (gfx_vk_exec.c)
+    vkCmdBlitImage(cb, src, VK_IMAGE_LAYOUT_GENERAL, g_simg[idx], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b, VK_FILTER_LINEAR);
     VkImageLayout lay = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     int ovm = dm_overlay_visible(), menu = dm_menu_state(), fps = dm_overlay_fps();
     if ((ovm || menu >= 0 || fps) && overlay_ready(cb, k, menu) && (V.has_dynrender || ov_fb(idx))) {   // without dynamic rendering, only with the image's framebuffer
@@ -775,6 +780,11 @@ static void present_window(vkimg_t *im, const int crop[4], double period, uint64
     pthread_mutex_unlock(&g_vk_queue_mu);
     if (r == VK_ERROR_OUT_OF_DATE_KHR) swap_destroy();
 }
+static void present_window(vkimg_t *im, const int crop[4], double period, uint64_t ticket) {   // period: the game's frame period (s); < 0 for a redraw (ticket 0)
+    int cx = crop ? crop[0] : 0, cy = crop ? crop[1] : 0, cw = crop && crop[2] ? crop[2] : (int)im->w, ch = crop && crop[3] ? crop[3] : (int)im->h;
+    im_meta_srgb = im->fmt == VK_FORMAT_R8G8B8A8_SRGB || im->fmt == VK_FORMAT_B8G8R8A8_SRGB || im->fmt == VK_FORMAT_A8B8G8R8_SRGB_PACK32 ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+    present_one(im->img, cx, cy, cw, ch, 1, period, ticket, 1);
+}
 // headless frame shots
 static int shot_wanted(uint64_t n) {
     static uint64_t until; const char *k = getenv("DM_VK_SHOTS");   // a DM_CTL "env DM_VK_SHOTS=N" line: each of the next N presents (a transition caught frame by frame)
@@ -805,6 +815,7 @@ static void shot(vkimg_t *im, uint64_t n) {
     free(row); fclose(f);
     VKLOG("frame %llu written to %s (%ux%u)", (unsigned long long)n, path, w, h);
 }
+#include "dm_framegen.h"
 static pthread_mutex_t g_present_mu = PTHREAD_MUTEX_INITIALIZER;   // the swapchain against the window going away (vk_window_lost, on the main thread)
 void vk_window_lost(void) { pthread_mutex_lock(&g_present_mu); swap_destroy(); g_win = NULL; pthread_mutex_unlock(&g_present_mu); }
 // The present thread: mtl_present only queues the frame and returns (as on Apple), so the game thread never waits in vkAcquireNextImageKHR or on the
@@ -831,7 +842,19 @@ static void *present_thread(void *arg) {
         }
         typeof(g_pq[0]) e = g_pq[g_pq_tail % PQ_N];
         pthread_mutex_unlock(&g_pq_mu);
-        if (e.im) { last = e; pthread_mutex_lock(&g_present_mu); if (swap_make()) present_window(e.im, e.has_crop ? e.crop : NULL, e.period, e.n); pthread_mutex_unlock(&g_present_mu); }
+        if (e.im) { last = e; pthread_mutex_lock(&g_present_mu);
+            if (swap_make()) {
+                VkImage gen[3] = {0, 0, 0}; double hold = 0, out_period = 0;
+                int ng = e.period >= 0 ? dm_fg_frame(e.im, e.has_crop ? e.crop : NULL, e.period, gen, &hold, &out_period) : 0;
+                int cx = e.has_crop && e.crop[0] ? e.crop[0] : 0, cy = e.has_crop && e.crop[1] ? e.crop[1] : 0,
+                    cw = e.has_crop && e.crop[2] ? e.crop[2] : (int)e.im->w, ch = e.has_crop && e.crop[3] ? e.crop[3] : (int)e.im->h;
+                (void)out_period;
+                // the generated frames first (each held for its equal share), then the game's own frame — the
+                // overlay travels on every one of them, or the gamepad would flicker at the game's rate
+                for (int g = 0; g < ng; g++) present_one(gen[g], 0, 0, cw, ch, 0, hold, 0, 0);
+                present_one(e.im->img, cx, cy, cw, ch, 1, e.period, e.n, 1);
+            }
+            pthread_mutex_unlock(&g_present_mu); }
         pthread_mutex_lock(&g_pq_mu); g_pq_tail++; g_pq_done = e.n; pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu);
     }
     return NULL;
@@ -907,6 +930,7 @@ void mtl_present_wait(uint64_t tk) {   // NVN acquire: the window texture's last
 }
 double mtl_presented_time(uint64_t n) { return present_time_get(n); }
 double vk_refresh_ms(void) { return V.has_dtiming && g_pres_recorded && g_refresh_ns ? g_refresh_ns / 1e6 : 0; }   // perf_android.c's late check: the display's refresh, when display times are what it gets
+uint64_t vk_refresh_cycle_ns(void) { return V.has_dtiming ? g_refresh_ns : 0; }   // dm_framegen.c: the refresh cap (how many presented images fit a game frame)
 uint32_t mtl_present_qos(void) { return 0; }
 int mtl_link_active(void) { return 0; }
 int mtl_link_wait_tick(int vsyncs, uint64_t timeout_ns) { (void)vsyncs; (void)timeout_ns; return 0; }

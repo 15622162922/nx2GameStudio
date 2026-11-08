@@ -33,24 +33,37 @@ object FolderScanner {
         Regex("\\[(0[0-9a-fA-F]{15})]").find(name)?.groupValues?.get(1)?.uppercase()
 
     /**
-     * The title ID of every game the output folder holds: the port wrote `<stem>-data/nx2a-data.json` (the
-     * game, its package, its title ID), and the APK sits beside the data pack.
+     * The title ID of every finished port the output folder holds: the port wrote `<stem>-data/` with
+     * `nx2a-data.json` (the game, its title ID) and the host the player runs (host/libdmplay.so). A pack
+     * without its host (a rebuild in flight, a deleted file) does not count as done.
      */
-    fun outIndex(outDir: File): Map<String, File> {
+    fun outIndex(outDir: File): Map<String, Ported> {
         if (!outDir.isDirectory) return emptyMap()
-        val out = HashMap<String, File>()
+        val out = HashMap<String, Ported>()
         for (d in outDir.listFiles() ?: return emptyMap()) {
             if (!d.isDirectory || !d.name.endsWith("-data")) continue
-            val apk = File(outDir, d.name.removeSuffix("-data") + ".apk")
-            if (!apk.isFile) continue
-            val id = try {
-                org.json.JSONObject(File(d, "nx2a-data.json").readText()).optString("title_id")
-            } catch (e: Exception) {
-                ""
-            }
-            if (id.isNotEmpty()) out[id.uppercase()] = apk
+            portFromPack(d)?.let { out[it.titleId.uppercase()] = it }
         }
         return out
+    }
+
+    /**
+     * The port a data pack holds, or null when the pack is not runnable (no manifest, or the host file is
+     * gone): the title id, the icon and the game's name come from the manifest, the paths are conventions.
+     */
+    fun portFromPack(pack: File): Ported? {
+        val man = try {
+            org.json.JSONObject(File(pack, "nx2a-data.json").readText())
+        } catch (e: Exception) {
+            return null
+        }
+        val id = man.optString("title_id")
+        if (id.isEmpty()) return null
+        val host = File(pack, man.optString("host", "host/libdmplay.so"))
+        if (!host.isFile) return null
+        return Ported(pack = pack, host = host,
+                      icon = File(pack, "icon.png").takeIf { it.isFile },
+                      titleId = id, name = man.optString("name"))
     }
 
     /** The game's display name: the file's name without its brackets and extension */

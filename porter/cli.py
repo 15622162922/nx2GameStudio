@@ -17,6 +17,9 @@ def _parser():
     po.add_argument('-p', '--version', default='', help='version to pack, v<N> (default: the newest in the folder)')
     po.add_argument('-l', '--language', default='', help='game language, a code or a name (default: English)')
     po.add_argument('--app-name', default='', help='the app\'s name on the device (default: the game\'s name)')
+    po.add_argument('--app', action='store_true',
+                    help="the nx2android app's mode: no APK and no install step — the data pack carries the host "
+                         "(libdmplay.so), the Vulkan drivers and the icon, and the app runs the game itself")
     po.add_argument('--install', action='store_true', help='install on the connected device afterwards')
     po.add_argument('--device', default='', help='adb serial of the device to install on')
     po.add_argument('--replace-signer', action='store_true', help='uninstall an app of the same package signed with another key first (deletes its saves)')
@@ -135,7 +138,7 @@ def cmd_port(a):
         try: offset = int(env)
         except ValueError: print(f'NX2A_VERCODE_OFFSET is not a number: {env}', file=sys.stderr); return 2
     opts = pipeline.Options(folder=Path(a.folder), keys=Path(a.keys) if a.keys else None, out=Path(a.out) if a.out else None, version=a.version, language=a.language,
-                            app_name=a.app_name, install=a.install, device=a.device, replace_signer=a.replace_signer, debug=a.debug, experimental=a.experimental, package=a.package, fps60=a.fps60, touch=a.touch, mt_replay=a.mt_replay, vulkan_driver=a.vulkan_driver,
+                            app_name=a.app_name, app=a.app, install=a.install, device=a.device, replace_signer=a.replace_signer, debug=a.debug, experimental=a.experimental, package=a.package, fps60=a.fps60, touch=a.touch, mt_replay=a.mt_replay, vulkan_driver=a.vulkan_driver,
                             vulkan_driver_dir=a.vulkan_driver_dir,
                             vercode_offset=offset, alias_headroom=a.alias_headroom, jobs=a.jobs)
     return _with_progress(a.progress, lambda: pipeline.emit_result(pipeline.Port(opts).run()))

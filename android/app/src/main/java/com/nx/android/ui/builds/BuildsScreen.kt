@@ -316,10 +316,10 @@ private fun OutcomeCard(lib: LibraryState, port: PortState, f: File, actions: Ap
     val status = lib.statusOf(f)
     when (status) {
         GameStatus.DONE -> {
-            val apk = lib.apkOf(f) ?: return
+            val ported = lib.portOf(f) ?: return
             Section("产物") {
-                Hint("产物：${apk.absolutePath}", size = 11.sp)
-                CapsuleButton("安装 APK", { actions.onInstall(apk) }, modifier = Modifier.fillMaxWidth())
+                Hint("产物：${ported.pack.absolutePath}", size = 11.sp)
+                CapsuleButton("▶ 运行", { actions.onRun(ported.pack, FolderScanner.displayName(f)) }, modifier = Modifier.fillMaxWidth())
             }
         }
         else -> {
@@ -383,7 +383,7 @@ private fun ConfigRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
-/** The ports that ran before: the result, how long it took, and the APK's install for the done ones */
+/** The ports that ran before: the result, how long it took, and the done ones' run button */
 @Composable
 private fun History(lib: LibraryState, port: PortState, actions: AppActions) {
     Section("历史") {
@@ -404,8 +404,11 @@ private fun History(lib: LibraryState, port: PortState, actions: AppActions) {
                 if (File(r.game).isFile()) {
                     QuietButton("再次构建", onClick = { lib.buildsTarget = File(r.game) })
                 }
-                if (r.phase == PortState.Phase.DONE && r.apk.isNotEmpty() && File(r.apk).isFile()) {
-                    QuietButton("安装", { actions.onInstall(File(r.apk)) })
+                // 完成记录的「▶ 运行」：与库页相同地启动（数据包还在才能跑）
+                if (r.phase == PortState.Phase.DONE && r.out.isNotEmpty() && FolderScanner.portFromPack(File(r.out)) != null) {
+                    QuietButton("▶ 运行", {
+                        FolderScanner.portFromPack(File(r.out))?.let { actions.onRun(it.pack, File(r.game).nameWithoutExtension) }
+                    })
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

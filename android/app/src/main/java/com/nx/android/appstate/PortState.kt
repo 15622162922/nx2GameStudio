@@ -25,7 +25,7 @@ class PortState(private val prefs: PrefsStore) {
     data class Record(
         val game: String,      // the source file's name
         val phase: Phase,      // DONE / FAILED / CANCELLED / INTERRUPTED
-        val apk: String,       // the APK the port made ('' when none)
+        val out: String,       // the artifact the port made (the data pack; '' when none)
         val startedAt: Long,   // wall clock of the start
         val seconds: Long,     // how long it took
     )
@@ -37,12 +37,16 @@ class PortState(private val prefs: PrefsStore) {
     var stageName by mutableStateOf(""); private set
     var stageStep by mutableStateOf(""); private set
     var progress by mutableStateOf(0f); private set
-    var apkPath by mutableStateOf(""); private set
+    var apkPath by mutableStateOf(""); private set   // the PC flow's APK ('' in the app's mode: the pack is the only artifact)
+    var dataPath by mutableStateOf(""); private set  // the data pack, both modes' artifact
     var startedAt by mutableStateOf(0L); private set
     var log by mutableStateOf(listOf<String>()); private set
     var history by mutableStateOf(listOf<Record>()); private set
 
     val running: Boolean get() = phase == Phase.RUNNING
+
+    /** The port's artifact (the pack in the app's mode, the APK on the PC flow); '' while it runs */
+    val outPath: String get() = apkPath.ifEmpty { dataPath }
 
     /** Loads the history and answers the question "was a port interrupted?": the marker is still set */
     fun attach() {
@@ -57,6 +61,7 @@ class PortState(private val prefs: PrefsStore) {
         stageOf = 0; stages = 0; stageName = ""; stageStep = ""
         progress = 0f
         apkPath = ""
+        dataPath = ""
         log = listOf()
         startedAt = System.currentTimeMillis()
         prefs.put(PORT_RUNNING, game)
@@ -84,6 +89,7 @@ class PortState(private val prefs: PrefsStore) {
             }
             "result" -> {
                 apkPath = ev.apk
+                dataPath = ev.data
                 progress = 1f
             }
         }
@@ -92,7 +98,7 @@ class PortState(private val prefs: PrefsStore) {
     /** The porter ended on its own: an APK means done, none means failed */
     fun finish() {
         if (phase != Phase.RUNNING) return   // a cancel already marked it
-        end(if (apkPath.isNotEmpty()) Phase.DONE else Phase.FAILED)
+        end(if (outPath.isNotEmpty()) Phase.DONE else Phase.FAILED)
     }
 
     /** The player stopped it: the porter and the tools it started are already dying */
@@ -115,13 +121,13 @@ class PortState(private val prefs: PrefsStore) {
         startedAt = 0
         prefs.put(PORT_RUNNING, null)
         if (game.isNotEmpty()) {
-            history = (listOf(Record(game, p, apkPath, System.currentTimeMillis() - secs * 1000, secs)) + history).take(20)
+            history = (listOf(Record(game, p, outPath, System.currentTimeMillis() - secs * 1000, secs)) + history).take(20)
             saveHistory()
         }
         say(
             when (p) {
-                Phase.DONE -> "完成：$apkPath"
-                Phase.FAILED -> "移植结束（没有产出 APK）：看看日志"
+                Phase.DONE -> "完成：$outPath"
+                Phase.FAILED -> "移植结束（没有产物）：看看日志"
                 Phase.CANCELLED -> "已取消"
                 Phase.INTERRUPTED -> "移植被系统中断：$game（可以重新发起）"
                 else -> return
@@ -150,7 +156,7 @@ class PortState(private val prefs: PrefsStore) {
     private fun saveHistory() {
         val a = JSONArray()
         for (r in history) {
-            a.put(JSONObject().put("game", r.game).put("phase", r.phase.name).put("apk", r.apk)
+            a.put(JSONObject().put("game", r.game).put("phase", r.phase.name).put("out", r.out)
                 .put("startedAt", r.startedAt).put("seconds", r.seconds))
         }
         prefs.putArray(PORT_HISTORY, a)

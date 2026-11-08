@@ -89,7 +89,9 @@ data class AppActions(
     val onSetKeys: (String) -> Unit,
     val onStartPort: (file: File, cfg: GameConfig) -> Unit,
     val onCancelPort: () -> Unit,
-    val onInstall: (File) -> Unit,
+    val onRun: (pack: File, name: String) -> Unit,
+    val onResumeGame: () -> Unit,
+    val onStopGame: () -> Unit,
     val onToast: (String) -> Unit,
     val version: () -> String,
     val keys: () -> String,
@@ -163,7 +165,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
 
     // a finished port goes into the library's records (the source and its APK stay together)
     LaunchedEffect(port.phase) {
-        if (port.phase == PortState.Phase.DONE) lib.noteDone(port.gameFile, port.apkPath)
+        if (port.phase == PortState.Phase.DONE) lib.noteDone(port.gameFile, port.dataPath)
     }
 
     // 选中游戏的背景铺满整块屏幕：顶栏透明画在图上，三个 tab 共用这层背景
@@ -182,7 +184,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         )
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryScreen(lib, port, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
+                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
                 Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, actions, onRequest)
             }

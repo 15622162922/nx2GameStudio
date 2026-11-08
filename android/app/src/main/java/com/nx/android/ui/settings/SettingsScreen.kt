@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.data.Env
+import com.nx.android.data.LosslessDll
 import com.nx.android.data.PortRunner
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.components.PickerMode
@@ -66,9 +67,37 @@ fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env,
         EnvSection(ob, actions)
         DoctorSection(env, actions, onRequest)
         PathsSection(lib, env, actions, onRequest)
+        FrameGenSection(actions, onRequest)
         LogSection(actions)
         AboutSection(ob, actions)
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+/** 帧生成（Lossless.dll）：设备级的一次性配置。状态以私有副本为准，选择后校验并复制（不内置、不下载）。 */
+@Composable
+private fun FrameGenSection(actions: AppActions, onRequest: (PickerRequest) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var model by remember { mutableStateOf(LosslessDll.ensure(context)?.absolutePath) }
+    Section("帧生成（Lossless.dll）") {
+        Text(
+            if (model != null) "已就绪：$model"
+            else "还没有 Lossless.dll。放在常见位置（Documents/Emulation/bios、Switch、Download）会自动发现，或在这里选一个。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            QuietButton("选择 Lossless.dll", onClick = {
+                onRequest(PickerRequest(PickerMode.FILE, emptySet(), null, "选择 Lossless.dll", onPicked = { f ->
+                    if (LosslessDll.install(context, f)) {
+                        model = LosslessDll.ensure(context)?.absolutePath
+                        actions.onToast("帧生成已就绪")
+                    } else actions.onToast("这个文件不像 Lossless.dll（PE 镜像，至少 100 KB）")
+                }))
+            })
+            if (model != null) QuietButton("重新发现", onClick = { model = LosslessDll.ensure(context)?.absolutePath })
+        }
+        Text("游戏运行中在抽屉里打开帧生成即可使用；DLL 的更新会自动拷到私有目录。",
+             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

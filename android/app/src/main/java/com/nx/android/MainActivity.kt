@@ -15,19 +15,21 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
-import com.nx.android.data.ApkProvider
 import com.nx.android.data.AppLog
 import com.nx.android.data.Env
+import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
+import com.nx.android.domain.FolderScanner
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.AppRoot
 import java.io.File
 
 /**
- * The shell: it owns what only an activity can own — the storage permission, the system pickers, the APK
- * install — and puts the screen up. Everything long-lived comes from the AppContainer (NxApp); the screens
- * take state holders and action lambdas, never this activity.
+ * The shell: it owns what only an activity can own — the storage permission, the system pickers — and puts
+ * the screen up. Everything long-lived comes from the AppContainer (NxApp); the screens take state holders
+ * and action lambdas, never this activity.
  */
 class MainActivity : ComponentActivity() {
 
@@ -68,7 +70,26 @@ class MainActivity : ComponentActivity() {
                               cfg.touch, cfg.fps60, cfg.experimental)
         },
         onCancelPort = { PortService.cancel(this) },
-        onInstall = { install(it) },
+        onRun = { pack, name ->
+            // 运行一个完成的移植：宿主与驱动拷进私有目录后拉起 :play（包是唯一真源，拷贝覆盖旧副本）
+            FolderScanner.portFromPack(pack)?.let { ported ->
+                container.player.start(ported.titleId, name)
+                Player.run(this, ported, name) { ok ->
+                    if (!ok) {
+                        container.player.stop()
+                        toast("无法运行：${pack.name} 里的宿主程序缺失")
+                    }
+                }
+            } ?: toast("无法运行：${pack.name} 不是可运行的数据包")
+        },
+        onResumeGame = {
+            container.player.start(container.player.titleId, container.player.name)
+            com.nx.android.game.GameActivity.resume(this)
+        },
+        onStopGame = {
+            container.player.stop()
+            com.nx.android.game.GameActivity.stop(this)
+        },
         onToast = { toast(it) },
         version = { versionName() },
         keys = { container.prefs.keys },
@@ -123,28 +144,6 @@ class MainActivity : ComponentActivity() {
 
     // ---- after the port (the activity's own privilege) -----------------------------------------------------------
 
-    /** Installs the port: the APK goes through the app's provider to the system installer (the shared storage's
-     * own permissions are not the app's to hand out, and the installer could not read them) */
-    fun install(apk: File) {
-        if (!apk.exists()) { toast("找不到 ${apk.absolutePath}"); return }
-        val local = File(filesDir, "install.apk")
-        try {
-            apk.inputStream().use { src -> local.outputStream().use { src.copyTo(it) } }
-        } catch (e: Exception) {
-            toast("复制 APK 失败：${e.message}"); return
-        }
-        val uri = ApkProvider.uriFor(this, local)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            toast("系统没有安装器：${apk.absolutePath}")
-        }
-    }
-
     fun versionName(): String = try {
         packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
     } catch (e: Exception) {
@@ -160,5 +159,6 @@ class MainActivity : ComponentActivity() {
     val ob: OnboardingState get() = container.onboarding
     val lib: LibraryState get() = container.library
     val port: PortState get() = container.port
+    val player: PlayerState get() = container.player
     val storageOk: Boolean get() = container.storageOk
 }

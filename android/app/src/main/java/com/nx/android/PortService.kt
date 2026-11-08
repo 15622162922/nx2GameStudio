@@ -100,7 +100,7 @@ class PortService : Service() {
             port.running ->
                 if (port.stageName.isEmpty()) "正在移植…" else "阶段 ${port.stageOf}/${port.stages}：${port.stageName}" +
                     (if (port.stageStep.isEmpty()) "" else " · ${port.stageStep}")
-            port.phase == PortState.Phase.DONE -> "完成：${File(port.apkPath).name}"
+            port.phase == PortState.Phase.DONE -> "完成：${File(port.outPath).name}"
             port.phase == PortState.Phase.CANCELLED -> "已取消"
             port.phase == PortState.Phase.INTERRUPTED -> "被系统中断，可重新发起"
             else -> "移植结束（没有产出 APK）：看看日志"

@@ -28,6 +28,7 @@ class Options:
     version: str = ''                  # v<N> to pack (default: the newest in the folder)
     language: str = ''                 # a code or a name (default: English)
     app_name: str = ''                 # the launcher label (default: the game's name in its control data)
+    app: bool = False                  # the nx2android app's mode: no APK and no install — the pack carries the host (libdmplay.so), the drivers and the icon; the app runs the game itself
     install: bool = False              # install on the device after packing
     device: str = ''                   # adb serial
     replace_signer: bool = False       # uninstall an app of the same package signed with another key
@@ -253,7 +254,7 @@ class Port:
         nsp.rmtree(self.work / 'tmp')
         self.result.update(title_id=self.g.id, name=self.app_name, package=self.package, version=self.pkg_ver, display=self.display, language=self.lang,
                            status=self.ap.status, derived=bool(self.derived), installed=bool(o.install))
-        say(f'done: {self.result["apk"]} and {self.result["data"]}')
+        say(f'done: {self.result.get("apk", "no APK (the app runs it)") + ", " if "apk" in self.result else ""}{self.result["data"]}')
         if self.derived: say(f'[RED] {self.derived}: the port is built from a derived profile and may not run as the profile\'s tested version does'
                              + (f'; {self.derived_mem}' if self.derived_mem else ''))
         for x in self.lost: say(f'[RED] {x}')
@@ -644,14 +645,19 @@ class Port:
     def host(self):
         PROG.stage('host', step=f'NDK {self.tools["ndk"].name}')
         out = self.aw / ('host-debug' if self.o.debug else 'host')
-        nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out, '--lib', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
+        # the app's mode runs the game itself: libdmplay.so (the host with the player's JNI entry) instead of the APK's libdmhost.so
+        nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out,
+                 '--play' if self.o.app else '--lib', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
                 + (['--adrenotools'] if (self.drivers() and not prebuilt_loader()) else []), self.logs / 'android_host.log', env=self.env)
-        self.so = out / 'libdmhost.so'
+        self.so = out / ('libdmplay.so' if self.o.app else 'libdmhost.so')
         if not self.so.is_file(): raise BuildError(f'build.py made no {self.so}')
         PROG.end(f'{self.so.stat().st_size / 2**20:.1f} MB')
 
     # ---- apk: the host as a NativeActivity app, signed with the player's key ----
     def apk(self):
+        if self.o.app:   # the app's mode: the pack is the only artifact, the app runs the game itself
+            self.result['mode'] = 'app'
+            return
         PROG.stage('APK')
         stem = app_stem(self.g, self.app_name)
         self.apk_path = self.o.out / f'{stem}.apk'; self.o.out.mkdir(parents=True, exist_ok=True)
@@ -671,12 +677,19 @@ class Port:
     def theme(self):
         """The on-screen gamepad's theme: only the game's own pack goes in the APK (dm/android/themes/themes.tsv maps title IDs to packs; a game with no row
         gets the ergo pack), as assets/overlay/ (theme.tsv and an atlas per layout), which the app reads at its first frame (dm/android/overlay_theme.c)"""
+        files = self.theme_files()
+        if not files: return []
+        self.result['theme'] = android_profile.theme(self.g.id).name; say(f'gamepad theme: {self.result["theme"]}')
+        return [a for name, src in files.items() for a in ('--asset', f'{name}={src}')]
+
+    def theme_files(self):
+        """The theme's files ({name in the pack: source}, overlay/ of the pack), or None without them. The APK carries them as assets/overlay/
+        (theme()); the player's app has no APK assets, and its pack carries them as plain files (overlay_theme.c falls back to the pack)"""
         pack = android_profile.theme(self.g.id)
         files = [pack / 'theme.tsv'] + [pack / f'{lay}.png' for lay in android_profile.LAYOUTS]
-        missing = [f.name for f in files if not f.is_file()]
-        if missing: say(f'[RED] the gamepad theme {pack.name} has no {", ".join(missing)}: the app draws its gamepad without a theme'); return []
-        self.result['theme'] = pack.name; say(f'gamepad theme: {pack.name}')
-        return [a for f in files for a in ('--asset', f'overlay/{f.name}={f}')]
+        if missing := [f.name for f in files if not f.is_file()]:
+            say(f'[RED] the gamepad theme {pack.name} has no {", ".join(missing)}: the app draws its gamepad without a theme'); return None
+        return {f'overlay/{f.name}': f for f in files}
 
     def icon(self):   # the game's icon (nx_extract saves the control data's English one as icon.jpg) as a 256 px PNG; None without Pillow or an icon
         src = next((d / 'icon.jpg' for d in (self.game, self.base) if (d / 'icon.jpg').exists()), None)
@@ -712,10 +725,19 @@ class Port:
         font_env, font_files = self.button_font()
         cjk_env, cjk_files = self.cjk_font()
         dst = self.data_dir()
+        files = {**self.fps_files, **font_files, **cjk_files}
+        host = icon = None; drivers = []
+        if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
+            host = 'host/libdmplay.so'
+            files[host] = self.so
+            if theme := self.theme_files(): files.update(theme)
+            if src := self.icon(): icon = 'icon.png'; files[icon] = src
+            for d in self.drivers() + self.loader_libs(): files[f'drivers/{d.name}'] = d
+            drivers = sorted({f'drivers/{d.name}' for d in self.drivers() + self.loader_libs()})
         man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=self.game / 'RomFS', shaders=self.dmsv,
                              aoc=self.aoc, language=self.lang, package=self.package, env=self.fps_env + font_env + (['DM_VK_MT_REPLAY=1'] if self.o.mt_replay else [])
                              + ([f'DM_VK_DRIVER={self.o.vulkan_driver.name}'] if self.o.vulkan_driver else []) + cjk_env, settings=TOUCH_SETTINGS if self.o.touch else None,
-                             files={**self.fps_files, **font_files, **cjk_files}, text=self.lists(),
+                             files=files, text=self.lists(), host=host, icon=icon, drivers=drivers,
                              progress=lambda what: PROG.set(step=f'linking {what}'))
         self.data_path = dst; self.result['data'] = str(dst)
         PROG.end(f'{man["files"]:,} files, {man["bytes"] / 2**30:.1f} GB')
@@ -763,6 +785,7 @@ class Port:
 
     # ---- install (optional) ----
     def install(self):
+        if self.o.app: return   # the app's mode: no APK, the app runs the game itself
         install.install(self.apk_path, self.data_path, self.tools['adb'], self.o.device or self.cfg.get('device'), replace_signer=self.o.replace_signer)
 
 

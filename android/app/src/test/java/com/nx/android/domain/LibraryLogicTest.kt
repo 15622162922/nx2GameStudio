@@ -4,16 +4,24 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 
-/** The card's status: the running port, the remembered APK, and the APK that went away */
+/** The card's status: the running port, the remembered pack (the host inside makes it done), and the pack whose host went away */
 class LibraryLogicTest {
 
-    private val apk = File.createTempFile("game", ".apk").also { it.writeText("apk") }
+    private fun tmpDir(): File = File.createTempFile("nx2a-port", "").let { f -> f.delete(); f.mkdirs(); f }
+
+    private fun port(hostExists: Boolean): Ported {
+        val pack = tmpDir()
+        File(pack, "host").mkdirs()
+        val host = File(pack, "host/libdmplay.so")
+        if (hostExists) host.writeText("ELF")
+        return Ported(pack, host, null, "0100000000010000", "Hades II")
+    }
 
     @Test
-    fun `a remembered apk makes the game done`() {
+    fun `a finished port (pack and host together) makes the game done`() {
         val f = File("/sdcard/Games/Game.nsp")
         assertEquals(GameStatus.DONE,
-                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to apk), portRunning = false, portGameFile = ""))
+                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to port(hostExists = true)), portRunning = false, portGameFile = ""))
     }
 
     @Test
@@ -26,11 +34,9 @@ class LibraryLogicTest {
     }
 
     @Test
-    fun `a deleted apk falls back to not ported`() {
+    fun `a pack whose host went away falls back to not ported`() {
         val f = File("/sdcard/Games/Game.nsp")
-        val gone = File("/sdcard/Switch/Ports/Gone.apk")
         assertEquals(GameStatus.NOT_PORTED,
-                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to gone), portRunning = false, portGameFile = ""))
-        apk.delete()
+                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to port(hostExists = false)), portRunning = false, portGameFile = ""))
     }
 }

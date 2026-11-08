@@ -59,9 +59,9 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 | 60 fps | Only with `--fps60` (below): the profile's own cap, or the build's FPSLocker-Warehouse config converted for the host | `android/fpslock/{fpslock.tsv,patches.py,<build ID>.yaml}` |
 | rewrite | `patch_nso.py` with `DM_TARGET=android` | `android/patched_<version>/` |
 | shaders | `shader_split.py` (the DLC's own shaders too, `aoc/` given as `DM_SPLIT_AOC`), then `shader_vk.py` (SPIR-V) with the translator built from the repository's source (`dm/gfx/tools/dmsh_xlate` over `dm/third_party/ryujinx`, once per player in their nx2android folder), plus the shaders captured on the device (below) | `shader/pkg`, `android/shaders.dmsv`, `android/captured_shaders/` |
-| host | `dm/android/build.py --release` with the player's NDK (`--debug`: a development build, debug information and `DM_CTL`) | `android/host/libdmhost.so` (`android/host-debug/`) |
-| apk | `dm/android/apk/mkapk.py`, signed with the player's own key, with the game's gamepad theme only (`dm/android/themes/themes.tsv`: its pack, else the ergo pack) as `assets/overlay/` | `<out>/<App>.apk` |
-| data | The files the app reads from `/sdcard/Android/data/<package>/files` | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/` |
+| host | `dm/android/build.py --release` with the player's NDK (`--debug`: a development build, debug information and `DM_CTL`) | `android/host/libdmhost.so` (`android/host-debug/`); with `--app`: `libdmplay.so` instead (the host statically linked with the player's JNI entry, the app's `:play` process loads it) |
+| apk | `dm/android/apk/mkapk.py`, signed with the player's own key, with the game's gamepad theme only (`dm/android/themes/themes.tsv`: its pack, else the ergo pack) as `assets/overlay/` | `<out>/<App>.apk` — skipped with `--app` (the phone line: the app runs the game itself, no per-game APK) |
+| data | The files the app reads from `/sdcard/Android/data/<package>/files` | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/`; with `--app` the pack also carries the host (`host/libdmplay.so`), the Vulkan drivers (`drivers/`), the gamepad's theme (`overlay/`) and the icon (`icon.png`), all named in the manifest |
 | install | `adb install`, the profile's `requires` checked against the device, the data pack pushed (optional) | |
 
 RomFS in the data pack is hard-linked to the extraction when the volume allows it, so it takes no extra space.
@@ -139,5 +139,13 @@ The engine is our own fork since 2026-10-29: no subtree pull from upstream, and 
 
 `android/` is an Android app (Kotlin, Gradle) that runs the pipeline **on the phone**. It holds no pipeline logic:
 it unpacks the environment (the rootfs from the nixport payload, the build tools, the tool's own tree), starts the
-porter as a guest program and shows its output. The assets are built by `packaging/android-apk/` and are not
-committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).
+porter as a guest program and shows its output. The porter runs with `--app` there: the data pack is the only
+artifact, and a finished port runs inside the app — no per-game APK and no installer step. The player lives in
+the app's own `:play` process (`com.nx.android.game.GameActivity`): the pack's host (`libdmplay.so`, the host
+statically linked with its JNI entry, `dm/android/jni_android.c`) and its driver libraries are copied into the
+app's private folder (sdcard is noexec) and loaded there; the surface, input and lifecycle reach the same shared
+core the NativeActivity APK serves (`dm/android/jni_android.h`). One game plays at a time; the process ends with
+the game, so a crash takes the game down, not the app or a port that is running. Saves, logs and temp go under
+the app's files folder per title id (`DM_GAME_ID`); the game's language and Vulkan driver are picked in the
+library's drawer and written into the pack's `env.txt`. The assets are built by `packaging/android-apk/` and are
+not committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).

@@ -43,20 +43,25 @@ class FolderScannerTest {
     }
 
     @Test
-    fun `the output folder is indexed by title id through the data packs' manifests`() {
+    fun `the output folder is indexed by title id through the data packs' manifests, host included`() {
         val out = tmpDir()
         val pack = File(out, "HadesIIData-data")
-        pack.mkdirs()
+        File(pack, "host").mkdirs()
         File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000","name":"Hades II","package":"org.nx2a.hades"}""")
-        File(out, "HadesIIData.apk").writeText("")
-        // another data pack whose APK is gone: it does not enter the index
+        File(pack, "host/libdmplay.so").writeText("ELF")
+        File(pack, "icon.png").writeBytes(byteArrayOf(1))
+        // another data pack whose host is gone (a rebuild in flight): it does not count as done
         val orphan = File(out, "Gone-data")
         orphan.mkdirs()
         File(orphan, "nx2a-data.json").writeText("""{"title_id":"0100000000019999"}""")
 
         val idx = FolderScanner.outIndex(out)
         assertEquals(1, idx.size)
-        assertEquals("HadesIIData.apk", idx["0100000000010000"]!!.name)
+        val p = idx["0100000000010000"]!!
+        assertEquals("Hades II", p.name)
+        assertEquals("0100000000010000", p.titleId)
+        assertTrue(p.host.isFile)
+        assertTrue(p.icon!!.isFile)
         assertFalse(idx.containsKey("0100000000019999"))
         out.deleteRecursively()
     }

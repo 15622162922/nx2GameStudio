@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <!-- The .NET SDK comes from Microsoft's servers. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Installing the port the tool makes. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- The game files and the ports the tool makes are on the shared storage: from Android 11 the old
          permissions are not enough, the app needs the all-files access (the user gives it once). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
@@ -43,11 +41,18 @@
             android:name=".PortService"
             android:exported="false" />
 
-        <!-- Serves the APK the tool made to the system installer (a file:// URI is not allowed since Android 7). -->
-        <provider
-            android:name="com.nx.android.data.ApkProvider"
-            android:authorities="com.nx.android.apk"
-            android:exported="true"
-            android:grantUriPermissions="true" />
+        <!-- The player: one game at a time, in a process of its own — a crash (or the game's own exit, which
+             ends the process) takes the game down, not the app or a port that is running. singleTask: the
+             app's "resume the game" and "exit the game" both land here; every config change is handled here
+             (a recreation takes the running game's window over, it does not restart it). -->
+        <activity
+            android:name=".game.GameActivity"
+            android:process=":play"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode|fontWeightAdjustment|fontScale"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
     </application>
 </manifest>

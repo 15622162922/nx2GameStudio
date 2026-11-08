@@ -15,23 +15,24 @@ import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameConfig
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
+import com.nx.android.domain.Ported
 import org.json.JSONObject
 import java.io.File
 
 /**
  * The library: the game files of the chosen folder, what became of each one, and each game's own port options
  * (they follow the game now; the old app kept them global, and a game without its own entry keeps the old
- * defaults). A game counts as done when the port's APK is there — the ones this app ported are remembered by
- * source path, the ones from before are matched through the data packs' manifests (the title ID in the file's
- * name).
+ * defaults). A game counts as done when its pack and the host inside it are there — the ones this app ported
+ * are remembered by source path, the ones from before are matched through the data packs' manifests (the title
+ * ID in the file's name).
  */
 class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
 
     var folder by mutableStateOf(prefs.str(LIB_FOLDER))
     var games by mutableStateOf(listOf<File>()); private set
 
-    /** The APK of a game this app ported (source path → APK); re-checked against the disk at every scan */
-    var apks by mutableStateOf(mapOf<String, File>()); private set
+    /** The finished port of a game this app ported (source path → pack); re-checked against the disk at every scan */
+    var ports by mutableStateOf(mapOf<String, Ported>()); private set
 
     var scanning by mutableStateOf(false); private set
 
@@ -54,7 +55,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
     private val FAKE_DATA = true
 
     private val fakeStatus = HashMap<String, GameStatus>()
-    private val fakeApks = HashMap<String, File>()
+    private val fakePorts = HashMap<String, Ported>()
 
     /** 15 条假游戏（名字/状态各异；路径是假的，只为看网格、hero 与磨砂背景的排版） */
     private fun fakeGames(): List<File> {
@@ -79,7 +80,11 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         for ((name, status) in names) {
             val f = File("/sdcard/FakeLibrary/$name.nsp")
             fakeStatus[f.absolutePath] = status
-            if (status == GameStatus.DONE) fakeApks[f.absolutePath] = File("/sdcard/Switch/Ports/$name.apk")
+            if (status == GameStatus.DONE) {
+                val pack = File("/sdcard/Switch/Ports/${name}-data")
+                fakePorts[f.absolutePath] = Ported(pack, File(pack, "host/libdmplay.so"), File(pack, "icon.png"),
+                                                   FolderScanner.titleIdIn(name) ?: "", name)
+            }
             out.add(f)
         }
         return out
@@ -96,7 +101,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         }
         try {
             val o = prefs.json(LIB_PORTS)
-            apks = o.keys().asSequence().associateWith { File(o.getString(it)) }
+            ports = o.keys().asSequence().mapNotNull { k -> FolderScanner.portFromPack(File(o.getString(k)))?.let { k to it } }.toMap()
         } catch (e: Exception) {
         }
         try {
@@ -125,7 +130,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         heroIndex = if (count > 0) index.coerceIn(0, count - 1) else 0
     }
 
-    /** The folder's game files, and the APK each one has (the remembered ones, the data packs' matches) */
+    /** The folder's game files, and the finished port each one has (the remembered ones, the packs' matches) */
     fun rescan() {
         scanning = true
         Thread {
@@ -134,47 +139,48 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
             var found = (if (FAKE_DATA) fakeGames() else emptyList()) + real
             found = found.distinctBy { it.absolutePath }.sortedBy { it.name.lowercase() }
             val byTitle = FolderScanner.outIndex(File(prefs.out))
-            val matched = HashMap(apks.filterKeys { name -> found.any { it.absolutePath == name } })
+            val matched = HashMap(ports.filterKeys { name -> found.any { it.absolutePath == name } })
             for (f in found) {
                 val id = FolderScanner.titleIdIn(f.name) ?: continue
                 byTitle[id]?.let { matched[f.absolutePath] = it }
             }
             games = found
-            apks = matched
+            ports = matched
             scanning = false
         }.start()
     }
 
     fun statusOf(f: File): GameStatus {
         if (FAKE_DATA) fakeStatus[f.absolutePath]?.let { return it }
-        return LibraryLogic.statusOf(f, apks, port.running, port.gameFile)
+        return LibraryLogic.statusOf(f, ports, port.running, port.gameFile)
     }
 
-    fun apkOf(f: File): File? {
-        if (FAKE_DATA) fakeApks[f.absolutePath]?.let { return it }
-        return apks[f.absolutePath]?.takeIf { it.isFile }
+    /** The game's finished port (its pack), null when it has none */
+    fun portOf(f: File): Ported? {
+        if (FAKE_DATA) fakePorts[f.absolutePath]?.let { return it }
+        return ports[f.absolutePath]
     }
 
     /**
-     * 删除一个移植产物：产物 APK 与同目录的数据包目录（**存档在数据包里，随之删除**）。游戏源文件不动。
+     * 删除一个移植产物：整个数据包目录（宿主、图标、**存档在数据包里，随之删除**）。游戏源文件不动。
      * 删完刷新状态：该游戏回落为未移植。
      */
     fun deleteOutcome(f: File): Boolean {
-        val apk = apks[f.absolutePath] ?: return false
-        val pack = File(apk.parentFile, apk.nameWithoutExtension + "-data")
-        val apkGone = apk.delete()
-        val packGone = !pack.exists() || pack.deleteRecursively()
-        apks = apks - f.absolutePath
-        prefs.putJson(LIB_PORTS, JSONObject(apks.mapValues { it.value.absolutePath }))
+        val port = ports[f.absolutePath] ?: return false
+        val gone = !port.pack.exists() || port.pack.deleteRecursively()
+        ports = ports - f.absolutePath
+        prefs.putJson(LIB_PORTS, JSONObject(ports.mapValues { it.value.pack.absolutePath }))
         rescan()
-        return apkGone && packGone
+        return gone
     }
 
-    /** A port came out done: the source and its APK stay together */
-    fun noteDone(source: String, apk: String) {
-        if (source.isEmpty() || apk.isEmpty()) return
-        apks = apks + (source to File(apk))
-        prefs.putJson(LIB_PORTS, JSONObject(apks.mapValues { it.value.absolutePath }))
+    /** A port came out done: the source and its data pack stay together */
+    fun noteDone(source: String, pack: String) {
+        if (source.isEmpty() || pack.isEmpty()) return
+        FolderScanner.portFromPack(File(pack))?.let {
+            ports = ports + (source to it)
+            prefs.putJson(LIB_PORTS, JSONObject(ports.mapValues { p -> p.value.pack.absolutePath }))
+        }
     }
 
     /** The port options a game carries: its own, or the old app's globals as the defaults */

@@ -34,9 +34,10 @@ def link_tree(src, dst):   # (files, bytes)
 def files_folder(package): return f'/sdcard/Android/data/{package}/files'
 
 
-def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, language='en-US', package=None, env=(), settings=None, files=None, text=None, progress=None):
+def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, language='en-US', package=None, env=(), settings=None, files=None, text=None, host=None, icon=None, drivers=None, progress=None):
     """Write the pack to dst (replacing it). profile: the AndroidProfile; package: the app's, when not the profile's; env: more env.txt rows, after the profile's; settings: settings.txt values over the profile's;
-    files: {name in the pack: source} (the 60 fps memory writes, fpslock.tsv; the button-icon font); text: {name in the pack: its text} (the launcher's lists: languages.txt, drivers.txt). Returns the manifest"""
+    files: {name in the pack: source} (the 60 fps memory writes, fpslock.tsv; the button-icon font; subfolders for the app's mode: host/, drivers/, overlay/, icon.png);
+    text: {name in the pack: its text} (the launcher's lists: languages.txt, drivers.txt); host/icon/drivers: the app's artifacts, named in the manifest. Returns the manifest"""
     package = package or profile.package
     tmp = dst.with_name(dst.name + '.partial')
     if tmp.exists(): shutil.rmtree(tmp)
@@ -47,7 +48,10 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
         if progress: progress(what)
         dn, db = link_tree(src, tmp / sub); n += dn; b += db
     link_or_copy(shaders, tmp / 'shaders.dmsv'); n += 1; b += shaders.stat().st_size
-    for name, src in (files or {}).items(): shutil.copyfile(src, tmp / name); n += 1; b += Path(src).stat().st_size
+    for name, src in (files or {}).items():
+        f = tmp / name
+        f.parent.mkdir(parents=True, exist_ok=True)   # the app's files live in subfolders (host/, drivers/, overlay/)
+        shutil.copyfile(src, f); n += 1; b += Path(src).stat().st_size
     for name, body in (text or {}).items(): (tmp / name).write_text(body, encoding='utf-8', newline='\n'); n += 1; b += len(body.encode('utf-8'))
     rows = [f'# Written by nx2android\'s porter for {profile.name} ({profile.id}); KEY=VALUE per line, read by the app at launch',
             f'DM_LANG={language}']
@@ -57,6 +61,9 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     if sets := {**profile.settings, **(settings or {})}: (tmp / 'settings.txt').write_text(''.join(f'{k}={v}\n' for k, v in sets.items()), encoding='utf-8', newline='\n')
     man = dict(title_id=profile.id, name=profile.name, package=package, version=version, display=display, language=language, requires=profile.requires,
                files=n, bytes=b, dlc=sorted(int(p.name) for p in aoc.iterdir() if p.is_dir() and p.name.isdigit()) if aoc else [], made=time.strftime('%Y-%m-%d %H:%M:%S'))
+    if host: man['host'] = host         # the app's mode: the game's host (libdmplay.so) in the pack, the app copies it into its private folder to run the game
+    if icon: man['icon'] = icon
+    if drivers: man['drivers'] = list(drivers)
     (tmp / MANIFEST).write_text(json.dumps(man, indent=2), encoding='utf-8')
     if dst.exists(): shutil.rmtree(dst)
     for i in range(20):   # Windows: a folder just removed can stay delete-pending while another process (an indexer, a virus scan) holds it, and the rename is refused meanwhile

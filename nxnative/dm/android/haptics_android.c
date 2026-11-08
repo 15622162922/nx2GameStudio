@@ -5,7 +5,6 @@
 #include "dm.h"
 #include "hle_haptics.h"
 #include <jni.h>
-#include <android/native_activity.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -108,8 +107,12 @@ static void *haptics_thread(void *a) {
     }
     return NULL;
 }
-void dm_haptics_android_start(ANativeActivity *act, int on) {
-    g_vm = act->vm; g_actobj = act->clazz;   // the NativeActivity object: a global reference the framework keeps
+void dm_haptics_android_start(JNIEnv *E, JavaVM *vm, jobject actctx, int on) {
+    // the context object (the NativeActivity, or the player's GameActivity): the haptics thread reaches it after
+    // this call returns, so it goes into a global reference here (the call runs on Java's thread)
+    g_vm = vm;
+    g_actobj = (E && actctx) ? (*E)->NewGlobalRef(E, actctx) : NULL;
+    if (E && actctx && !g_actobj && (*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [haptics] cannot keep the context: no vibration"); }
     atomic_store(&g_on, on != 0);
     dm_haptics_init(sink, 1);
     pthread_t t; if (!pthread_create(&t, NULL, haptics_thread, NULL)) pthread_detach(t);

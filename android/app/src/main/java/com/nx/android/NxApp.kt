@@ -6,8 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.Env
+import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
 
 /**
@@ -34,4 +36,7 @@ class AppContainer(app: NxApp) {
     val port = PortState(prefs)
     val onboarding = OnboardingState(prefs, env, storageOk = { storageOk })
     val library = LibraryState(prefs, port)
+
+    /** 正在玩的游戏（:play 进程的存在与否，两秒一查） */
+    val player = PlayerState(alive = { Player.playProcessAlive(app) })
 }

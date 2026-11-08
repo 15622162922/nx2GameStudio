@@ -16,6 +16,8 @@ ap.add_argument('--out')
 ap.add_argument('--api', default='31')
 ap.add_argument('--jobs', type=int, default=os.cpu_count() or 8)
 ap.add_argument('--exe', action='store_true'); ap.add_argument('--lib', action='store_true')
+ap.add_argument('--play', action='store_true', help='also libdmplay.so: the host statically linked with the player\'s JNI entry (jni_android.c), one per game, for the app\'s :play process')
+ap.add_argument('--no-lsfg', action='store_true', help='build without the frame generation (NX_LSFG): an MIT build without the GPL lsfg/ folder (the drawer then reports "not in this build")')
 ap.add_argument('--only-compile', action='store_true', help='compile every source and report errors, no link')
 ap.add_argument('--keep-going', action='store_true')
 ap.add_argument('-O', default='2')
@@ -23,7 +25,7 @@ ap.add_argument('--gfx', default='vk', choices=('vk', 'null'), help='graphics ba
 ap.add_argument('--release', action='store_true', help='a build to keep installed: no debug information, stripped, no DM_CTL')
 ap.add_argument('--adrenotools', action='store_true', help='also libadrenotools.so and its hooks (third_party/libadrenotools), which the APK carries with a custom Vulkan driver')
 a = ap.parse_args()
-if not (a.exe or a.lib): a.exe = a.lib = True
+if not (a.exe or a.lib or a.play): a.exe = a.lib = True
 
 import platform as _pf, shutil as _sh, stat as _st0
 # An ARM64 phone (Linux, aarch64): Google's NDK ships host tools for x86-64 only, so the compiler is the
@@ -73,7 +75,7 @@ for sh in sorted((DM / 'android/shaders').glob('*.*')):
 def srcs(*globs): return [p for g in globs for p in sorted(DM.glob(g))]
 HOST = [p for p in srcs('host/*.c') if p.name not in ('hle_movie_avc.c',)]   # VideoToolbox: dm/android/movie_avc.c instead
 GFX = srcs('gfx/*.c', 'gfx/nvn/*.c', 'gfx/tex/*.c')
-PORT = [p for p in srcs('android/compat/*.c', 'android/*.c') if not (p.name == 'gfx_null.c' and a.gfx != 'null') and not (p.name.startswith('gfx_vk') and a.gfx != 'vk')]   # one graphics backend
+PORT = [p for p in srcs('android/compat/*.c', 'android/*.c') if not (p.name == 'gfx_null.c' and a.gfx != 'null') and not (p.name.startswith('gfx_vk') and a.gfx != 'vk') and not p.name in ('jni_android.c', 'dm_framegen.c', 'vka_shim.c')]   # one graphics backend; jni_android.c goes into --play's link, dm_framegen.c + vka_shim.c into every target's (their list below)
 ASM = srcs('host/entry.S', 'gfx/nvn/nvn_entry.S', 'gfx/nvn/nvn_thunks.S')
 VPX = srcs('third_party/libvpx/**/*.c')
 
@@ -81,7 +83,7 @@ INC = ['-include', str(DM / 'android/compat/include/darwin_compat.h'), f'-I{DM /
        f'-I{DM / "third_party/vulkan-headers/include"}', f'-I{gen / a.game}', f'-I{DM / "third_party/libvpx"}', f'-I{DM / "third_party/stb_vorbis"}', f'-I{DM / "android"}']
 CFLAGS = [TARGET, f'-O{a.O}'] + DBG + ['-fPIC', '-fno-omit-frame-pointer', '-ffixed-x18', '-Wall', '-Wno-unused-function', '-Wno-unused-variable', '-Wno-unused-but-set-variable',
           '-Wno-format', '-Wno-deprecated-declarations', '-Wno-gnu-folding-constant', '-Werror=implicit-function-declaration', '-Werror=return-type',
-          '-Werror=incompatible-pointer-types', '-Werror=int-conversion', '-D_GNU_SOURCE', '-DDM_ANDROID=1', '-fno-strict-aliasing', '-fvisibility=hidden'] + (['-DDM_RELEASE=1'] if a.release else [])
+          '-Werror=incompatible-pointer-types', '-Werror=int-conversion', '-D_GNU_SOURCE', '-DDM_ANDROID=1', '-fno-strict-aliasing', '-fvisibility=hidden'] + (['-DDM_RELEASE=1'] if a.release else []) + ([] if a.no_lsfg else ['-DNX_LSFG=1'])
 VPX_FLAGS = [TARGET, '-O2'] + DBG + ['-fPIC', f'-I{DM / "third_party/libvpx"}', f'-I{DM / "third_party/libvpx/config"}', '-w']
 
 import hashlib, shutil
@@ -120,16 +122,29 @@ def build(files):
             elif err.strip() and '--verbose' in sys.argv: print(err, file=sys.stderr)
     return objs, failed
 
-all_files = HOST + GFX + PORT + ASM
+# the frame generation travels with every target (the present calls it); its GPL chain only when built in
+all_files = HOST + GFX + PORT + ASM + srcs('android/dm_framegen.c') + (srcs('android/lsfg/*.c', 'android/vka_shim.c') if not a.no_lsfg else [])
+PLAYS = srcs('android/jni_android.c')   # the player's JNI entry: compiled always (the errors surface here too), linked only for --play
 objs, failed = build(all_files)
+pobjs, pfailed = build(PLAYS)
 vobjs, vfailed = build(VPX)
-failed += vfailed
-print(f'compiled {len(all_files) + len(VPX)} sources, {len(failed)} failed' + (': ' + ', '.join(str(f.relative_to(DM)) for f in failed) if failed else ''))
+failed += pfailed + vfailed
+print(f'compiled {len(all_files) + len(PLAYS) + len(VPX)} sources, {len(failed)} failed' + (': ' + ', '.join(str(f.relative_to(DM)) for f in failed) if failed else ''))
 if failed and not a.keep_going: sys.exit(1)
 if a.only_compile: sys.exit(1 if failed else 0)
 
 LIBS = ['-landroid', '-llog', '-lvulkan', '-laaudio', '-lnativewindow', '-lmediandk', '-lz', '-lm', '-ldl']   # -lz: the gamepad theme's PNGs (overlay_theme.c)
 LDFLAGS = [TARGET, '-fuse-ld=lld', '-Wl,--error-limit=0', '-Wl,-z,max-page-size=16384', '-Wl,--build-id', '-Wl,-z,nostart-stop-gc']
+if a.play:   # libdmplay.so: the whole host + the JNI entry, statically linked (jni_android.c's header comment)
+    r = subprocess.run([CC] + CC_EXTRA + LDFLAGS + ['-shared', '-Wl,-soname,libdmplay.so', '-o', str(out / 'libdmplay.so')] + [str(o) for o in objs + pobjs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
+    print(r.stderr.strip() if r.returncode else f'linked {out / "libdmplay.so"}', file=sys.stderr if r.returncode else sys.stdout)
+    if r.returncode: sys.exit(1)
+    if a.release:   # the static symbol table goes too (the dynamic one stays: the JNI surface)
+        _strip = (bin_ / ('llvm-strip.exe' if os.name == 'nt' else 'llvm-strip'))
+        if NX2A_ARM_HOST:
+            _strip = Path(_sh.which('llvm-strip') or _sh.which('llvm-strip-18') or _sh.which('strip') or _strip)
+        subprocess.run([str(_strip), '--strip-unneeded', str(out / 'libdmplay.so')], check=True)
+        print(f'stripped {out / "libdmplay.so"}: {(out / "libdmplay.so").stat().st_size // 1024} KB')
 if a.exe:
     r = subprocess.run([CC] + CC_EXTRA + LDFLAGS + ['-pie', '-o', str(out / 'dmhost')] + [str(o) for o in objs + vobjs] + LIBS, capture_output=True, text=True, errors='replace')
     print(r.stderr.strip() if r.returncode else f'linked {out / "dmhost"}', file=sys.stderr if r.returncode else sys.stdout)

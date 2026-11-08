@@ -143,6 +143,31 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
+    def test_app_mode_pack(self):   # --app: the pack carries what the APK used to (host, drivers, icon, the gamepad's theme), named in the manifest
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
+            (t / 'romfs/Data').mkdir(parents=True); (t / 'romfs/Data/a.bin').write_bytes(b'y' * 20)
+            (t / 'shaders.dmsv').write_bytes(b'DMSV')
+            (t / 'libdmplay.so').write_bytes(b'ELF'); (t / 'libvulkan_freedreno.so').write_bytes(b'DRV'); (t / 'libadrenotools.so').write_bytes(b'AT')
+            (t / 'theme.tsv').write_text('theme'); (t / 'icon.png').write_bytes(b'PNG')
+            p = profiles.load(NEO)
+            man = datapack.build(t / 'out-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv',
+                                 files={'host/libdmplay.so': t / 'libdmplay.so', 'drivers/libvulkan_freedreno.so': t / 'libvulkan_freedreno.so',
+                                        'drivers/libadrenotools.so': t / 'libadrenotools.so', 'overlay/theme.tsv': t / 'theme.tsv', 'icon.png': t / 'icon.png'},
+                                 host='host/libdmplay.so', icon='icon.png', drivers=['drivers/libadrenotools.so', 'drivers/libvulkan_freedreno.so'])
+            o = t / 'out-data'
+            self.assertTrue((o / 'host/libdmplay.so').is_file()); self.assertTrue((o / 'drivers/libvulkan_freedreno.so').is_file())   # subfolders are made
+            self.assertTrue((o / 'overlay/theme.tsv').is_file()); self.assertTrue((o / 'icon.png').is_file())
+            man = datapack.read_manifest(o)
+            self.assertEqual(man['host'], 'host/libdmplay.so'); self.assertEqual(man['icon'], 'icon.png')
+            self.assertEqual(man['drivers'], ['drivers/libadrenotools.so', 'drivers/libvulkan_freedreno.so'])
+            datapack.build(t / 'pc-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
+            pc = datapack.read_manifest(t / 'pc-data')   # the PC flow's pack carries none of the app's fields
+            self.assertNotIn('host', pc); self.assertNotIn('icon', pc); self.assertNotIn('drivers', pc)
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
     @unittest.skipUnless(any(Path(p).is_file() for p in pipeline.LETTER_FONTS), 'no letter font on this machine')
     def test_button_font(self):   # the Nintendo extension stand-in: made once, in the pack, named in env.txt (Super Mario Bros. Wonder's "Press L+R" drew '?' without it)
         try: from fontTools.ttLib import TTFont
@@ -253,6 +278,11 @@ class Misc(unittest.TestCase):
         from porter import cli
         self.assertTrue(cli._parser().parse_args(['port', 'x', '--mt-replay']).mt_replay); self.assertFalse(cli._parser().parse_args(['port', 'x']).mt_replay)
         self.assertFalse(pipeline.Options(Path(".")).mt_replay)
+
+    def test_app_option(self):   # --app: the nx2android app's mode (no APK, no install; the pack carries the host) — off unless given
+        from porter import cli
+        self.assertTrue(cli._parser().parse_args(['port', 'x', '--app']).app); self.assertFalse(cli._parser().parse_args(['port', 'x']).app)
+        self.assertFalse(pipeline.Options(Path(".")).app)
 
     def test_vulkan_driver_option(self):   # --vulkan-driver FILE: parsed, and a file that is not a .so library fails before any stage
         from porter import cli
