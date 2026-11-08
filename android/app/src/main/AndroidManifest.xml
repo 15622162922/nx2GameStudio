@@ -11,18 +11,23 @@
     <!-- The game files and the ports the tool makes are on the shared storage: from Android 11 the old
          permissions are not enough, the app needs the all-files access (the user gives it once). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- The port runs in a foreground service (the notification keeps the process alive while the app is
+         in the background or the screen is off). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
+        android:name=".NxApp"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode|fontWeightAdjustment|fontScale"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -31,9 +36,16 @@
             </intent-filter>
         </activity>
 
+        <!-- The port: a foreground service so it goes on while the app is in the background or the screen
+             is off. It carries no state (PortState is the one source); it keeps the process alive and
+             mirrors the progress into the notification. -->
+        <service
+            android:name=".PortService"
+            android:exported="false" />
+
         <!-- Serves the APK the tool made to the system installer (a file:// URI is not allowed since Android 7). -->
         <provider
-            android:name=".ApkProvider"
+            android:name="com.nx.android.data.ApkProvider"
             android:authorities="com.nx.android.apk"
             android:exported="true"
             android:grantUriPermissions="true" />

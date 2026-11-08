@@ -1,4 +1,4 @@
-package com.nx.android
+package com.nx.android.data
 
 import java.io.File
 import java.io.InputStream

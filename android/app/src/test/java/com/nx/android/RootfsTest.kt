@@ -1,4 +1,5 @@
 package com.nx.android
+import com.nx.android.data.Tar
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

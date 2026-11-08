@@ -1,0 +1,118 @@
+package com.nx.android
+import com.nx.android.appstate.PortState
+import com.nx.android.data.Env
+import com.nx.android.data.PortRunner
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.os.IBinder
+import java.io.File
+
+/**
+ * The foreground service that keeps the port alive while the app is in the background or the screen is off: the
+ * porter runs in the app's own process, and Android kills idle background processes — the service's notification
+ * says a port is on, so the process stays. It carries no state: PortState is the one source; the service keeps
+ * the process alive and mirrors the progress into the notification. Not sticky: the porter cannot resume, so a
+ * killed service is an interrupted port, not one to restart half-made.
+ */
+class PortService : Service() {
+
+    companion object {
+        const val CHANNEL = "nx2a_port"
+        const val GAME = "game"; const val KEYS = "keys"; const val OUT = "out"
+        const val TOUCH = "touch"; const val FPS60 = "fps60"; const val EXP = "exp"
+        private var instance: PortService? = null
+
+        /** Starts a port: the state goes up first (the UI turns at once), the service keeps it alive */
+        fun start(ctx: Context, game: String, keys: String, out: String,
+                  touch: Boolean, fps60: Boolean, exp: Boolean) {
+            (ctx.applicationContext as NxApp).container.port.begin(game)
+            val i = Intent(ctx, PortService::class.java)
+                .putExtra(GAME, game).putExtra(KEYS, keys).putExtra(OUT, out)
+                .putExtra(TOUCH, touch).putExtra(FPS60, fps60).putExtra(EXP, exp)
+            ctx.startForegroundService(i)
+        }
+
+        /** The stop from the UI: the porter and its tools die, the state marks the cancel */
+        fun cancel(ctx: Context) {
+            (ctx.applicationContext as NxApp).container.port.cancel()
+            instance?.runner?.cancel()
+            instance?.stopShown()
+        }
+    }
+
+    private var runner: PortRunner? = null
+    private lateinit var nm: NotificationManager
+    private val port: PortState by lazy { (applicationContext as NxApp).container.port }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "移植进度", NotificationManager.IMPORTANCE_LOW))
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val game = intent?.getStringExtra(GAME) ?: return stop()
+        val keys = intent.getStringExtra(KEYS) ?: return stop()
+        val out = intent.getStringExtra(OUT) ?: return stop()
+        startForeground(1, notification())
+        runner = PortRunner(Env(applicationContext)) { line ->
+            port.onLine(line)
+            nm.notify(1, notification())
+        }
+        runner!!.port(game, keys, out, intent.getBooleanExtra(TOUCH, false),
+            intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false)) {
+            port.finish()
+            nm.notify(1, notification())
+            stopShown()   // the notification stays (the result), the service goes
+            stopSelf()
+        }
+        return START_NOT_STICKY
+    }
+
+    private fun stop(): Int { stopSelf(); return START_NOT_STICKY }
+
+    /** Lets the notification show the port's outcome while the service itself ends */
+    private fun stopShown() {
+        try { stopForeground(STOP_FOREGROUND_DETACH) } catch (e: Exception) {}
+        instance = null
+    }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+
+    private fun notification(): Notification {
+        val tap = PendingIntent.getActivity(this, 0,
+            Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, 1)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val what = when {
+            port.running ->
+                if (port.stageName.isEmpty()) "正在移植…" else "阶段 ${port.stageOf}/${port.stages}：${port.stageName}" +
+                    (if (port.stageStep.isEmpty()) "" else " · ${port.stageStep}")
+            port.phase == PortState.Phase.DONE -> "完成：${File(port.apkPath).name}"
+            port.phase == PortState.Phase.CANCELLED -> "已取消"
+            port.phase == PortState.Phase.INTERRUPTED -> "被系统中断，可重新发起"
+            else -> "移植结束（没有产出 APK）：看看日志"
+        }
+        return Notification.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(if (port.gameFile.isEmpty()) "nx2android" else File(port.gameFile).name)
+            .setContentText(what)
+            .setProgress(100, (port.progress * 100).toInt(), port.running && port.progress <= 0f)
+            .setOngoing(port.running)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(tap)
+            .build()
+    }
+}

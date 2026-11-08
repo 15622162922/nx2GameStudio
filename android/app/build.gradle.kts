@@ -67,6 +67,9 @@ android {
         implementation("androidx.compose.material:material-icons-extended")
         implementation("androidx.activity:activity-compose:1.13.0")
         testImplementation("junit:junit:4.13.2")
+        // the porter's progress events and the data pack's manifest are JSON: the JVM tests parse them with
+        // the real org.json (the android.jar the tests run against only has the stubs)
+        testImplementation("org.json:json:20240303")
     }
 
     compileOptions {

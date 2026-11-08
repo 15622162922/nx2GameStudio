@@ -1,4 +1,4 @@
-package com.nx.android
+package com.nx.android.data
 
 import android.content.ContentProvider
 import android.content.ContentValues
