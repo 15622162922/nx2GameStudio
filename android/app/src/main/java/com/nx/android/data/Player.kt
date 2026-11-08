@@ -32,8 +32,16 @@ object Player {
      * Runs a finished port: the pack's host and drivers are copied into the private folder (over an older
      * copy: the pack is the truth), then the GameActivity comes up. [onReady] answers on a worker thread with
      * false when the pack has no host to copy (the library already shows such a game as not ported).
+     *
+     * 先结束存活的 :play 进程：重建过的宿主永远加载不进一个还在跑着旧宿主的进程（System.load 对同路径
+     * 已加载的库是空操作），所以每次运行都以全新的进程开始。
      */
     fun run(context: Context, port: Ported, name: String, onReady: (Boolean) -> Unit) {
+        if (playProcessAlive(context)) {
+            GameActivity.stop(context)
+            val deadline = System.currentTimeMillis() + 3000
+            while (playProcessAlive(context) && System.currentTimeMillis() < deadline) Thread.sleep(100)
+        }
         Thread {
             val ok = try {
                 val dst = hostDir(context, port.titleId)

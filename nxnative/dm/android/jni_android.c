@@ -15,6 +15,7 @@ void dm_menu_overlay_set(int); void dm_menu_opacity_set(int); void dm_menu_rumbl
 void dm_menu_fps_set(int); void dm_menu_mode_set(int); void dm_menu_edit_open(void);
 char *dm_menu_saves(void); void dm_menu_export(void); int dm_menu_import(const char *name);
 int dm_menu_export_note(char *out, int cap); int dm_menu_state(void);
+char *dm_pad_layout_json(void); char *dm_pad_state_json(void);
 #include <stdlib.h>
 #include <android/log.h>
 #include <android/native_window_jni.h>
@@ -141,6 +142,26 @@ Java_com_nx_android_game_Native_menuExportNote(JNIEnv *E, jclass c) {
     char buf[128] = {0};
     dm_menu_export_note(buf, (int)sizeof buf);
     return (*E)->NewStringUTF(E, buf);
+}
+
+// the player's pad (android-virtual-pad): the app draws the overlay, the host keeps the hit test. The layout
+// and the live state arrive as small JSON strings (front_android.c dm_pad_*); the app polls the state and
+// redraws on its version tick.
+JNIEXPORT jstring JNICALL
+Java_com_nx_android_game_Native_padLayout(JNIEnv *E, jclass c) {
+    (void)E; (void)c;
+    char *j = dm_pad_layout_json();
+    jstring out = (*E)->NewStringUTF(E, j ? j : "{}");
+    free(j);
+    return out;
+}
+JNIEXPORT jstring JNICALL
+Java_com_nx_android_game_Native_padState(JNIEnv *E, jclass c) {
+    (void)E; (void)c;
+    char *j = dm_pad_state_json();
+    jstring out = (*E)->NewStringUTF(E, j ? j : "{}");
+    free(j);
+    return out;
 }
 
 // the drawer's frame generation: the live switch and the status line ("<state> <reason>", Banana's format)

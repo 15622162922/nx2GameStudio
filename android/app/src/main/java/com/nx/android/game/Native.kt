@@ -29,4 +29,8 @@ object Native {
     @JvmStatic external fun menuExport()
     @JvmStatic external fun menuImport(name: String): Boolean
     @JvmStatic external fun menuExportNote(): String
+
+    /** 虚拟手柄（App 绘制层）：布局与实时状态（JSON，见 front_android.c 的 dm_pad_*） */
+    @JvmStatic external fun padLayout(): String
+    @JvmStatic external fun padState(): String
 }

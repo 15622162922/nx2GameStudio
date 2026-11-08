@@ -64,6 +64,10 @@ fun GameDrawer(
     open: Boolean,
     onOpenChange: (Boolean) -> Unit,
     settings: FrameGenSettings?,
+    padShown: () -> Boolean,
+    onPadShown: (Boolean) -> Unit,
+    padOpacity: () -> Int,
+    onPadOpacity: (Int) -> Unit,
     onPauseResume: () -> Unit,
     onExit: () -> Unit,
 ) {
@@ -117,7 +121,7 @@ fun GameDrawer(
                                 when (DrawerTab.entries[tab]) {
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow("这个游戏不支持帧生成")
                                         else FrameGenRows(settings, status)
-                                    DrawerTab.DISPLAY -> DisplayRows()
+                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity)
                                     DrawerTab.SAVES -> SaveRows()
                                 }
                             }
@@ -194,21 +198,24 @@ private fun FrameGenRows(settings: FrameGenSettings, status: String) {
 
 /** 画面与操作页：宿主菜单的行，直控（即改即生效并持久保存在包的 settings.txt） */
 @Composable
-private fun DisplayRows() {
-    var overlay by remember { mutableStateOf(Native.menuGet(0) != 0) }
-    var opacity by remember { mutableStateOf(Native.menuGet(1)) }
+private fun DisplayRows(
+    padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
+    padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+) {
+    var shown by remember { mutableStateOf(padShown()) }
+    var opacity by remember { mutableStateOf(padOpacity()) }
     var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
     var fps by remember { mutableStateOf(Native.menuGet(3) != 0) }
     var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
 
-    SwitchRow("虚拟手柄", overlay) { overlay = it; Native.menuSet(0, if (it) 1.0 else 0.0) }
+    SwitchRow("虚拟手柄", shown) { shown = it; onPadShown(it) }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("手柄不透明度", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text("$opacity%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Slider(value = opacity.toFloat(), valueRange = 20f..80f, steps = 11,
-               onValueChange = { opacity = it.toInt(); Native.menuSet(1, opacity.toDouble()) })
+        Slider(value = opacity.toFloat(), valueRange = 10f..100f,
+               onValueChange = { opacity = it.toInt(); onPadOpacity(opacity) })
     }
     SwitchRow("震动", rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
     SwitchRow("帧率计数", fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }

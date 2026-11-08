@@ -36,6 +36,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
+import com.nx.android.ui.game.PadView
 import com.nx.android.data.PrefsStore
 import com.nx.android.ui.game.GameDrawer
 import com.nx.android.ui.theme.NxTheme
@@ -76,6 +77,8 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var paused by mutableStateOf(false)
     private var drawerOpen by mutableStateOf(false)
     private var fgSettings: FrameGenSettings? = null
+    private var packPath: String? = null
+    private lateinit var padView: PadView
 
     private fun immersive() {
         window.decorView   // the decor must exist: the insets controller hangs off it (a plain Activity has none until it is asked for)
@@ -94,6 +97,10 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         val surface = SurfaceView(this)
         surface.holder.addCallback(this)
         frame.addView(surface, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // 虚拟手柄绘制层（android-virtual-pad）：画在游戏画面之上、抽屉之下；不消费触点——命中与分流在宿主
+        packPath = intent.getStringExtra(EXTRA_PACK)
+        padView = PadView(this, PrefsStore(this), packPath?.let { java.io.File(it) })
+        frame.addView(padView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // the drawer's layer: a ComposeView over the game's surface (the composition needs the activity's owners on the view)
         val compose = ComposeView(this)
         compose.setViewTreeLifecycleOwner(this)
@@ -145,6 +152,10 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 open = drawerOpen,
                 onOpenChange = { drawerOpen = it },
                 settings = fgSettings,
+                padShown = { padView.shown },
+                onPadShown = { padView.shown = it },
+                padOpacity = { padView.opacity },
+                onPadOpacity = { padView.opacity = it },
                 onPauseResume = {
                     paused = !paused
                     Native.lifecycle(if (paused) 0 else 1)

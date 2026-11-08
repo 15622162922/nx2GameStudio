@@ -406,8 +406,11 @@ static _Atomic int g_pad_in = -1;   // the device that last sent a controller's 
 static _Atomic int g_knob[2][2];    // the sticks' knob offsets, in 1/10000 of the stick radius
 static _Atomic int64_t g_press_t[16], g_menu_t, g_stick_t[2];   // when each overlay button (by DM_BTN_* bit), the menu button and each stick went down, 0 = not held
 static uint64_t g_touch_btn;        // the overlay buttons held, as of the last touch event
+static _Atomic int g_pad_app;   // the player's app-side pad (android-virtual-pad): the host stops DRAWING the overlay (present_one), the hit test below keeps working
 static int64_t mono_ns(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec; }
-int dm_overlay_visible(void) { return atomic_load(&g_pads) ? 0 : atomic_load(&g_set_overlay) && atomic_load(&g_overlay) ? 1 : 2; }
+static int pad_input_visible(void) { return atomic_load(&g_set_overlay) && atomic_load(&g_overlay) ? 1 : 2; }   // the hit test's side (ctl_at): the physical-controller hide is the app's drawing choice now — a control the player touches always answers
+int dm_overlay_visible(void) { return atomic_load(&g_pad_app) ? 0 : pad_input_visible(); }   // the render side: the app draws the pad in the player
+static int g_dpi;   // the display's density (AConfiguration), 0 = unknown
 int dm_overlay_layout(void) {   // the phone's layout in a window at least OV_PHONE_ASPECT wide for its height (overlay_layout.h)
     static int last_w = -1, last_h = -1, phone;
     ANativeWindow *w = dm_front_window(); int ww = w ? ANativeWindow_getWidth(w) : 0, wh = w ? ANativeWindow_getHeight(w) : 0;
@@ -432,7 +435,6 @@ int64_t dm_overlay_pressed(int ctl, uint64_t bit) {
     if (OV_CTLS[ctl].kind == OV_BUTTON) bit = OV_CTLS[ctl].btn;
     return bit && bit < 1u << 16 ? atomic_load(&g_press_t[__builtin_ctzll(bit)]) : 0;
 }
-static int g_dpi;   // the display's density (AConfiguration), 0 = unknown
 float dm_overlay_scale(void) {
     static int last_w = -1, last_h = -1; static float s = 1;
     ANativeWindow *w = dm_front_window(); int ww = w ? ANativeWindow_getWidth(w) : 0, h = w ? ANativeWindow_getHeight(w) : 0;
@@ -445,7 +447,7 @@ float dm_overlay_scale(void) {
 void dm_overlay_knob(int stick, float *dx, float *dy) { *dx = atomic_load(&g_knob[stick][0]) / 10000.0f; *dy = atomic_load(&g_knob[stick][1]) / 10000.0f; }
 static int g_ptr_ctl[32];   // pointer id → control index + 1 (0 = the touch screen)
 static int ctl_at(float x, float y, float W, float H) {   // the control under (x, y) in pixels, -1 if none (in the layout editor: every control, shown or not)
-    int best = -1, vis = atomic_load(&g_edit) ? 1 : dm_overlay_visible(), shown = vis == 1; float bd = 1e9f;
+    int best = -1, vis = atomic_load(&g_edit) ? 1 : pad_input_visible(), shown = vis == 1; float bd = 1e9f;
     if (!vis) return -1;   // a controller is attached: every touch is the game's
     for (int i = 0; i < OV_N; i++) {
         const ov_ctl *c = &OV_CTLS[i]; if (!shown && c->kind != OV_MENU) continue;   // hidden: only the menu button answers
@@ -782,6 +784,43 @@ char *dm_menu_saves(void) {
 }
 int dm_menu_import(const char *name) { return name && *name ? dm_saves_request_import(name) : 0; }   // 1: the import is set (the app ends; it happens at the next start)
 int dm_menu_export_note(char *out, int cap) { return dm_save_note(out, cap); }   // the export's outcome line (OVX_*, dm_save_note)
+
+// ---- the player's pad (android-virtual-pad): the app draws the overlay, the host keeps the hit test. The
+// two exports hand the app the same data the hit test reads: the active layout's controls (per game, with the
+// player's own offsets, in window fractions) and the live state (which controls pointers hold, the sticks'
+// knob offsets, the pad bits, how many controllers are attached, and the host's own UI up — the pause menu or
+// the layout editor, whose drawing the app's pad steps aside for: the app draws over the game's frame). The
+// version ticks on every edit, the w/h say which window the fractions were computed at.
+static const char *pad_kind_name(int kind) { return kind == OV_STICK_L || kind == OV_STICK_R ? "stick" : kind == OV_DPAD ? "dpad" : kind == OV_MENU ? "menu" : "button"; }
+char *dm_pad_layout_json(void) {
+    ANativeWindow *w = dm_front_window(); float W = w ? (float)ANativeWindow_getWidth(w) : 1, H = w ? (float)ANativeWindow_getHeight(w) : 1;
+    int L = dm_overlay_layout();
+    size_t cap = 512 + (size_t)DM_AOV_N * 160; char *out = malloc(cap); if (!out) return NULL;
+    size_t o = (size_t)snprintf(out, cap, "{\"layout\":\"%s\",\"ver\":%d,\"opacity\":%d,\"w\":%.0f,\"h\":%.0f,\"controls\":[",
+                                LAYOUT_NAMES[L], atomic_load(&g_cust_ver), atomic_load(&g_set_opacity), (double)W, (double)H);
+    for (int i = 0; i < DM_AOV_N; i++) {
+        const ov_ctl *c = &OV_CTLS[i]; float b[4]; ov_box(c, W, H, b);   // b: centre x, y and HALF width, height, in window px — the app draws the same boxes the hit test uses
+        float cx = b[0] / W, cy = b[1] / H, hw = b[2] / W, hh = b[3] / H;
+        o += (size_t)snprintf(out + o, cap - o, "%s{\"n\":\"%s\",\"k\":\"%s\",\"b\":%llu,\"x\":%.5f,\"y\":%.5f,\"hw\":%.5f,\"hh\":%.5f}",
+                              i ? "," : "", c->name, pad_kind_name(c->kind), (unsigned long long)c->btn, (double)cx, (double)cy, (double)hw, (double)hh);
+    }
+    snprintf(out + o, cap - o, "]}");
+    return out;
+}
+char *dm_pad_state_json(void) {
+    int held[DM_AOV_N] = {0};
+    for (int p = 0; p < 32; p++) { int c = g_ptr_ctl[p] - 1; if (c >= 0 && c < DM_AOV_N) held[c] = 1; }
+    size_t cap = 256 + (size_t)DM_AOV_N * 8; char *out = malloc(cap); if (!out) return NULL;
+    size_t o = (size_t)snprintf(out, cap, "{\"v\":%d,\"e\":%d,\"m\":%d,\"pads\":%d,\"btn\":%llu,\"p\":[", atomic_load(&g_cust_ver),
+                                atomic_load(&g_edit) ? 1 : 0, atomic_load(&g_menu) ? 1 : 0,
+                                atomic_load(&g_pads), (unsigned long long)(g_btn | g_touch_btn));
+    int first = 1;
+    for (int i = 0; i < DM_AOV_N; i++) if (held[i]) { o += (size_t)snprintf(out + o, cap - o, "%s%d", first ? "" : ",", i); first = 0; }
+    o += (size_t)snprintf(out + o, cap - o, "],\"k\":[[%.4f,%.4f],[%.4f,%.4f]]}",
+                          atomic_load(&g_knob[0][0]) / 10000.0, atomic_load(&g_knob[0][1]) / 10000.0,
+                          atomic_load(&g_knob[1][0]) / 10000.0, atomic_load(&g_knob[1][1]) / 10000.0);
+    return out;
+}
 
 // ---- the layout editor (overlay_layout.h OVE_*): opened from the menu, the game stays held. A finger on a control chooses it and drags it; a second finger
 // pinches it bigger or smaller; - and + resize the chosen control, or every control when none is chosen; Reset puts the layout's places and sizes back;
@@ -1237,6 +1276,7 @@ int dm_java_start(const char *pack, const char *internal, const char *title_id, 
     if (g_host_up) return 1;
     JavaVM *vm = NULL; if (E) (*E)->GetJavaVM(E, &vm);
     g_play = 1; g_dpi = dpi;
+    atomic_store(&g_pad_app, 1);   // the app draws the pad (dm_pad_layout_json/dm_pad_state_json); the host keeps the hit test only
     if (title_id && title_id[0]) setenv("DM_GAME_ID", title_id, 1);
     snprintf(g_data_dir, sizeof g_data_dir, "%s", pack);
     snprintf(g_root, sizeof g_root, "%s", pack);
