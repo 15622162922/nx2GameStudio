@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -106,6 +105,3 @@ fun Hint(text: String, modifier: Modifier = Modifier, size: TextUnit = 12.sp) {
 fun rememberPageScroll(): ScrollState =
     rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
 
-@Composable
-fun rememberLibraryGrid(): LazyGridState =
-    rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }

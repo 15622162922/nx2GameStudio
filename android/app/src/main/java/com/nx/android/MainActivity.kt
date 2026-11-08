@@ -10,13 +10,15 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.ApkProvider
 import com.nx.android.data.AppLog
 import com.nx.android.data.Env
-import com.nx.android.data.Picker
 import com.nx.android.data.PrefsStore
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.AppRoot
@@ -30,8 +32,6 @@ import java.io.File
 class MainActivity : ComponentActivity() {
 
     companion object {
-        /** The game files the app's own picker list shows (the system picker's fallback) */
-        val GAME_EXTS = listOf(".nsp", ".xci", ".nsz", ".xcz")
         const val EXTRA_TAB = "tab"   // the notification's tap lands on the builds page
     }
 
@@ -42,6 +42,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 全屏沉浸：内容铺满整块屏幕，系统栏隐藏（下滑临时呼出）——capyps5 CapyActivity 同款
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
         container.storageOk = storageGranted()
         launchTab = intent?.getIntExtra(EXTRA_TAB, 0) ?: 0
         if (!container.prefs.bool(PrefsStore.OB_COMPLETED)) container.onboarding.open()
@@ -56,9 +62,7 @@ class MainActivity : ComponentActivity() {
     private val actions = AppActions(
         onAskStorage = { askStorage() },
         storageOk = { container.storageOk },
-        onPickKeys = { cb -> pickKeys(cb) },
-        onPickFolder = { start, cb -> pickFolder(start, cb) },
-        onPickLibraryFolder = { cb -> pickLibraryFolder(cb) },
+        onSetKeys = { container.prefs.writeKeys(it) },
         onStartPort = { file, cfg ->
             PortService.start(this, file.absolutePath, container.prefs.keys, container.prefs.out,
                               cfg.touch, cfg.fps60, cfg.experimental)
@@ -117,74 +121,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---- the pickers (the activity's own privilege) -------------------------------------------------------------
-
-    /** The keys file: the system picker first, the app's own list where there is none. The saved path follows */
-    fun pickKeys(onPick: (String) -> Unit = {}) {
-        try {
-            picker.file { path -> container.prefs.writeKeys(path); onPick(path) }
-        } catch (e: Exception) {
-            // this tablet has no app that handles the system picker: the app's own list takes over
-            toast("系统没有文件选择器，用应用内的列表")
-            pickOwn(container.prefs.keys, false) { path -> container.prefs.writeKeys(path); onPick(path) }
-        }
-    }
-
-    /** A folder on the card (the game folder, the output folder) */
-    fun pickFolder(start: String, onPick: (String) -> Unit) {
-        try {
-            picker.tree(start, onPick)
-        } catch (e: Exception) {
-            toast("系统没有文件选择器，用应用内的列表")
-            pickOwn(start, true) { path -> onPick(path) }
-        }
-    }
-
-    /** The library's game folder: the picker comes back with the folder, the library rescans */
-    fun pickLibraryFolder(onPick: (String) -> Unit) {
-        val start = container.library.folder.trim().ifEmpty { "/sdcard" }
-        pickFolder(start) { dir -> onPick(dir) }
-    }
-
-    /** The app's own folder list: the folders of a path, and the files of it */
-    private fun pickOwn(start: String, foldersOnly: Boolean, onPick: (String) -> Unit) {
-        val path = start.trim().ifEmpty { "/sdcard" }
-        val names = ArrayList<String>()
-        val paths = ArrayList<String>()
-        try {
-            val f = File(path)
-            if (f.isDirectory) {
-                names.add(".."); paths.add(f.parentFile?.absolutePath ?: path)
-                f.listFiles()?.sortedBy { it.name }?.forEach {
-                    if (it.isHidden) return@forEach
-                    if (foldersOnly && !it.isDirectory) return@forEach
-                    if (!foldersOnly && !it.isDirectory && GAME_EXTS.none { ext -> it.name.endsWith(ext) }) return@forEach
-                    names.add(it.name); paths.add(it.absolutePath)
-                }
-            }
-        } catch (e: Exception) {
-        }
-        android.app.AlertDialog.Builder(this)
-            .setTitle(path)
-            .setItems(names.toTypedArray()) { _, which ->
-                if (names[which] == "..") pickOwn(paths[which], foldersOnly, onPick)
-                else if (foldersOnly) pickOwn(paths[which], foldersOnly, onPick)
-                else onPick(paths[which])
-            }
-            .setPositiveButton("用这个") { _, _ -> onPick(path) }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        try {
-            picker.onResult(requestCode, resultCode, data)
-        } catch (e: Exception) {
-            toast("选择失败：${e.message}")
-        }
-    }
-
     // ---- after the port (the activity's own privilege) -----------------------------------------------------------
 
     /** Installs the port: the APK goes through the app's provider to the system installer (the shared storage's
@@ -225,5 +161,4 @@ class MainActivity : ComponentActivity() {
     val lib: LibraryState get() = container.library
     val port: PortState get() = container.port
     val storageOk: Boolean get() = container.storageOk
-    private val picker by lazy { Picker(this) }
 }

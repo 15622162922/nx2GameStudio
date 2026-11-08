@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,10 +26,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -37,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -49,8 +53,16 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.AppContainer
 import com.nx.android.R
 import com.nx.android.appstate.PortState
+import com.nx.android.data.StorageVolumes
 import com.nx.android.domain.GameConfig
+import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.ui.builds.BuildsScreen
+import com.nx.android.ui.components.CapsuleButton
+import com.nx.android.ui.components.FilePickerScreen
+import com.nx.android.ui.components.QuietButton
+import com.nx.android.ui.components.PickerMode
+import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
 import com.nx.android.ui.onboarding.OnboardingScreen
 import com.nx.android.ui.settings.SettingsScreen
@@ -74,9 +86,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 data class AppActions(
     val onAskStorage: () -> Unit,
     val storageOk: () -> Boolean,
-    val onPickKeys: ((String) -> Unit) -> Unit,
-    val onPickFolder: (start: String, cb: (String) -> Unit) -> Unit,
-    val onPickLibraryFolder: ((String) -> Unit) -> Unit,
+    val onSetKeys: (String) -> Unit,
     val onStartPort: (file: File, cfg: GameConfig) -> Unit,
     val onCancelPort: () -> Unit,
     val onInstall: (File) -> Unit,
@@ -94,18 +104,59 @@ data class AppActions(
 @Composable
 fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
     NxTheme {
+        var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
         Box(Modifier.fillMaxSize().background(NxPalette.Background)) {
             if (container.onboarding.active) {
-                OnboardingScreen(container.onboarding, actions)
+                OnboardingScreen(container.onboarding, actions) { pickerReq = it }
             } else {
-                MainScreen(container, actions, startTab)
+                MainScreen(container, actions, startTab) { pickerReq = it }
+            }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val volumes = remember(ctx) { StorageVolumes.list(ctx) }
+            pickerReq?.let { req ->
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
+                    if (!actions.storageOk()) {
+                        // 内置文件管理器读不了没有全文件访问的存储：给授权入口
+                        Column(
+                            Modifier.fillMaxSize().padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                        ) {
+                            Spacer(Modifier.weight(1f))
+                            Text("需要存储权限", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                "内置文件管理器需要「所有文件访问」权限才能列出游戏文件。",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Spacer(Modifier.weight(1f))
+                                QuietButton("取消", onClick = { pickerReq = null })
+                                CapsuleButton("去授权", onClick = {
+                                    pickerReq = null
+                                    actions.onAskStorage()
+                                })
+                            }
+                        }
+                    } else {
+                        FilePickerScreen(
+                            req = req,
+                            volumes = volumes,
+                            onPicked = { f ->
+                                pickerReq = null
+                                req.onPicked(f)
+                            },
+                            onCancel = { pickerReq = null },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int) {
+fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
+               onRequest: (PickerRequest) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     val port = container.port
     val lib = container.library
@@ -115,21 +166,29 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int) {
         if (port.phase == PortState.Phase.DONE) lib.noteDone(port.gameFile, port.apkPath)
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // 选中游戏的背景铺满整块屏幕：顶栏透明画在图上，三个 tab 共用这层背景
+    Box(Modifier.fillMaxSize()) {
+        HeroBackground(lib, port, lib.visible().getOrNull(lib.heroIndex))
+        Column(Modifier.fillMaxSize()) {
         TopBar(
             selected = tab,
             onSelect = { tab = it.ordinal },
-            onAddGameFolder = { actions.onPickLibraryFolder { dir -> lib.chooseFolder(dir) } },
+            onAddGameFolder = {
+                onRequest(PickerRequest(PickerMode.DIR, emptySet(),
+                    File(lib.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                    onPicked = { dir -> lib.chooseFolder(dir.path) }))
+            },
             onRefresh = { lib.rescan() },
         )
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryScreen(lib, port, container.prefs.keys, container.env.ready, actions)
-                Tab.BUILDS -> BuildsScreen(port, actions)
-                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, actions)
+                Tab.LIBRARY -> LibraryScreen(lib, port, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
+                Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
+                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, actions, onRequest)
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
+        }
     }
 }
 

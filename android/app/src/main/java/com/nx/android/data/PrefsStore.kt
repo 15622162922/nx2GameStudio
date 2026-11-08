@@ -26,10 +26,9 @@ class PrefsStore(ctx: Context) {
         const val LEGACY_EXPERIMENTAL = "experimental"
         // the library's memory
         const val LIB_FOLDER = "lib.folder"
-        const val LIB_FILTER = "lib.filter"
         const val LIB_CONFIGS = "lib.configs"
         const val LIB_PORTS = "lib.ports"
-        const val LIB_VIEW = "lib.view"
+        const val LIB_EXTRA = "lib.extra"
         // the guided setup
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"

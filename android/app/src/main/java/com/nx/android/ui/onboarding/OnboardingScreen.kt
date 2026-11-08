@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.ui.components.PickerMode
+import com.nx.android.ui.components.PickerRequest
+import java.io.File
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
@@ -44,7 +47,7 @@ import com.nx.android.ui.theme.NxPalette
  * folder, done. The gates are OnboardingLogic's; this view only draws and sends intents.
  */
 @Composable
-fun OnboardingScreen(ob: OnboardingState, actions: AppActions) {
+fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val facts = ob.facts()
     val can = OnboardingLogic.canAdvance(ob.step, facts)
 
@@ -89,8 +92,8 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions) {
                 when (ob.step) {
                     ObStep.WELCOME -> WelcomeStep(ob, actions)
                     ObStep.ENV -> EnvStep(ob)
-                    ObStep.KEYS -> KeysStep(ob, actions)
-                    ObStep.GAMES -> GamesStep(ob, actions)
+                    ObStep.KEYS -> KeysStep(ob, actions, onRequest)
+                    ObStep.GAMES -> GamesStep(ob, actions, onRequest)
                     ObStep.DONE -> DoneStep()
                 }
             }
@@ -194,7 +197,7 @@ private fun EnvStep(ob: OnboardingState) {
 }
 
 @Composable
-private fun KeysStep(ob: OnboardingState, actions: AppActions) {
+private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     Section("prod.keys（自己的 Switch 导出的）") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(
@@ -216,7 +219,10 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions) {
             if (ob.keysChecking) {
                 CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
             } else {
-                QuietButton("选择文件", { actions.onPickKeys { ob.chooseKeys(it) } })
+                QuietButton("选择文件", onClick = {
+                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), null, "选择 prod.keys",
+                        onPicked = { f -> ob.chooseKeys(f.path) }))
+                })
             }
         }
         Hint("常见位置（/sdcard/switch/）已有的 keys 会自动填上并校验")
@@ -230,7 +236,7 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions) {
 }
 
 @Composable
-private fun GamesStep(ob: OnboardingState, actions: AppActions) {
+private fun GamesStep(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     Section("游戏文件夹") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (ob.folder.isNotBlank()) NxPalette.Ready else NxPalette.Unbuilt)
@@ -239,7 +245,11 @@ private fun GamesStep(ob: OnboardingState, actions: AppActions) {
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f), maxLines = 2,
             )
-            QuietButton("选择文件夹", { actions.onPickLibraryFolder { ob.chooseFolder(it) } })
+            QuietButton("选择文件夹", onClick = {
+                onRequest(PickerRequest(PickerMode.DIR, emptySet(),
+                    File(ob.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                    onPicked = { dir -> ob.chooseFolder(dir.path) }))
+            })
         }
         if (ob.folder.isNotBlank()) {
             Hint(if (ob.games.isEmpty()) "这里没有找到游戏文件（NSP / XCI / NSZ / XCZ）——可以直接继续，游戏库里随时能换文件夹"

@@ -40,6 +40,8 @@ import com.nx.android.appstate.OnboardingState
 import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
 import com.nx.android.ui.AppActions
+import com.nx.android.ui.components.PickerMode
+import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.QuietButton
@@ -55,14 +57,15 @@ import java.io.File
  * folder, the log (view, clear, share), the version and the way back into the guided setup.
  */
 @Composable
-fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, actions: AppActions) {
+fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env,
+                   actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberPageScroll()).padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         EnvSection(ob, actions)
-        DoctorSection(env, actions)
-        PathsSection(lib, env, actions)
+        DoctorSection(env, actions, onRequest)
+        PathsSection(lib, env, actions, onRequest)
         LogSection(actions)
         AboutSection(ob, actions)
         Spacer(Modifier.height(12.dp))
@@ -111,7 +114,7 @@ private fun EnvSection(ob: OnboardingState, actions: AppActions) {
 }
 
 @Composable
-private fun DoctorSection(env: Env, actions: AppActions) {
+private fun DoctorSection(env: Env, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     var running by remember { mutableStateOf(false) }
     var out by remember { mutableStateOf(listOf<String>()) }
     Section("自检") {
@@ -128,7 +131,7 @@ private fun DoctorSection(env: Env, actions: AppActions) {
                     .doctor(actions.keys(), json = false) { running = false }
             })
         }
-        KeysRow(actions)
+        KeysRow(actions, onRequest)
         if (out.isNotEmpty()) {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState())
@@ -150,7 +153,7 @@ private fun DoctorSection(env: Env, actions: AppActions) {
 }
 
 @Composable
-private fun KeysRow(actions: AppActions) {
+private fun KeysRow(actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val keys = actions.keys()
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         StatusDot(if (keys.isNotBlank() && File(keys).isFile()) NxPalette.Ready else NxPalette.Danger, 8.dp)
@@ -159,12 +162,15 @@ private fun KeysRow(actions: AppActions) {
             Text(keys.ifEmpty { "还没有设置" }, style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
-        QuietButton("修改", { actions.onPickKeys {} })
+        QuietButton("修改", onClick = {
+            onRequest(PickerRequest(PickerMode.FILE, emptySet(), null, "选择 prod.keys",
+                onPicked = { f -> actions.onSetKeys(f.path) }))
+        })
     }
 }
 
 @Composable
-private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions) {
+private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val out = actions.out()
     Section("输出目录") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -173,11 +179,12 @@ private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions) {
                 Text(out, style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
-            QuietButton("修改", {
-                actions.onPickFolder(out) { path ->
-                    actions.onSetOut(path)
-                    lib.rescan()
-                }
+            QuietButton("修改", onClick = {
+                onRequest(PickerRequest(PickerMode.DIR, emptySet(), File(out), "选择输出目录",
+                    onPicked = { dir ->
+                        actions.onSetOut(dir.path)
+                        lib.rescan()
+                    }))
             })
         }
         Hint("输出目录一换，游戏库的「已完成」就按新目录重新算")
