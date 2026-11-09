@@ -57,9 +57,9 @@ Each game is a profile in `nxnative/dm/games/<title ID>/` with an `android.tsv`:
 
 ## Releases and version numbers
 
-This line's versions are the upstream base it carries. `porter/__init__.py` holds that base (`0.MINOR.PATCH` of the upstream nxnative the line is forked from), and the release tag is the base with the line's name on it: `v<major>.<minor>-android` — `v0.3-android` for the base `0.3.0`. The line's own revisions take a number after it (`v0.3-android.1`) and do not change the version in `porter/__init__.py`; picking up a new upstream base bumps that version (`0.4.0` → `v0.4-android`).
+This line's versions are the upstream base it carries. `porter/__init__.py` holds that base (`0.MINOR.PATCH` of the upstream nxnative the line is forked from), and the release tag is the base with the line's own pre-release stage on it: `v<base>-alphaNN` — `v0.3.0-alpha02` for the base `0.3.0`'s second alpha — or `v<base>` itself (`v0.3.0`) for the released version of that base. A pre-release is published as a GitHub pre-release (`--prerelease`), so it does not become the repository's "Latest" release: the players on the released version are not pushed onto an alpha, and the app's update check stays on the released one. Picking up a new upstream base bumps that version (`0.4.0` → `v0.4.0-alpha01`).
 
-The phone app says the same version: its `versionName` in `android/app/build.gradle.kts` is `0.3-android`, the tag without the `v`, so the update check can tell which release is newer than the app that is running.
+The phone app says the same version: its `versionName` in `android/app/build.gradle.kts` is `0.3.0-alpha02`, the tag without the `v`, so the update check can tell which release is newer than the app that is running. The first release's own writing (`v0.3-android`) is still read, as the base's first alpha, so an app from before knows what the releases are like.
 
 A release checks only the games it adds or fixes, not the older ones; a break in an older game is fixed by a later patch release. The version is raised by a commit `chore(release): version <x.y.z>`.
 
