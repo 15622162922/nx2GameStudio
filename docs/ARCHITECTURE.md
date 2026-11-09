@@ -125,6 +125,7 @@ The player's settings, the legacy path's APK signing key and the built translato
 ```
 nx2android/
   docs/ARCHITECTURE.md   this file
+  docs/GETTING_STARTED.md   the development setup and the two working loops
   porter/                port pipeline (python -m porter)
   gui/                   desktop app (python -m gui)
   devtools/              device bring-up scripts
