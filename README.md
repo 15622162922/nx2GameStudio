@@ -29,6 +29,8 @@ Tested on a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
 3. **Port** tab: choose the folder with the game's NSP, XCI, NSZ or XCZ files (base game, update, DLC) and click **Port**.
 4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. The nx2android app on the phone is what plays a game: it ports on the phone itself, and it plays the packs it finds in its output folder.
 
+The app on the phone also looks for a newer release: when it starts, it checks the release page quietly, and if there is a newer version it says so on the home page. The **Settings** tab has a **Check for updates** entry that checks again on demand. The app downloads nothing by itself — the notice leads to the release page, where the APK is.
+
 Pokémon Legends: Arceus and Pokémon Legends: Z-A need the device during the port: their shaders are in Oodle-compressed archives, which the port decodes with the game's own decoder on the device. Have platform-tools (adb) from step 2, and plug in the device with USB debugging on before you click **Port**.
 
 A game played by touch: tick **Touch game** on the Port tab (`--touch`). The on-screen gamepad then starts hidden and every touch but one on the menu button goes to the game; the pause menu shows the gamepad again.

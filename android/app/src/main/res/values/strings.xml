@@ -301,4 +301,11 @@
     <string name="picker_switch_volume">Switch the storage volume</string>
     <string name="storage_internal">Internal storage</string>
     <string name="storage_sd_card">SD card (%1$s)</string>
+    <string name="update_available">A newer version is available: %1$s</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_check_hint">The app looks on the release page for a newer version.</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">You are on the newest version.</string>
+    <string name="update_failed">The check failed: no network, or the release page could not be reached.</string>
+    <string name="update_download">Get it</string>
 </resources>

@@ -39,6 +39,8 @@ class PrefsStore(ctx: Context) {
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
         const val PORT_HISTORY = "port.history"
+        // the update check: the version the player closed the notice for (empty = none)
+        const val UPDATE_IGNORED = "update.ignored"
     }
 
     val prefs: SharedPreferences = ctx.getSharedPreferences("nx2a", Context.MODE_PRIVATE)

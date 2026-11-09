@@ -9,6 +9,7 @@ import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.Player
@@ -44,6 +45,9 @@ class AppContainer(app: NxApp) {
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */
     val drivers = DriverState()
+
+    /** 有没有新版本：冷启动时查一次，主页与设置页读同一份 */
+    val update = UpdateState(prefs, app)
 
     /** 正在玩的游戏（:play 进程的存在与否，两秒一查） */
     val player = PlayerState(alive = { Player.playProcessAlive(app) })

@@ -153,7 +153,9 @@ artifact, and a finished port runs inside the app — no per-game APK and no ins
 the app's own `:play` process (`com.nx.android.game.GameActivity`): the pack's host (`libdmplay.so`, the host
 statically linked with its JNI entry, `dm/android/jni_android.c`) and its driver libraries are copied into the
 app's private folder (sdcard is noexec) and loaded there; the surface, input and lifecycle reach the same shared
-core the NativeActivity APK serves (`dm/android/jni_android.h`). One game plays at a time; the process ends with
+core the NativeActivity APK serves (`dm/android/jni_android.h`). The game page keeps the volume keys for Android:
+the game's audio sits in the media volume group, so the system's volume bar is the game's volume - consuming them
+in the app would leave the player with no way to turn the sound up. One game plays at a time; the process ends with
 the game, so a crash takes the game down, not the app or a port that is running. The game page is a page of the
 app's own task - it sits on top of the library page - so the launcher icon never lands on it, and ending the
 game falls back to the library page instead of the home screen. Saves, logs and temp go under
@@ -181,6 +183,23 @@ layer stays free of Android and says what went wrong in a code, not a sentence (
 both sides, no Chinese left in the Kotlin sources, every `R.string` in the table, and every
 `stringResource(...)` passing as many arguments as the string has placeholders. It runs in CI, with the rest
 of the Python suite.
+
+### The app's own update check
+
+The app on the phone looks for a newer release: once on a cold start (quietly — nothing is said when there is
+no network, no release, or nothing newer) and again when the player asks for it in the settings. A newer
+release is a notice on the home page and a link to the release page; the app does not download or install
+anything itself.
+
+It does not ask the GitHub API for that: an unauthenticated API gives 60 requests per hour per address, and
+the phones sit behind the same address more often than not (the driver catalogue stopped using the API for
+the same reason). The release page redirects to the newest release's tag, so following that redirect and
+reading the last piece of the address is enough.
+
+The three layers, as everywhere else in the app: `domain/UpdateVersion.kt` holds the fork's versions and
+their comparison (free of Android, so the tests run on the JVM), `data/UpdateChecker.kt` asks for the tag,
+and `appstate/UpdateState.kt` holds the state the screens read — the notice on the home page and the entry
+in the settings (`ui/update/UpdateUi.kt`).
 
 One platform quirk is worth knowing: a locale **with** a region (`en_US`, `zh_CN`) overrides the phone's own
 locale, a locale with only a language (`en`) does not — on Android 16 the configuration keeps the phone's

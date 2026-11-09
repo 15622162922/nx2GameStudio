@@ -43,6 +43,7 @@ import com.nx.android.R
 import com.nx.android.appstate.DriverState
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Drivers
 import com.nx.android.data.Env
@@ -61,6 +62,7 @@ import com.nx.android.ui.components.rememberPageScroll
 import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
+import com.nx.android.ui.update.UpdateCheckRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,13 +76,15 @@ import java.io.File
  * only asks for them.
  */
 @Composable
-fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: DriverState,
+fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: DriverState, update: UpdateState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit, onLog: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberPageScroll()).padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // 关于（含版本与检查更新）在最上面：版本与更新是玩家最先要找的两样东西
+        AboutSection(ob, update, actions)
         LanguageSection()
         EnvSection(ob, actions)
         DoctorSection(env, actions, onRequest)
@@ -88,7 +92,6 @@ fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: Dr
         DriversSection(drivers, actions, onRequest, onDrivers)
         FrameGenSection(actions, onRequest)
         LogSection(actions, onLog)
-        AboutSection(ob, actions)
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -375,13 +378,16 @@ internal fun LogOverlay(onClose: () -> Unit, text: String) {
 }
 
 @Composable
-private fun AboutSection(ob: OnboardingState, actions: AppActions) {
+private fun AboutSection(ob: OnboardingState, update: UpdateState, actions: AppActions) {
     Section(stringResource(R.string.set_section_about)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.set_version), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text(actions.version(), style = MaterialTheme.typography.bodyMedium,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        // 有没有新版本：玩家自己查一次，结果当场摆出来
+        UpdateCheckRow(update)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {

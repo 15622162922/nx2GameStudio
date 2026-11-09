@@ -81,6 +81,7 @@ import com.nx.android.ui.settings.SettingsScreen
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.theme.NxTheme
+import com.nx.android.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -223,11 +224,13 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             },
             onRefresh = { lib.rescan() },
         )
+        // 有新版本时的提示条：在顶栏下面、内容上面，不挡事，可以关掉
+        UpdateBanner(container.update)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
-                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, container.drivers, actions,
+                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, container.drivers, container.update, actions,
                     onRequest, onDrivers, onLog)
             }
         }

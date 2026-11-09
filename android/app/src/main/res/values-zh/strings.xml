@@ -300,4 +300,11 @@
     <string name="picker_switch_volume">切换存储卷</string>
     <string name="storage_internal">内部存储</string>
     <string name="storage_sd_card">SD 卡（%1$s）</string>
+    <string name="update_available">有新版本可用：%1$s</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_check_hint">App 会在 release 页上看看有没有更新的版本。</string>
+    <string name="update_checking">正在检查…</string>
+    <string name="update_up_to_date">已经是最新版本了。</string>
+    <string name="update_failed">检查失败：没有网络，或者够不着 release 页。</string>
+    <string name="update_download">去下载</string>
 </resources>

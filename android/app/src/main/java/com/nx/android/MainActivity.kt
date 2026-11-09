@@ -20,6 +20,7 @@ import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
+import com.nx.android.data.AppVersion
 import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
@@ -71,6 +72,8 @@ class MainActivity : ComponentActivity() {
             container.env.refreshTools()
             container.drivers.ensureShipped(this)
             container.drivers.refresh(this)
+            // 有没有新版本：冷启动查一次，查不到就安静地过去（引导没走完的第一次启动不查）
+            if (container.prefs.bool(PrefsStore.OB_COMPLETED)) container.update.checkQuietly()
         }.start()
     }
 
@@ -180,11 +183,7 @@ class MainActivity : ComponentActivity() {
 
     // ---- after the port (the activity's own privilege) -----------------------------------------------------------
 
-    fun versionName(): String = try {
-        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
-    } catch (e: Exception) {
-        "?"
-    }
+    fun versionName(): String = AppVersion.of(this).ifEmpty { "?" }
 
     fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
