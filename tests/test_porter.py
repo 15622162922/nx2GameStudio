@@ -359,12 +359,61 @@ class Misc(unittest.TestCase):
     def test_disk_space(self):   # twice the game files, less what the build folder holds, plus 1 GB
         from types import SimpleNamespace as NS
         d = Path(tempfile.mkdtemp(prefix='nx2a_test_game_')); (d / 'g.nsp').write_bytes(b'\0' * 2**20); work = d / 'build'
-        p = NS(o=NS(folder=d), work=work); real = shutil.disk_usage
+        p = NS(o=NS(folder=d), work=work, fam={'base': d / 'g.nsp', 'updates': [], 'dlc': []}); real = shutil.disk_usage
         try:
             shutil.disk_usage = lambda _: NS(free=2**30 + 2**20)
             with self.assertRaises(pipeline.BuildError): pipeline.Port.check_space(p)
             work.mkdir(); (work / 'x').write_bytes(b'\0' * 2**20); pipeline.Port.check_space(p)   # a build folder already there counts
         finally: shutil.disk_usage = real
+
+    def space_port(self, folder, fam, work):   # a port-like object for the space check alone (the check reads the picked game's files and the build folder)
+        from types import SimpleNamespace as NS
+        return NS(o=NS(folder=folder), work=work, fam=fam)
+
+    def space_fits(self, port, free):   # does the check pass with this much free space on the disk?
+        from types import SimpleNamespace as NS
+        real = shutil.disk_usage
+        try:
+            shutil.disk_usage = lambda _: NS(free=free)
+            pipeline.Port.check_space(port)
+        except pipeline.BuildError as e: return str(e)
+        finally: shutil.disk_usage = real
+        return None
+
+    def test_space_counts_the_picked_game_only(self):   # a folder of many games: the others are not this port's business (they once made a 1 GB game ask for 285 GB)
+        d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))
+        try:
+            (d / 'a.nsp').write_bytes(b'\0' * 2**20)             # the picked game: 1 MB
+            (d / 'b.nsp').write_bytes(b'\0' * 100 * 2**20)        # another game in the same folder: 100 MB
+            work = d / 'build'
+            p = self.space_port(d, {'base': d / 'a.nsp', 'updates': [], 'dlc': []}, work)
+            self.assertIsNone(self.space_fits(p, 2**30 + 2 * 2**20))          # twice the picked game's files plus 1 GB fits
+            err = self.space_fits(p, 2**30 + 2 * 2**20 - 1)
+            self.assertIsNotNone(err)                                    # a byte less does not
+            self.assertRegex(err, r'not enough disk space on .+: the port needs about [\d.]+ GB more, [\d.]+ GB is free')
+            self.assertFalse(work.exists())                              # refused before anything was written
+        finally: shutil.rmtree(d, ignore_errors=True)
+
+    def test_space_counts_the_game_s_updates_and_dlc(self):   # the picked game's own updates and DLC count (the port reads them)
+        d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))
+        try:
+            (d / 'a.nsp').write_bytes(b'\0' * 2**20); (d / 'u.nsp').write_bytes(b'\0' * 2**20); (d / 'c.nsp').write_bytes(b'\0' * 2**20)
+            work = d / 'build'
+            fam = {'base': d / 'a.nsp', 'updates': [('v1', d / 'u.nsp')], 'dlc': [('0100000000011000', 'v0', d / 'c.nsp')]}
+            p = self.space_port(d, fam, work)
+            self.assertIsNone(self.space_fits(p, 2**30 + 6 * 2**20))      # three files of 1 MB, twice over, plus 1 GB
+            self.assertIsNotNone(self.space_fits(p, 2**30 + 6 * 2**20 - 1))
+        finally: shutil.rmtree(d, ignore_errors=True)
+
+    def test_space_less_the_build_folder(self):   # what an earlier build left in the build folder is not needed again
+        d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))
+        try:
+            (d / 'a.nsp').write_bytes(b'\0' * 2**20)
+            work = d / 'build'; work.mkdir(); (work / 'x').write_bytes(b'\0' * 2**20)
+            p = self.space_port(d, {'base': d / 'a.nsp', 'updates': [], 'dlc': []}, work)
+            self.assertIsNone(self.space_fits(p, 2**30 + 2**20))          # 2 MB wanted, 1 MB of it already there
+            self.assertIsNotNone(self.space_fits(p, 2**30 + 2**20 - 1))
+        finally: shutil.rmtree(d, ignore_errors=True)
 
 
 def _hfs0(files):   # an HFS0 of (name, data): the XCI's partitions (hash fields left zero: nothing here reads them)
@@ -427,6 +476,19 @@ class Dumps(unittest.TestCase):   # porter/dumps.py: NSZ / XCZ → NSP; an NCZ m
         self.nsz(self.solid, 'Game [v0].nsz')
         app, fam = pipeline.nsp.scan_nsps(self.d, self.dumps.EXTS)
         self.assertEqual(app, 0x0100000000AAA000); self.assertEqual(fam['base'].suffix, '.nsz')
+
+    def test_space_counts_a_compressed_dump_decompressed(self):   # an NSZ counts as its decompressed size, and once more for the NSP it becomes while it is extracted
+        from types import SimpleNamespace as NS
+        src = self.nsz(self.solid); size = self.dumps.size(src)
+        work = self.d / 'build'
+        p = NS(o=NS(folder=self.d), work=work, fam={'base': src, 'updates': [], 'dlc': []})
+        real = shutil.disk_usage
+        try:
+            shutil.disk_usage = lambda _: NS(free=2**30 + 3 * size)
+            pipeline.Port.check_space(p)                       # twice the decompressed size plus its NSP, plus 1 GB
+            shutil.disk_usage = lambda _: NS(free=2**30 + 3 * size - 1)
+            with self.assertRaises(pipeline.BuildError): pipeline.Port.check_space(p)
+        finally: shutil.disk_usage = real
 
 
 @unittest.skipUnless(importlib.util.find_spec('Crypto'), 'no pycryptodome')
