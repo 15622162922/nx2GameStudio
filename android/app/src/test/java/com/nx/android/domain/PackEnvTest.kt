@@ -57,7 +57,8 @@ class PackEnvTest {
         val installed = listOf("/data/user/0/com.nx.android/files/drivers/Turnip_Gen8_V39/libvulkan_freedreno.so" to "Turnip Gen8 V39")
         assertEquals(
             listOf(
-                "" to "系统默认",
+                // the device's own driver has no name here: the app names it in its own words
+                "" to null,
                 installed[0],
                 "libvulkan_freedreno.so" to "libvulkan_freedreno.so",
             ),

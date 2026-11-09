@@ -1,7 +1,4 @@
 package com.nx.android
-import com.nx.android.appstate.PortState
-import com.nx.android.data.Env
-import com.nx.android.data.PortRunner
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,6 +8,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import com.nx.android.R
+import com.nx.android.appstate.PortState
+import com.nx.android.data.AppLocale
+import com.nx.android.data.Env
+import com.nx.android.data.PortRunner
 import java.io.File
 
 /**
@@ -49,6 +51,7 @@ class PortService : Service() {
     private var runner: PortRunner? = null
     private lateinit var nm: NotificationManager
     private val port: PortState by lazy { (applicationContext as NxApp).container.port }
+    private val locale: AppLocale by lazy { (applicationContext as NxApp).container.locale }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,7 +59,7 @@ class PortService : Service() {
         super.onCreate()
         instance = this
         nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "移植进度", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, locale.str(R.string.port_notification_channel), NotificationManager.IMPORTANCE_LOW))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -64,7 +67,7 @@ class PortService : Service() {
         val keys = intent.getStringExtra(KEYS) ?: return stop()
         val out = intent.getStringExtra(OUT) ?: return stop()
         startForeground(1, notification())
-        runner = PortRunner(Env(applicationContext)) { line ->
+        runner = PortRunner(Env(applicationContext), locale) { line ->
             port.onLine(line)
             nm.notify(1, notification())
         }
@@ -98,12 +101,12 @@ class PortService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val what = when {
             port.running ->
-                if (port.stageName.isEmpty()) "正在移植…" else "阶段 ${port.stageOf}/${port.stages}：${port.stageName}" +
+                if (port.stageName.isEmpty()) locale.str(R.string.port_notification_running) else locale.str(R.string.port_stage_of, port.stageOf, port.stages, port.stageName) +
                     (if (port.stageStep.isEmpty()) "" else " · ${port.stageStep}")
-            port.phase == PortState.Phase.DONE -> "完成：${File(port.outPath).name}"
-            port.phase == PortState.Phase.CANCELLED -> "已取消"
-            port.phase == PortState.Phase.INTERRUPTED -> "被系统中断，可重新发起"
-            else -> "移植结束（没有产出数据包）：看看日志"
+            port.phase == PortState.Phase.DONE -> locale.str(R.string.port_done_path, File(port.outPath).name)
+            port.phase == PortState.Phase.CANCELLED -> locale.str(R.string.common_cancelled)
+            port.phase == PortState.Phase.INTERRUPTED -> locale.str(R.string.port_interrupted_short)
+            else -> locale.str(R.string.port_failed_no_pack)
         }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)   // the mark's shapes: the notification tints the silhouette

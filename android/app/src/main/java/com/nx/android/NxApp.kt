@@ -9,6 +9,7 @@ import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
@@ -31,11 +32,14 @@ class AppContainer(app: NxApp) {
     val prefs = PrefsStore(app)
     val env = Env(app)
 
+    /** 界面语言：玩家选的那个（没选就是跟随系统）。屏幕用 stringResource 读词，没有屏幕的地方用它的 str() */
+    val locale = AppLocale(app, prefs)
+
     /** 所有文件访问权限：MainActivity 在 onResume 时更新 */
     var storageOk by mutableStateOf(false)
 
-    val port = PortState(prefs)
-    val onboarding = OnboardingState(prefs, env, storageOk = { storageOk })
+    val port = PortState(prefs, locale)
+    val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk })
     val library = LibraryState(prefs, port)
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */

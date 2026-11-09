@@ -108,7 +108,10 @@ class SaveBackupTest {
             SaveBackup.unpack(pkg, tmp("unpacked"))
             fail("a package that writes out of the folder has to be refused")
         } catch (e: Exception) {
-            assertTrue(e.message ?: "", (e.message ?: "").contains("越界") || (e.message ?: "").contains("路径"))
+            // the refusal carries a code, not a sentence: the app's words for it live in its own resources
+            assertTrue(e.message ?: "", e is SaveBackup.Refused)
+            val refused = e as SaveBackup.Refused
+            assertEquals(SaveBackup.Refusal.PATH_ESCAPES, refused.refusal)
         }
     }
 

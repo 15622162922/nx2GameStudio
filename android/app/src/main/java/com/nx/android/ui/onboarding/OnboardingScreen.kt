@@ -1,5 +1,6 @@
 package com.nx.android.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -25,22 +25,26 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
+import com.nx.android.appstate.OnboardingState
+import com.nx.android.data.AppLocale
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
-import com.nx.android.appstate.OnboardingState
-import com.nx.android.ui.components.PickerMode
-import com.nx.android.ui.components.PickerRequest
-import java.io.File
 import com.nx.android.ui.AppActions
+import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
+import com.nx.android.ui.components.PickerMode
+import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.theme.NxPalette
+import java.io.File
 
 /**
  * The guided setup, five steps: the permission and the space, the environment's unpack, the keys, the games'
@@ -61,11 +65,11 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(stepTitle(ob.step), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("第 ${ob.step.ordinal + 1} 步，共 ${ObStep.entries.size - 1} 步",
+                Text(stringResource(R.string.onb_step_of, ob.step.ordinal + 1, ObStep.entries.size - 1),
                      style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { ob.skipForLater() }) { Text("稍后再说", color = NxPalette.Cream) }
+            TextButton(onClick = { ob.skipForLater() }) { Text(stringResource(R.string.onb_later), color = NxPalette.Cream) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (s in ObStep.entries) {
@@ -103,7 +107,7 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (ob.step > ObStep.WELCOME) {
-                QuietButton("返回", { ob.back() })
+                QuietButton(stringResource(R.string.common_back), { ob.back() })
             }
             Spacer(Modifier.weight(1f))
             CapsuleButton(
@@ -115,20 +119,22 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
     }
 }
 
+@Composable
 private fun stepTitle(s: ObStep): String = when (s) {
-    ObStep.WELCOME -> "欢迎来到 nx2android"
-    ObStep.ENV -> "准备环境"
+    ObStep.WELCOME -> stringResource(R.string.onb_welcome)
+    ObStep.ENV -> stringResource(R.string.onb_prepare_env)
     ObStep.KEYS -> "prod.keys"
-    ObStep.GAMES -> "游戏文件夹"
-    ObStep.DONE -> "一切就绪"
+    ObStep.GAMES -> stringResource(R.string.onb_game_folder)
+    ObStep.DONE -> stringResource(R.string.onb_all_ready)
 }
 
+@Composable
 private fun primaryLabel(s: ObStep, can: Boolean): String = when (s) {
-    ObStep.WELCOME -> "开始"
-    ObStep.ENV -> if (can) "继续" else "等待环境…"
-    ObStep.KEYS -> if (can) "继续" else "等待校验…"
-    ObStep.GAMES -> "继续"
-    ObStep.DONE -> "进入游戏库"
+    ObStep.WELCOME -> stringResource(R.string.common_start)
+    ObStep.ENV -> if (can) stringResource(R.string.common_continue) else stringResource(R.string.onb_waiting_env)
+    ObStep.KEYS -> if (can) stringResource(R.string.common_continue) else stringResource(R.string.onb_waiting_check)
+    ObStep.GAMES -> stringResource(R.string.common_continue)
+    ObStep.DONE -> stringResource(R.string.onb_enter_library)
 }
 
 // ---- the steps -----------------------------------------------------------------------------------------------
@@ -136,35 +142,35 @@ private fun primaryLabel(s: ObStep, can: Boolean): String = when (s) {
 @Composable
 private fun WelcomeStep(ob: OnboardingState, actions: AppActions) {
     val facts = ob.facts()
-    Section("存储访问") {
+    Section(stringResource(R.string.onb_storage_access)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (facts.storageOk) NxPalette.Ready else NxPalette.Danger)
             Text(
-                if (facts.storageOk) "已授予所有文件访问"
-                else "读取游戏文件与写出移植产物需要「所有文件访问」权限",
+                if (facts.storageOk) stringResource(R.string.onb_storage_granted)
+                else stringResource(R.string.onb_storage_why),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
-            if (!facts.storageOk) QuietButton("去授权", { actions.onAskStorage() })
+            if (!facts.storageOk) QuietButton(stringResource(R.string.onb_grant_access), { actions.onAskStorage() })
         }
-        Hint("授权在系统的设置页完成，回来后这一步自动通过")
+        Hint(stringResource(R.string.onb_grant_access_where))
     }
-    Section("磁盘空间") {
+    Section(stringResource(R.string.onb_disk_space)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (facts.freeGB >= facts.neededGB) NxPalette.Ready else NxPalette.Danger)
             Text(
-                "剩余 ${facts.freeGB} GB　·　解压环境需要约 700 MB",
+                stringResource(R.string.onb_free_space, facts.freeGB),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        Hint(if (facts.freeGB < facts.neededGB) "空间不足：清一色删掉些东西再回来" else "空间足够，可以继续")
+        Hint(if (facts.freeGB < facts.neededGB) stringResource(R.string.onb_space_short) else stringResource(R.string.onb_space_enough))
     }
 }
 
 @Composable
 private fun EnvStep(ob: OnboardingState) {
     val ready = ob.facts().envReady
-    Section("运行环境") {
+    Section(stringResource(R.string.onb_runtime)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (ob.unpacking) {
                 CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
@@ -173,32 +179,33 @@ private fun EnvStep(ob: OnboardingState) {
             }
             Text(
                 when {
-                    ready -> "环境就绪"
-                    ob.unpacking -> "正在解压：${ob.unpackStep}"
-                    else -> "还没有环境（rootfs、编译工具和 .NET 运行时，约 700 MB）"
+                    ready -> stringResource(R.string.env_ready)
+                    ob.unpacking -> stringResource(R.string.onb_unpacking, ob.unpackStep)
+                    else -> stringResource(R.string.onb_no_env)
                 },
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
             )
-            if (!ready && !ob.unpacking) QuietButton("准备环境", { ob.unpack() })
+            if (!ready && !ob.unpacking) QuietButton(stringResource(R.string.onb_prepare_env), { ob.unpack() })
         }
         if (ob.unpacking) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(5.dp), color = NxPalette.Building)
         }
         if (ob.unpackError.isNotEmpty()) {
             Text(
-                "准备失败：${ob.unpackError}",
+                stringResource(R.string.onb_prepare_failed, ob.unpackError),
                 color = NxPalette.Danger,
                 style = MaterialTheme.typography.bodySmall,
             )
-            Hint("点「准备环境」重试；失败的原因也在日志里")
+            Hint(stringResource(R.string.onb_retry_hint))
         }
     }
-    Hint("环境解压一次就好：之后更新 App 只带新的小工具，不再重复这一步")
+    Hint(stringResource(R.string.onb_unpack_once))
 }
 
 @Composable
 private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    Section("prod.keys（自己的 Switch 导出的）") {
+    val locale = LocalAppLocale.current
+    Section(stringResource(R.string.onb_prod_keys)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(
                 when {
@@ -209,7 +216,7 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (Picke
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    ob.keysPath.ifEmpty { "还没有选择 keys 文件" },
+                    ob.keysPath.ifEmpty { stringResource(R.string.onb_no_keys_file) },
                     style = MaterialTheme.typography.bodyMedium, maxLines = 2,
                 )
                 if (ob.keysDetail.isNotEmpty()) {
@@ -219,41 +226,42 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (Picke
             if (ob.keysChecking) {
                 CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
             } else {
-                QuietButton("选择文件", onClick = {
-                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), null, "选择 prod.keys",
+                QuietButton(stringResource(R.string.onb_choose_file), onClick = {
+                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), null, locale.str(R.string.onb_choose_prod_keys),
                         onPicked = { f -> ob.chooseKeys(f.path) }))
                 })
             }
         }
-        Hint("常见位置（/sdcard/switch/）已有的 keys 会自动填上并校验")
+        Hint(stringResource(R.string.onb_keys_common_places))
     }
     if (!ob.keysOk && !ob.keysChecking) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = ob.keysSkipped, onCheckedChange = { if (it) ob.skipKeys() else ob.unskipKeys() })
-            Text("暂时跳过（发起移植时会再提醒）", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.onb_skip_keys), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @Composable
 private fun GamesStep(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    Section("游戏文件夹") {
+    val locale = LocalAppLocale.current
+    Section(stringResource(R.string.onb_game_folder)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (ob.folder.isNotBlank()) NxPalette.Ready else NxPalette.Unbuilt)
             Text(
-                ob.folder.ifEmpty { "还没有选择文件夹" },
+                ob.folder.ifEmpty { stringResource(R.string.onb_no_folder) },
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f), maxLines = 2,
             )
-            QuietButton("选择文件夹", onClick = {
+            QuietButton(stringResource(R.string.onb_choose_folder), onClick = {
                 onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(ob.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                    File(ob.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
                     onPicked = { dir -> ob.chooseFolder(dir.path) }))
             })
         }
         if (ob.folder.isNotBlank()) {
-            Hint(if (ob.games.isEmpty()) "这里没有找到游戏文件（NSP / XCI / NSZ / XCZ）——可以直接继续，游戏库里随时能换文件夹"
-                 else "找到 ${ob.games.size} 个游戏文件；同目录的更新和 DLC 会在移植时自动带上")
+            Hint(if (ob.games.isEmpty()) stringResource(R.string.onb_no_games_found)
+                 else stringResource(R.string.onb_games_found, ob.games.size))
             if (ob.games.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     for (g in ob.games.take(30)) {
@@ -263,7 +271,7 @@ private fun GamesStep(ob: OnboardingState, actions: AppActions, onRequest: (Pick
                             color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                         )
                     }
-                    if (ob.games.size > 30) Hint("…以及另外 ${ob.games.size - 30} 个")
+                    if (ob.games.size > 30) Hint(stringResource(R.string.onb_and_more, ob.games.size - 30))
                 }
             }
         }
@@ -272,12 +280,12 @@ private fun GamesStep(ob: OnboardingState, actions: AppActions, onRequest: (Pick
 
 @Composable
 private fun DoneStep() {
-    Section("完成了") {
+    Section(stringResource(R.string.onb_done)) {
         Text(
-            "环境就绪、钥匙校验过、游戏也找齐了。\n" +
-                "接下来在游戏库里挑一个游戏发起移植，移植在后台跑，跑完在库里就能玩。",
+            stringResource(R.string.onb_done_text) + "\n" +
+                stringResource(R.string.onb_done_next),
             style = MaterialTheme.typography.bodyMedium,
         )
-        Hint("有跳过的步骤也不要紧：设置里随时能补，库里的入口会提醒缺什么")
+        Hint(stringResource(R.string.onb_skipped_steps))
     }
 }

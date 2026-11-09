@@ -35,6 +35,15 @@ object Drivers {
 
     private const val META = "meta.json"
 
+    /**
+     * Why a driver was refused. A code, not a sentence: the words for it live in the app's own resources
+     * (see `ui/Failures.kt`).
+     */
+    enum class Refusal { NO_DRIVER, NO_LIBRARY, NOT_A_DRIVER }
+
+    /** A driver that was refused: the reason. */
+    class Refused(val refusal: Refusal) : IOException(refusal.name)
+
     /** App 内置的那个驱动（在 assets 里）：没有网络也能装 */
     const val SHIPPED_ASSET = "drivers/Turnip_Gen8_V39.zip"
     const val SHIPPED_NAME = "Turnip Gen8 V39"
@@ -89,8 +98,8 @@ object Drivers {
                 entry = zip.nextEntry
             }
         }
-        val m = meta ?: throw IOException("这个压缩包里没有驱动")
-        if (!File(stage, m.library).isFile) throw IOException("这个压缩包里没有驱动库")
+        val m = meta ?: throw Refused(Refusal.NO_DRIVER)
+        if (!File(stage, m.library).isFile) throw Refused(Refusal.NO_LIBRARY)
         return m
     }
 
@@ -140,7 +149,7 @@ object Drivers {
         return when {
             name.endsWith(".zip") -> runCatching { file.inputStream().use { install(context, it).getOrThrow() } }
             name.endsWith(".so") -> installLibrary(context, file)
-            else -> Result.failure(IOException("这不是驱动（要一个 zip 压缩包或一个 .so 驱动库）"))
+            else -> Result.failure(Refused(Refusal.NOT_A_DRIVER))
         }
     }
 

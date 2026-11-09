@@ -34,11 +34,15 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.nx.android.NxApp
+import com.nx.android.R
+import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
-import com.nx.android.ui.game.PadView
 import com.nx.android.data.PrefsStore
+import com.nx.android.ui.ProvideAppLocale
 import com.nx.android.ui.game.GameDrawer
+import com.nx.android.ui.game.PadView
 import com.nx.android.ui.theme.NxTheme
 
 /**
@@ -74,6 +78,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
     }
 
+    /** 界面语言：toast 与抽屉里的词从这里取 */
+    private val locale: AppLocale get() = (application as NxApp).container.locale
+
     private var paused by mutableStateOf(false)
     private var drawerOpen by mutableStateOf(false)
     private var fgSettings: FrameGenSettings? = null
@@ -106,7 +113,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         compose.setViewTreeLifecycleOwner(this)
         compose.setViewTreeViewModelStoreOwner(this)
         compose.setViewTreeSavedStateRegistryOwner(this)
-        compose.setContent { NxTheme { DrawerRoot() } }
+        compose.setContent { NxTheme { ProvideAppLocale(locale) { DrawerRoot() } } }
         frame.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(frame)
         immersive()
@@ -114,11 +121,11 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         if (intent.getBooleanExtra(EXTRA_EXIT, false)) return endGame()
         val pack = intent.getStringExtra(EXTRA_PACK)
         val host = intent.getStringExtra(EXTRA_HOST)
-        if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast("没有要运行的游戏"); finish(); return }
+        if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast(locale.str(R.string.game_no_game_to_run)); finish(); return }
         try {
             System.load(host)
         } catch (t: Throwable) {
-            toast("无法载入游戏程序：${t.message}")
+            toast(locale.str(R.string.game_cannot_load_host, t.message))
             finish()
             return
         }
@@ -159,7 +166,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null) { paused = false; Native.lifecycle(1) },
                     contentAlignment = androidx.compose.ui.Alignment.Center,
-                ) { androidx.compose.material3.Text("已暂停 — 点按继续", color = Color.White,
+                ) { androidx.compose.material3.Text(locale.str(R.string.drawer_paused_overlay), color = Color.White,
                     style = androidx.compose.material3.MaterialTheme.typography.titleLarge) }
             }
             GameDrawer(
@@ -236,6 +243,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     // ---- lifecycle: the same dance as the NativeActivity's callbacks ----
     override fun onResume() { super.onResume(); Native.lifecycle(1) }
+
+    /** The phone's language changed (configChanges holds it): the app's words are read again */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        locale.configurationChanged()
+    }
     override fun onPause() { super.onPause(); Native.lifecycle(0) }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)

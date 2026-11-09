@@ -13,10 +13,12 @@ import androidx.activity.compose.setContent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
 import com.nx.android.data.Env
 import com.nx.android.data.Player
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private val container by lazy { (application as NxApp).container }
+
+    /** 界面语言：toast 与分享面板的标题从这里取词 */
+    private val locale: AppLocale get() = container.locale
 
     /** Which tab the screen opens on (the notification's tap says the builds page) */
     var launchTab = 0
@@ -82,10 +87,10 @@ class MainActivity : ComponentActivity() {
                 Player.run(this, ported, name) { ok ->
                     if (!ok) {
                         container.player.stop()
-                        toast("无法运行：${pack.name} 里的宿主程序缺失")
+                        toast(locale.str(R.string.main_cannot_run_no_host, pack.name))
                     }
                 }
-            } ?: toast("无法运行：${pack.name} 不是可运行的数据包")
+            } ?: toast(locale.str(R.string.main_cannot_run_not_a_pack, pack.name))
         },
         onResumeGame = {
             container.player.start(container.player.titleId, container.player.name)
@@ -104,14 +109,14 @@ class MainActivity : ComponentActivity() {
             val text = AppLog.text()
             if (text.isNotEmpty()) {
                 startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_TEXT, text), "分享日志"))
+                    .putExtra(Intent.EXTRA_TEXT, text), locale.str(R.string.main_share_log)))
             } else {
-                toast("日志还是空的")
+                toast(locale.str(R.string.main_log_empty))
             }
         },
         onClearLog = {
             AppLog.clear()
-            toast("日志已清空")
+            toast(locale.str(R.string.main_log_cleared))
         },
         readLog = { AppLog.text(2000) },
     )
@@ -119,6 +124,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         container.storageOk = storageGranted()   // the permission may have been given in the background
+    }
+
+    /** The phone's language changed (configChanges holds it): the app's words are read again */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        container.locale.configurationChanged()
     }
 
     // ---- the storage (the activity's own privilege) ----------------------------------------------------------
@@ -142,7 +153,7 @@ class MainActivity : ComponentActivity() {
             try {
                 startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
             } catch (e2: Exception) {
-                toast("这台设备没有可用的权限设置页")
+                toast(locale.str(R.string.main_no_permission_settings))
             }
         }
     }

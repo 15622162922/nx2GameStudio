@@ -4,15 +4,17 @@ import android.os.Environment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.nx.android.R
+import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
 import com.nx.android.data.Env
+import com.nx.android.data.PortRunner
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PrefsStore.Companion.OB_COMPLETED
 import com.nx.android.data.PrefsStore.Companion.OB_FOLDER
 import com.nx.android.data.PrefsStore.Companion.OB_KEYS
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
-import com.nx.android.data.PortRunner
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
@@ -25,7 +27,7 @@ import java.io.File
  * storage permission, the environment's unpack, the doctor's keys check, the folder scan — and remembers
  * everything across restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
  */
-class OnboardingState(private val prefs: PrefsStore, private val env: Env,
+class OnboardingState(private val prefs: PrefsStore, private val env: Env, private val locale: AppLocale,
                       private val storageOk: () -> Boolean) {
 
     companion object {
@@ -135,7 +137,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env,
             } catch (e: Exception) {
                 unpacking = false
                 unpackError = "${e.javaClass.simpleName}: ${e.message}"
-                AppLog.line("准备失败：${e.message}")
+                AppLog.line(locale.str(R.string.onb_prepare_failed, e.message))
             }
         }.start()
     }
@@ -174,18 +176,18 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env,
         val p = keysPath.trim()
         if (p.isEmpty() || !File(p).isFile()) {
             keysOk = false
-            keysDetail = if (p.isEmpty()) "还没有选择 prod.keys" else "文件不存在：$p"
+            keysDetail = if (p.isEmpty()) locale.str(R.string.onb_no_keys_chosen) else locale.str(R.string.onb_file_missing, p)
             return
         }
         keysChecking = true
         keysDetail = ""
         val buf = StringBuilder()
-        PortRunner(env) { line -> buf.appendLine(line) }.doctor(p, json = true) {
+        PortRunner(env, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
             keysChecking = false
             val rows = runCatching { org.json.JSONArray(buf.toString().trim()) }.getOrNull()
             if (rows == null) {
                 keysOk = false
-                keysDetail = "自检没有输出（环境未就绪？）"
+                keysDetail = locale.str(R.string.onb_check_no_output)
                 return@doctor
             }
             for (i in 0 until rows.length()) {
@@ -197,7 +199,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env,
                 }
             }
             keysOk = false
-            keysDetail = "自检没有报告 prod.keys"
+            keysDetail = locale.str(R.string.onb_check_no_keys)
         }
     }
 

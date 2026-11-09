@@ -159,6 +159,32 @@ the app's files folder per title id (`DM_GAME_ID`); the game's language and Vulk
 library's drawer and written into the pack's `env.txt`. The assets are built by `packaging/android-apk/` and are
 not committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).
 
+### The app's own language
+
+The app's words live in its own resources: `res/values/strings.xml` is English (the default bundle) and
+`res/values-zh/strings.xml` is Chinese. The phone picks the bundle — a phone set to Chinese gets the Chinese
+one, every other phone the English one — and the player can pick one in the settings (`界面语言` /
+**App language**), which takes effect at once and is remembered (`lang` in the app's preferences). The app's
+language is not the game's language: the game's own is a per-game setting in the library's drawer, written
+into the pack's `env.txt`.
+
+`AppLocale` (`data/AppLocale.kt`) holds the choice and hands out the resources the words are read from. The
+screens read them with `stringResource` (the resources are handed to the composition by `ui/Locale.kt`), and
+the code that has no screen — the state holders, the service, the activity — reads them with
+`AppLocale.str()`. Both read the same resources, so a word is the same word wherever it is shown. The data
+layer stays free of Android and says what went wrong in a code, not a sentence (`Drivers.Refused`,
+`SaveBackup.Refused`); `ui/Failures.kt` turns a code into the app's own words.
+
+`tests/test_app_text.py` holds the two tables to each other and the sources to the tables: the same keys on
+both sides, no Chinese left in the Kotlin sources, every `R.string` in the table, and every
+`stringResource(...)` passing as many arguments as the string has placeholders. It runs in CI, with the rest
+of the Python suite.
+
+One platform quirk is worth knowing: a locale **with** a region (`en_US`, `zh_CN`) overrides the phone's own
+locale, a locale with only a language (`en`) does not — on Android 16 the configuration keeps the phone's
+own (`zh_CN`) and the words stay in the phone's language. `AppLocale.locale` therefore gives both languages
+a region (`Locale.US`, `Locale.SIMPLIFIED_CHINESE`).
+
 ### The Vulkan drivers
 
 A game runs on the device's own Vulkan driver unless the player picks another one in the library's drawer. The

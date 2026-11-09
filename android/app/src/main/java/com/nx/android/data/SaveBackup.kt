@@ -20,6 +20,16 @@ object SaveBackup {
     /** the package's extension */
     const val EXT = "zip"
 
+    /**
+     * Why a package was refused. A code, not a sentence: this layer stays free of Android, so the words
+     * for it live in the app's own resources (see `ui/Failures.kt`).
+     */
+    enum class Refusal { TOO_MANY_ENTRIES, BAD_PATH, PATH_ESCAPES, TOO_BIG }
+
+    /** A package that was refused: the reason, and the entry that caused it when there is one. */
+    class Refused(val refusal: Refusal, val entry: String? = null) :
+        IOException(if (entry == null) refusal.name else "${refusal.name}: $entry")
+
     /** how much a package may unpack to (a save is small; a package from elsewhere is not to be trusted) */
     const val MAX_UNPACKED = 512L * 1024 * 1024
 
@@ -104,16 +114,16 @@ object SaveBackup {
             while (true) {
                 val entry = zip.nextEntry ?: break
                 entries++
-                if (entries > MAX_ENTRIES) throw IOException("包里条目太多")
+                if (entries > MAX_ENTRIES) throw Refused(Refusal.TOO_MANY_ENTRIES)
                 val name = entry.name
                 if (name.isEmpty() || name.startsWith("/") || name.contains("\\") || name.contains(":")) {
-                    throw IOException("包里的路径不对：$name")
+                    throw Refused(Refusal.BAD_PATH, name)
                 }
                 val parts = name.split("/")
-                if (parts.any { it == ".." }) throw IOException("包里的路径越界：$name")
+                if (parts.any { it == ".." }) throw Refused(Refusal.PATH_ESCAPES, name)
                 val out = File(dest, name)
                 if (!out.canonicalPath.startsWith(dest.canonicalPath + File.separator)) {
-                    throw IOException("包里的路径越界：$name")
+                    throw Refused(Refusal.PATH_ESCAPES, name)
                 }
                 if (entry.isDirectory) {
                     out.mkdirs()
@@ -121,7 +131,7 @@ object SaveBackup {
                 }
                 out.parentFile?.mkdirs()
                 bytes += out.outputStream().use { zip.copyTo(it) }
-                if (bytes > MAX_UNPACKED) throw IOException("包解开后太大")
+                if (bytes > MAX_UNPACKED) throw Refused(Refusal.TOO_BIG)
             }
         }
         val dirs = dest.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name }.orEmpty()

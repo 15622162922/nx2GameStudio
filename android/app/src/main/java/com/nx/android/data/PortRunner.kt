@@ -1,6 +1,7 @@
 package com.nx.android.data
 
 import com.nx.android.BuildConfig
+import com.nx.android.R
 import java.io.File
 
 /**
@@ -8,7 +9,7 @@ import java.io.File
  * behavior (one stream for stdout and stderr, the porter's events by line, cancel stops the porter and the
  * tools it started). Every run is one thread; the output goes to [onLine] from that thread.
  */
-class PortRunner(private val env: Env, private val onLine: (String) -> Unit) {
+class PortRunner(private val env: Env, private val locale: AppLocale, private val onLine: (String) -> Unit) {
 
     @Volatile private var proc: Process? = null
 
@@ -37,11 +38,11 @@ class PortRunner(private val env: Env, private val onLine: (String) -> Unit) {
         if (keys.isNotBlank()) args += listOf("-k", keys.trim())
         val t = Thread {
             try {
-                onLine("检查工具…")
+                onLine(locale.str(R.string.runner_checking_tools))
                 env.patchInterpreters()
-                onLine("改写解释器路径完成")
+                onLine(locale.str(R.string.runner_interpreter_patched))
             } catch (e: Exception) {
-                onLine("[RED] 改写解释器路径失败：${e.message}")
+                onLine(locale.str(R.string.runner_interpreter_patch_failed, e.message))
             }
             start(args, onEnd)
         }
@@ -56,7 +57,7 @@ class PortRunner(private val env: Env, private val onLine: (String) -> Unit) {
                 proc = p
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)
-                if (code != 0) onLine("[RED] 退出 $code")
+                if (code != 0) onLine(locale.str(R.string.runner_exit_code, code))
             } catch (e: Exception) {
                 onLine("[RED] ${e.message}")
             } finally {

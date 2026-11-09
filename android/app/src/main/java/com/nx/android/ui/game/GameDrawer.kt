@@ -1,5 +1,6 @@
 package com.nx.android.ui.game
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -41,9 +42,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
 import com.nx.android.data.FrameGenKnobs
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.game.Native
@@ -53,8 +56,8 @@ import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.delay
 
 /** 抽屉的两个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
-enum class DrawerTab(val label: String) {
-    FRAMEGEN("帧生成"), DISPLAY("画面与操作")
+enum class DrawerTab(@StringRes val label: Int) {
+    FRAMEGEN(R.string.drawer_tab_framegen), DISPLAY(R.string.drawer_tab_display)
 }
 
 /**
@@ -114,7 +117,7 @@ fun GameDrawer(
                                         Modifier.clip(RoundedCornerShape(50))
                                             .background(if (selected) NxPalette.Cream else Color.White.copy(alpha = 0.16f))
                                             .clickable { tab = i }.padding(horizontal = 14.dp, vertical = 6.dp)
-                                    ) { Text(t.label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    ) { Text(stringResource(t.label), fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             color = if (selected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant) }
                                 }
                             }
@@ -125,7 +128,7 @@ fun GameDrawer(
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                             ) {
                                 when (DrawerTab.entries[tab]) {
-                                    DrawerTab.FRAMEGEN -> if (settings == null) HintRow("这个游戏不支持帧生成")
+                                    DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
                                     DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity) { onOpenChange(false) }
                                 }
@@ -137,9 +140,9 @@ fun GameDrawer(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                QuietButton(if (paused) "继续" else "暂停", onClick = onPauseResume, modifier = Modifier.weight(1f))
-                                QuietButton("退出游戏", onClick = onExit, modifier = Modifier.weight(1f))
-                                QuietButton("回到游戏", onClick = { onOpenChange(false) }, modifier = Modifier.weight(1f))
+                                QuietButton(if (paused) stringResource(R.string.drawer_resume) else stringResource(R.string.drawer_resume), onClick = onPauseResume, modifier = Modifier.weight(1f))
+                                QuietButton(stringResource(R.string.drawer_exit), onClick = onExit, modifier = Modifier.weight(1f))
+                                QuietButton(stringResource(R.string.drawer_back_to_game), onClick = { onOpenChange(false) }, modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -167,36 +170,39 @@ private fun FrameGenRows(settings: FrameGenSettings, status: String) {
     val reason = status.substringAfter(' ', "")
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("帧生成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.drawer_tab_framegen), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         Box(
             Modifier.clip(RoundedCornerShape(50)).background(if (knobs.on) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
                 .clickable { knobs = knobs.copy(on = !knobs.on); pushGen(settings, knobs) }
                 .padding(horizontal = 16.dp, vertical = 7.dp),
-        ) { Text(if (knobs.on) "开" else "关", color = if (knobs.on) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+        ) { Text(if (knobs.on) stringResource(R.string.common_on) else stringResource(R.string.common_off), color = if (knobs.on) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
     }
     // 状态行：宿主的判定是唯一真源（设备能力、DLL、显示节奏都在它那边）
     Text(
         when (state) {
-            1 -> "正在生成帧"
-            2 -> reason.ifEmpty { "已开启，等待稳定帧率" }
-            0 -> "关闭"
-            -1 -> reason.ifEmpty { "此设备不支持" }
-            else -> "此构建没有帧生成"
-        } + if (state == -1 && reason.contains("Lossless.dll")) "（点下方「选择 Lossless.dll」）" else "",
+            1 -> stringResource(R.string.drawer_generating)
+            2 -> reason.ifEmpty { stringResource(R.string.drawer_waiting_stable) }
+            0 -> stringResource(R.string.drawer_off)
+            -1 -> reason.ifEmpty { stringResource(R.string.drawer_device_unsupported) }
+            else -> stringResource(R.string.drawer_build_without_fg)
+        } + if (state == -1 && reason.contains("Lossless.dll")) stringResource(R.string.drawer_choose_dll_hint) else "",
         style = MaterialTheme.typography.bodySmall,
         color = when (state) { 1 -> NxPalette.Ready; 2 -> NxPalette.Building; -1 -> NxPalette.Danger; else -> MaterialTheme.colorScheme.onSurfaceVariant },
     )
     if (state >= 0) {
-        OptionRow("每游戏帧倍率", listOf("2x", "3x", "4x"), "${knobs.mult}x") { name ->
+        // 选项的词先取好：回调里不能取词
+        val targets = targetLabels()
+        val auto = stringResource(R.string.drawer_auto)
+        OptionRow(stringResource(R.string.drawer_multiplier), listOf("2x", "3x", "4x"), "${knobs.mult}x") { name ->
             knobs = knobs.copy(mult = name.removeSuffix("x").toIntOrNull() ?: 2); pushGen(settings, knobs)
         }
-        OptionRow("目标帧率", TARGET_LABELS, targetLabel(knobs.target)) { name ->
-            knobs = knobs.copy(target = TARGET_LABELS.indexOf(name).let { if (it >= 0) FrameGenKnobs.TARGETS[it] else 0 }); pushGen(settings, knobs)
+        OptionRow(stringResource(R.string.drawer_target_fps), targets, targetLabel(knobs.target)) { name ->
+            knobs = knobs.copy(target = targets.indexOf(name).let { if (it >= 0) FrameGenKnobs.TARGETS[it] else 0 }); pushGen(settings, knobs)
         }
-        OptionRow("光流质量", listOf("自动", "25%", "50%", "75%", "100%"), flowLabel(knobs.flow)) { name ->
-            knobs = knobs.copy(flow = if (name == "自动") 0 else name.removeSuffix("%").toIntOrNull() ?: 0); pushGen(settings, knobs)
+        OptionRow(stringResource(R.string.drawer_flow_quality), listOf(auto, "25%", "50%", "75%", "100%"), flowLabel(knobs.flow)) { name ->
+            knobs = knobs.copy(flow = if (name == auto) 0 else name.removeSuffix("%").toIntOrNull() ?: 0); pushGen(settings, knobs)
         }
-        Text("开关与倍率即时生效；DLL 与它的选择在设置页（重启项）。Lossless Scaling 的资源不会被内置或下载。",
+        Text(stringResource(R.string.drawer_fg_hint),
              style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -214,20 +220,20 @@ private fun DisplayRows(
     var fps by remember { mutableStateOf(Native.menuGet(3) != 0) }
     var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
 
-    SwitchRow("虚拟手柄", shown) { shown = it; onPadShown(it) }
+    SwitchRow(stringResource(R.string.drawer_virtual_pad), shown) { shown = it; onPadShown(it) }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("手柄不透明度", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.drawer_pad_opacity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text("$opacity%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Slider(value = opacity.toFloat(), valueRange = 10f..100f,
                onValueChange = { opacity = it.toInt(); onPadOpacity(opacity) })
     }
-    SwitchRow("震动", rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
-    SwitchRow("帧率计数", fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
-    SwitchRow("底座模式", docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
+    SwitchRow(stringResource(R.string.drawer_rumble), rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
+    SwitchRow(stringResource(R.string.drawer_fps_counter), fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
+    SwitchRow(stringResource(R.string.drawer_docked), docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
     // 布局编辑器是宿主画的，画在游戏画面上：抽屉先收起，否则它盖着编辑器
-    QuietButton("布局编辑器（拖动按键位置）", onClick = { onCloseDrawer(); Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
+    QuietButton(stringResource(R.string.drawer_layout_editor), onClick = { onCloseDrawer(); Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -237,13 +243,21 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
         Box(
             Modifier.clip(RoundedCornerShape(50)).background(if (checked) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
                 .clickable { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 5.dp),
-        ) { Text(if (checked) "开" else "关", fontSize = 12.sp, color = if (checked) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+        ) { Text(if (checked) stringResource(R.string.common_on) else stringResource(R.string.common_off), fontSize = 12.sp, color = if (checked) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
     }
 }
 
-private val TARGET_LABELS = listOf("跟随游戏", "60", "90", "120")
-private fun targetLabel(t: Int) = TARGET_LABELS.getOrNull(FrameGenKnobs.TARGETS.indexOf(t)) ?: "跟随游戏"
-private fun flowLabel(f: Int) = if (f == 0) "自动" else "$f%"
+private val TARGET_LABELS = listOf("60", "90", "120")
+
+@Composable
+private fun targetLabels() = listOf(stringResource(R.string.drawer_follow_game)) + TARGET_LABELS
+
+@Composable
+private fun targetLabel(t: Int) =
+    targetLabels().getOrNull(FrameGenKnobs.TARGETS.indexOf(t)) ?: stringResource(R.string.drawer_follow_game)
+
+@Composable
+private fun flowLabel(f: Int) = if (f == 0) stringResource(R.string.drawer_auto) else "$f%"
 
 @Composable
 private fun OptionRow(label: String, options: List<String>, current: String, onPick: (String) -> Unit) {

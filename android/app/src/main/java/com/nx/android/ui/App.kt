@@ -1,6 +1,12 @@
 package com.nx.android.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,7 +14,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,17 +21,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,8 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -59,15 +61,16 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.AppContainer
 import com.nx.android.R
 import com.nx.android.appstate.PortState
+import com.nx.android.data.AppLocale
 import com.nx.android.data.StorageVolumes
-import com.nx.android.domain.GameConfig
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
+import com.nx.android.domain.GameConfig
 import com.nx.android.ui.builds.BuildsScreen
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.FilePickerScreen
-import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.library.ConfigPanel
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
@@ -85,10 +88,10 @@ import java.util.Date
 import java.util.Locale
 
 /** The main screen's pages */
-enum class Tab(val label: String, val icon: ImageVector) {
-    LIBRARY("游戏库", Icons.Filled.SportsEsports),
-    BUILDS("构建", Icons.Filled.Inventory2),
-    SETTINGS("设置", Icons.Filled.Settings),
+enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
+    LIBRARY(R.string.app_tab_library, Icons.Filled.SportsEsports),
+    BUILDS(R.string.app_tab_builds, Icons.Filled.Inventory2),
+    SETTINGS(R.string.app_tab_settings, Icons.Filled.Settings),
 }
 
 /** The screens' way back to the activity's own privileges: what they may ask for, nothing else */
@@ -122,6 +125,8 @@ data class AppActions(
 @Composable
 fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
     NxTheme {
+        // 界面语言：整棵树读同一份资源，玩家在设置里换语言时这里跟着换
+        ProvideAppLocale(container.locale) {
         var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
         var driversOpen by remember { mutableStateOf(false) }
         var logOpen by remember { mutableStateOf(false) }
@@ -135,7 +140,7 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                     onDrivers = { driversOpen = true },
                     onLog = { logOpen = true })
             }
-            val volumes = remember(ctx) { StorageVolumes.list(ctx) }
+            val volumes = remember(ctx, container.locale.mode) { StorageVolumes.list(ctx, container.locale) }
             pickerReq?.let { req ->
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
                     if (!actions.storageOk()) {
@@ -145,16 +150,17 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                         ) {
                             Spacer(Modifier.weight(1f))
-                            Text("需要存储权限", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.app_storage_permission_needed),
+                                 style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
-                                "内置文件管理器需要「所有文件访问」权限才能列出游戏文件。",
+                                stringResource(R.string.app_storage_permission_picker),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Spacer(Modifier.weight(1f))
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Spacer(Modifier.weight(1f))
-                                QuietButton("取消", onClick = { pickerReq = null })
-                                CapsuleButton("去授权", onClick = {
+                                QuietButton(stringResource(R.string.common_cancel), onClick = { pickerReq = null })
+                                CapsuleButton(stringResource(R.string.app_grant_permission), onClick = {
                                     pickerReq = null
                                     actions.onAskStorage()
                                 })
@@ -183,6 +189,7 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                 LogOverlay(onClose = { logOpen = false }, text = remember { actions.readLog() })
             }
         }
+        }
     }
 }
 
@@ -204,12 +211,14 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
     Box(Modifier.fillMaxSize()) {
         HeroBackground(lib, port, lib.visible().getOrNull(lib.heroIndex))
         Column(Modifier.fillMaxSize()) {
+        // 文件选择器的标题：回调里不能取词，先在外面取好
+        val chooseFolder = stringResource(R.string.app_choose_game_folder)
         TopBar(
             selected = tab,
             onSelect = { tab = it.ordinal },
             onAddGameFolder = {
                 onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(lib.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                    File(lib.folder.ifBlank { "/storage" }), chooseFolder,
                     onPicked = { dir -> lib.chooseFolder(dir.path) }))
             },
             onRefresh = { lib.rescan() },
@@ -266,15 +275,15 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onAddGameFolder: () -
         )
         Tab.entries.forEachIndexed { i, t ->
             Text(
-                t.label,
+                stringResource(t.label),
                 style = MaterialTheme.typography.titleLarge,
                 color = if (i == selected) MaterialTheme.colorScheme.onBackground else NxPalette.Unbuilt,
                 modifier = Modifier.clickable { onSelect(t) }.padding(end = 26.dp),
             )
         }
         Spacer(Modifier.weight(1f))
-        TopIcon(Icons.Filled.Add, "添加游戏文件夹", onAddGameFolder)
-        TopIcon(Icons.Filled.Refresh, "刷新游戏库", onRefresh)
+        TopIcon(Icons.Filled.Add, stringResource(R.string.app_add_game_folder), onAddGameFolder)
+        TopIcon(Icons.Filled.Refresh, stringResource(R.string.app_refresh_library), onRefresh)
         Text(time, style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
     }
@@ -307,7 +316,8 @@ private fun ActivityBar(port: PortState, openBuilds: () -> Unit) {
                     modifier = Modifier.weight(1f), maxLines = 1,
                 )
                 Text(
-                    "阶段 ${port.stageOf}/${port.stages}　${secs / 60} 分 ${secs % 60} 秒",
+                    stringResource(R.string.app_stage_and_time,
+                        port.stageOf, port.stages, secs / 60, secs % 60),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

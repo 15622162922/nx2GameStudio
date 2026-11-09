@@ -38,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
 import com.nx.android.ui.theme.NxPalette
 import java.io.File
 
@@ -95,8 +97,8 @@ fun FilePickerScreen(req: PickerRequest, volumes: List<Pair<String, File>>,
         }, onVolume = { current = it })
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                children.isEmpty() -> PickerEmpty("这里没有文件")
-                entries.isEmpty() -> PickerEmpty("没有符合后缀的游戏文件")
+                children.isEmpty() -> PickerEmpty(stringResource(R.string.picker_no_files))
+                entries.isEmpty() -> PickerEmpty(stringResource(R.string.picker_no_game_files))
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(160.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -121,9 +123,9 @@ fun FilePickerScreen(req: PickerRequest, volumes: List<Pair<String, File>>,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.weight(1f))
-            QuietButton("取消", onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp))
+            QuietButton(stringResource(R.string.common_cancel), onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp))
             CapsuleButton(
-                if (req.mode == PickerMode.FILE) "选定此文件" else "选定此文件夹",
+                if (req.mode == PickerMode.FILE) stringResource(R.string.picker_pick_file) else stringResource(R.string.picker_pick_folder),
                 onClick = { onPicked(current) },
                 enabled = canConfirm,
                 modifier = Modifier.heightIn(min = 48.dp),
@@ -157,7 +159,7 @@ private fun PickerTopBar(title: String, current: File, volumes: List<Pair<String
                 .clickable(enabled = !atVolumeRoot(current, volumes), onClick = onUp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "上一级", Modifier.size(22.dp),
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.picker_up), Modifier.size(22.dp),
                 tint = if (!atVolumeRoot(current, volumes)) MaterialTheme.colorScheme.onBackground
                 else NxPalette.Unbuilt)
         }
@@ -178,11 +180,11 @@ private fun PickerTopBar(title: String, current: File, volumes: List<Pair<String
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        currentVolume?.first ?: "存储",
+                        currentVolume?.first ?: stringResource(R.string.picker_section_storage),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onBackground,
                     )
-                    Icon(Icons.Filled.ArrowDropDown, "切换存储卷", Modifier.size(18.dp),
+                    Icon(Icons.Filled.ArrowDropDown, stringResource(R.string.picker_switch_volume), Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onBackground)
                 }
                 DropdownMenu(expanded = volumeMenu, onDismissRequest = { volumeMenu = false }) {

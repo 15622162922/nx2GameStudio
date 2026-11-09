@@ -30,16 +30,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
 import com.nx.android.appstate.DriverState
+import com.nx.android.data.AppLocale
 import com.nx.android.data.DriverCatalog
 import com.nx.android.data.DriverRelease
 import com.nx.android.data.Drivers
+import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.StatusDot
+import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +58,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun DriverScreen(state: DriverState, onClose: () -> Unit) {
+    val locale = LocalAppLocale.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf<DriverRelease?>(null) }   // 正在拿的那个
@@ -71,12 +77,12 @@ fun DriverScreen(state: DriverState, onClose: () -> Unit) {
         GlassSheet(modifier = Modifier.fillMaxSize(0.9f).clickable(enabled = false) {}) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Vulkan 驱动", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    Text(locale.str(R.string.driver_section), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f))
-                    QuietButton("关闭", onClose)
+                    QuietButton(locale.str(R.string.common_close), onClose)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Text("装好的驱动在游戏库页的抽屉里选：游戏的运行选项里。",
+                Text(locale.str(R.string.driver_where),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -90,18 +96,18 @@ fun DriverScreen(state: DriverState, onClose: () -> Unit) {
                             StatusDot(if (have) NxPalette.Ready else NxPalette.Unbuilt)
                             Column(Modifier.weight(1f)) {
                                 Text(r.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                Hint(r.note, size = 11.sp)
+                                Hint(stringResource(r.note), size = 11.sp)
                             }
                             if (have) {
                                 // 内置的那个是 App 的一部分，删不掉，也不装
-                                Hint(if (shipped) "内置" else "已装上", size = 11.sp)
+                                Hint(if (shipped) locale.str(R.string.driver_builtin) else locale.str(R.string.driver_installed_short), size = 11.sp)
                             } else if (working) {
                                 Hint("…", size = 11.sp)
                             } else if (shipped) {
                                 // 它自己会就位（下一个启动的时候），玩家不用点
-                                Hint(if (Drivers.shippedArchivePresent(context)) "下次启动会装好" else "这个包里没有", size = 11.sp)
+                                Hint(if (Drivers.shippedArchivePresent(context)) locale.str(R.string.driver_installed_next_start) else locale.str(R.string.driver_not_in_package), size = 11.sp)
                             } else {
-                                QuietButton("下载", {
+                                QuietButton(locale.str(R.string.driver_download), {
                                     if (busy != null) return@QuietButton
                                     busy = r
                                     progress = 0f
@@ -112,9 +118,9 @@ fun DriverScreen(state: DriverState, onClose: () -> Unit) {
                                         res.fold(
                                             onSuccess = {
                                                 state.refresh(context)
-                                                say("已安装：${it.label}")
+                                                say(locale.str(R.string.driver_installed, it.label))
                                             },
-                                            onFailure = { say("下载失败：${it.message.orEmpty()}") },
+                                            onFailure = { say(locale.str(R.string.driver_download_failed, failureText(locale, it))) },
                                         )
                                     }
                                 })

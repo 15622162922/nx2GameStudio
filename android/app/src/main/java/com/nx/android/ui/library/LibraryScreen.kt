@@ -52,21 +52,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.data.AppLocale
 import com.nx.android.data.Drivers
 import com.nx.android.data.GameIcon
 import com.nx.android.data.GameLog
@@ -78,13 +81,15 @@ import com.nx.android.domain.GameStatus
 import com.nx.android.domain.PackEnv
 import com.nx.android.domain.Ported
 import com.nx.android.ui.AppActions
-import com.nx.android.ui.components.PickerMode
-import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
+import com.nx.android.ui.components.PickerMode
+import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
+import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -119,10 +124,11 @@ private fun statusColor(s: GameStatus) = when (s) {
     GameStatus.DONE -> NxPalette.Ready
 }
 
+@Composable
 private fun statusLabel(s: GameStatus): String = when (s) {
-    GameStatus.NOT_PORTED -> "未移植"
-    GameStatus.PORTING -> "移植中"
-    GameStatus.DONE -> "已完成"
+    GameStatus.NOT_PORTED -> stringResource(R.string.common_not_ported)
+    GameStatus.PORTING -> stringResource(R.string.common_porting)
+    GameStatus.DONE -> stringResource(R.string.common_done)
 }
 
 /** The cover's two colors, picked by the name so one game always wears the same coat */
@@ -152,6 +158,7 @@ private fun rememberGameIcon(path: String?, maxSize: Int): androidx.compose.runt
 private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
                     visible: List<File>, actions: AppActions, onGoBuilds: () -> Unit,
                     onRequest: (PickerRequest) -> Unit) {
+    val locale = LocalAppLocale.current
     val sel = visible.getOrNull(lib.heroIndex)
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
@@ -161,16 +168,16 @@ private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
             if (lib.folder.isBlank() && lib.extras.isEmpty()) {
                 EmptyLibrary(onPick = {
                 onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(lib.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                    File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
                     onPicked = { dir -> lib.chooseFolder(dir.path) }))
             })
             } else {
-                Section("没有游戏") {
-                    Text("这个文件夹里没有游戏文件（NSP / XCI / NSZ / XCZ）。", style = MaterialTheme.typography.bodyMedium)
+                Section(stringResource(R.string.lib_no_games)) {
+                    Text(stringResource(R.string.lib_no_games_hint), style = MaterialTheme.typography.bodyMedium)
                     Row {
-                        QuietButton("换个文件夹", onClick = {
+                        QuietButton(stringResource(R.string.lib_other_folder), onClick = {
                             onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                                File(lib.folder.ifBlank { "/storage" }), "选择游戏文件夹",
+                                File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
                                 onPicked = { dir -> lib.chooseFolder(dir.path) }))
                         })
                     }
@@ -332,7 +339,7 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                      tint = if (locked) NxPalette.Background else Color.Black)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    when { building -> "查看构建"; running -> "运行"; else -> "构建" },
+                    when { building -> stringResource(R.string.lib_view_builds); running -> stringResource(R.string.set_run_onboarding); else -> stringResource(R.string.common_build) },
                     style = MaterialTheme.typography.titleMedium,
                     color = if (locked) NxPalette.Background else Color.Black,
                 )
@@ -342,25 +349,25 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                 Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.2f))
                     .clickable { lib.selected = f }.padding(11.dp),
             ) {
-                Icon(Icons.Filled.Tune, if (running) "运行配置" else "移植配置", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onBackground)
+                Icon(Icons.Filled.Tune, if (running) stringResource(R.string.lib_run_config) else stringResource(R.string.lib_port_config), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onBackground)
             }
         }
         if (locked) {
             Spacer(Modifier.height(6.dp))
-            Text("先退出当前游戏（${player.name}）再运行这个", style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.lib_close_current_game, player.name), style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (status == GameStatus.DONE && player.running && player.titleId == (ported?.titleId ?: "")) {
             // 这个游戏正在玩：回到游戏与退出直达
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QuietButton("回到游戏", onClick = { actions.onResumeGame() })
-                QuietButton("退出游戏", onClick = { actions.onStopGame() })
+                QuietButton(stringResource(R.string.drawer_back_to_game), onClick = { actions.onResumeGame() })
+                QuietButton(stringResource(R.string.drawer_exit), onClick = { actions.onStopGame() })
             }
         }
         if (status == GameStatus.DONE && player.exited) {
             Spacer(Modifier.height(6.dp))
-            Text("游戏已退出", style = MaterialTheme.typography.bodySmall, color = NxPalette.Building)
+            Text(stringResource(R.string.lib_game_exited), style = MaterialTheme.typography.bodySmall, color = NxPalette.Building)
         }
     }
 }
@@ -369,10 +376,10 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
 
 @Composable
 private fun EmptyLibrary(onPick: () -> Unit) {
-    Section("游戏库是空的") {
-        Text("选一个放游戏文件的文件夹（NSP / XCI / NSZ / XCZ），子目录也会被扫到。",
+    Section(stringResource(R.string.lib_empty_title)) {
+        Text(stringResource(R.string.lib_empty_hint),
              style = MaterialTheme.typography.bodyMedium)
-        Row { CapsuleButton("选择游戏文件夹", onPick) }
+        Row { CapsuleButton(stringResource(R.string.app_choose_game_folder), onPick) }
     }
 }
 
@@ -386,6 +393,7 @@ private fun EmptyLibrary(onPick: () -> Unit) {
 internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
                         f: File, actions: AppActions, onGoBuilds: () -> Unit,
                         onRequest: (PickerRequest) -> Unit, onClose: () -> Unit) {
+    val locale = LocalAppLocale.current
     BackHandler { onClose() }
     val status = lib.statusOf(f)
     // Title ID：文件名里的优先，没有就用数据包清单里的
@@ -400,7 +408,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
 
     /** 游戏运行日志：宿主把它写在了数据包里，拷进下载目录再发出去（整份文件，不截断） */
     fun shareGameLog(target: Ported) {
-        if (!actions.storageOk()) { actions.onToast("需要存储权限：日志要写进下载目录"); return }
+        if (!actions.storageOk()) { actions.onToast(locale.str(R.string.lib_log_needs_storage)); return }
         val game = FolderScanner.displayName(f)
         scope.launch {
             val r = withContext(Dispatchers.IO) {
@@ -408,18 +416,18 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
             }
             r.onSuccess { copied ->
                 if (copied == null) {
-                    actions.onToast("这个游戏还没有运行日志")
+                    actions.onToast(locale.str(R.string.lib_no_runtime_log))
                 } else {
                     runCatching {
                         context.startActivity(
-                            Intent.createChooser(SaveShare.textIntent(context, copied), "分享日志"))
+                            Intent.createChooser(SaveShare.textIntent(context, copied), locale.str(R.string.main_share_log)))
                     }.onFailure { e ->
-                        actions.onToast(if (e is ActivityNotFoundException) "没有可以接收的应用"
-                        else "分享失败：${e.message ?: "原因不明"}")
+                        actions.onToast(if (e is ActivityNotFoundException) locale.str(R.string.lib_no_receiver)
+                        else locale.str(R.string.lib_share_failed, failureText(locale, e)))
                     }
                 }
             }.onFailure {
-                actions.onToast("日志导出失败：${it.message ?: "原因不明"}")
+                actions.onToast(locale.str(R.string.lib_log_export_failed, failureText(locale, it)))
             }
         }
     }
@@ -463,7 +471,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                 // 已完成的游戏才有可管理的产物
                 if (status == GameStatus.DONE) {
                     Box {
-                        QuietButton("管理", onClick = { menuOpen = !menuOpen },
+                        QuietButton(locale.str(R.string.lib_manage), onClick = { menuOpen = !menuOpen },
                             modifier = Modifier.width(112.dp),
                             trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
                         androidx.compose.material3.DropdownMenu(
@@ -471,17 +479,17 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                             onDismissRequest = { menuOpen = false },
                         ) {
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("分享日志") },
+                                text = { Text(locale.str(R.string.main_share_log)) },
                                 leadingIcon = { Icon(Icons.Filled.Description, null, Modifier.size(18.dp)) },
                                 onClick = {
                                     menuOpen = false
                                     val p = ported
-                                    if (p == null) actions.onToast("产物不见了（输出目录里没找到）")
+                                    if (p == null) actions.onToast(locale.str(R.string.lib_artifact_missing))
                                     else shareGameLog(p)
                                 },
                             )
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("删除产物", color = NxPalette.Danger) },
+                                text = { Text(locale.str(R.string.lib_delete_artifact), color = NxPalette.Danger) },
                                 leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = NxPalette.Danger) },
                                 onClick = { menuOpen = false; confirmDelete = true },
                             )
@@ -496,9 +504,9 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
 
             when {
                 status == GameStatus.PORTING -> {
-                    Hint("正在移植中——去构建页看进度，或点下面的「查看构建」")
+                    Hint(locale.str(R.string.lib_porting_see_builds))
                     Spacer(Modifier.height(6.dp))
-                    CapsuleButton("查看构建", {
+                    CapsuleButton(locale.str(R.string.lib_view_builds), {
                         lib.buildsTarget = f
                         onClose()
                         onGoBuilds()
@@ -506,9 +514,9 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                 }
                 status == GameStatus.DONE -> {
                     if (ported == null) {
-                        Hint("产物不见了（输出目录里没找到）——状态回落为未移植")
+                        Hint(locale.str(R.string.lib_artifact_missing_state))
                     } else {
-                        Hint("产物：${ported.pack.absolutePath}", size = 11.sp)
+                        Hint(locale.str(R.string.builds_artifact_path, ported.pack.absolutePath), size = 11.sp)
                         Spacer(Modifier.height(8.dp))
                         RunOptions(ported)
                         Spacer(Modifier.height(10.dp))
@@ -517,17 +525,17 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         val playing = player.running && player.titleId == ported.titleId
                         if (playing) {
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                CapsuleButton("回到游戏", { actions.onResumeGame() }, modifier = Modifier.weight(1f))
-                                CapsuleButton("退出游戏", { actions.onStopGame() }, modifier = Modifier.weight(1f))
+                                CapsuleButton(locale.str(R.string.drawer_back_to_game), { actions.onResumeGame() }, modifier = Modifier.weight(1f))
+                                CapsuleButton(locale.str(R.string.drawer_exit), { actions.onStopGame() }, modifier = Modifier.weight(1f))
                             }
                         } else {
                             val locked = player.running
-                            if (locked) Hint("先退出当前游戏（${player.name}）再运行这个")
+                            if (locked) Hint(locale.str(R.string.lib_close_current_game, player.name))
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                CapsuleButton("▶ 运行", {
+                                CapsuleButton(locale.str(R.string.builds_run_action), {
                                     actions.onRun(ported.pack, FolderScanner.displayName(f))
                                 }, modifier = Modifier.weight(1f), enabled = !locked)
-                                CapsuleButton("▶ 构建", {
+                                CapsuleButton(locale.str(R.string.lib_build_action), {
                                     lib.buildsTarget = f
                                     onClose()
                                     onGoBuilds()
@@ -538,7 +546,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                 }
                 else -> {
                     // ▶ 构建：参数已即时保存，带参跳转，开始按钮在构建页上
-                    CapsuleButton("▶ 构建", {
+                    CapsuleButton(locale.str(R.string.lib_build_action), {
                         lib.buildsTarget = f
                         onClose()
                         onGoBuilds()
@@ -551,17 +559,17 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     if (confirmDelete) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("删除产物？") },
-            text = { Text("会删除整个数据包（宿主、图标，存档在数据包里，会一并消失），不可恢复。游戏源文件不受影响。") },
+            title = { Text(locale.str(R.string.lib_delete_artifact_confirm)) },
+            text = { Text(locale.str(R.string.lib_delete_artifact_what)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     confirmDelete = false
                     val gone = lib.deleteOutcome(f)
-                    actions.onToast(if (gone) "产物已删除" else "删除失败：文件可能正被占用")
-                }) { Text("删除", color = NxPalette.Danger) }
+                    actions.onToast(if (gone) locale.str(R.string.lib_artifact_deleted) else locale.str(R.string.lib_delete_failed_busy))
+                }) { Text(locale.str(R.string.common_delete), color = NxPalette.Danger) }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { Text(locale.str(R.string.common_cancel)) }
             },
         )
     }
@@ -579,13 +587,16 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
     val installed = remember { Drivers.list(context) }
     var current by remember { mutableStateOf(PackEnv.current(ported.pack)) }
 
-    PickRow("语言", langs.map { it.first to it.second }, current.first,
+    PickRow(stringResource(R.string.lib_section_language), langs.map { it.first to it.second }, current.first,
         onSelect = { code ->
             PackEnv.set(ported.pack, code, current.second)
             current = PackEnv.current(ported.pack)
         })
-    PickRow("Vulkan 驱动",
-        PackEnv.driverChoices(ported.pack, installed.map { it.library.absolutePath to it.label }), current.second,
+    // 设备自己的驱动在 domain 层没有名字：这里用 App 自己的词给它起一个
+    val systemDriver = stringResource(R.string.driver_system_default)
+    PickRow(stringResource(R.string.driver_section),
+        PackEnv.driverChoices(ported.pack, installed.map { it.library.absolutePath to it.label })
+            .map { (value, name) -> value to (name ?: systemDriver) }, current.second,
         onSelect = { value ->
             PackEnv.set(ported.pack, current.first, value.takeIf { it.isNotEmpty() })
             current = PackEnv.current(ported.pack)
@@ -601,6 +612,7 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
 @Composable
 private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, actions: AppActions,
                      onRequest: (PickerRequest) -> Unit, onToast: (String) -> Unit) {
+    val locale = LocalAppLocale.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val titleId = ported.titleId
@@ -634,29 +646,29 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
     fun gameRunning(): Boolean = player.running || Player.playProcessAlive(context)
 
     fun sharePackage(file: File) {
-        runCatching { context.startActivity(Intent.createChooser(SaveShare.intent(context, file), "分享存档")) }
-            .onFailure { onToast("没有可以接收的应用") }
+        runCatching { context.startActivity(Intent.createChooser(SaveShare.intent(context, file), locale.str(R.string.lib_share_saves))) }
+            .onFailure { onToast(locale.str(R.string.lib_no_receiver)) }
     }
 
     fun doExport() {
         if (gameRunning()) { askClose = true; return }
-        if (!actions.storageOk()) { onToast("需要存储权限：包要写进下载目录"); return }
+        if (!actions.storageOk()) { onToast(locale.str(R.string.lib_saves_need_storage)); return }
         busy = true
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val name = SaveBackup.packageName(gameName, titleId, stamp())
                     SaveBackup.export(live, liveDevice, File(packagesDir, name))
-                        ?: error("这个游戏还没有存档")
+                        ?: error(locale.str(R.string.lib_no_saves))
                 }
             }
             busy = false
             reload++
             r.onSuccess {
-                note = "已导出到 ${it.parentFile?.absolutePath}"
+                note = locale.str(R.string.lib_exported_to, it.parentFile?.absolutePath)
                 onToast(note)
             }.onFailure {
-                note = "导出失败：${it.message ?: "原因不明"}"
+                note = locale.str(R.string.lib_export_failed, failureText(locale, it))
                 onToast(note)
             }
         }
@@ -680,10 +692,10 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
             busy = false
             reload++
             r.onSuccess {
-                note = if (it != null) "已导入：换掉的进度留作 $it" else "已导入"
+                note = if (it != null) locale.str(R.string.lib_imported_backup, it) else locale.str(R.string.lib_imported)
                 onToast(note)
             }.onFailure {
-                note = "导入失败：${it.message ?: "原因不明"}"
+                note = locale.str(R.string.lib_import_failed, failureText(locale, it))
                 onToast(note)
             }
         }
@@ -704,10 +716,10 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
             busy = false
             reload++
             r.onSuccess {
-                note = if (it != null) "已恢复到这份备份：换掉的进度留作 $it" else "已恢复到这份备份"
+                note = if (it != null) locale.str(R.string.lib_restored_backup, it) else locale.str(R.string.lib_restored)
                 onToast(note)
             }.onFailure {
-                note = "恢复失败：${it.message ?: "原因不明"}"
+                note = locale.str(R.string.lib_restore_failed, failureText(locale, it))
                 onToast(note)
             }
         }
@@ -727,19 +739,19 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
             }
             busy = false
             reload++
-            r.onSuccess { sharePackage(it) }.onFailure { onToast("打包失败：${it.message ?: "原因不明"}") }
+            r.onSuccess { sharePackage(it) }.onFailure { onToast(locale.str(R.string.lib_package_failed, failureText(locale, it))) }
         }
     }
 
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    Text("存档", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Text(locale.str(R.string.lib_section_saves), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        QuietButton("导出存档", onClick = { doExport() }, modifier = Modifier.weight(1f), enabled = !busy)
-        QuietButton("导入存档…", onClick = {
-            onRequest(PickerRequest(PickerMode.FILE, setOf(SaveBackup.EXT), packagesDir, "选择存档包", onPicked = { pkg ->
+        QuietButton(locale.str(R.string.lib_export_saves), onClick = { doExport() }, modifier = Modifier.weight(1f), enabled = !busy)
+        QuietButton(locale.str(R.string.lib_import_saves), onClick = {
+            onRequest(PickerRequest(PickerMode.FILE, setOf(SaveBackup.EXT), packagesDir, locale.str(R.string.lib_choose_save_package), onPicked = { pkg ->
                 val id = SaveBackup.titleIdIn(pkg.name)
                 if (id != null && !id.equals(titleId, ignoreCase = true)) {
-                    note = "这是别的游戏的存档（$id），没有导入"
+                    note = locale.str(R.string.lib_other_games_save, id)
                     onToast(note)
                 } else {
                     pendingImport = pkg
@@ -747,35 +759,35 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
             }))
         }, modifier = Modifier.weight(1f), enabled = !busy)
     }
-    Hint("导出的包在 ${packagesDir.absolutePath}，可以直接发给别人；导入从任何地方选一个 zip。", size = 11.sp)
+    Hint(locale.str(R.string.lib_packages_where, packagesDir.absolutePath), size = 11.sp)
     if (note.isNotEmpty()) Hint(note, size = 11.sp)
 
     if (packages.isNotEmpty()) {
         Spacer(Modifier.height(4.dp))
-        Text("存档包", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Text(locale.str(R.string.lib_section_packages), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         for (p in packages) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("${p.name}  ·  ${sizeText(p.length())}",
                      style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
                      maxLines = 1, overflow = TextOverflow.Ellipsis)
-                QuietButton("分享", onClick = { sharePackage(p) }, enabled = !busy)
-                QuietButton("删除", onClick = { pendingDelete = p }, enabled = !busy)
+                QuietButton(locale.str(R.string.common_share), onClick = { sharePackage(p) }, enabled = !busy)
+                QuietButton(locale.str(R.string.common_delete), onClick = { pendingDelete = p }, enabled = !busy)
             }
         }
     }
 
     if (backups.isNotEmpty()) {
         Spacer(Modifier.height(4.dp))
-        Text("备份", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Text(locale.str(R.string.lib_section_backups), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         for (b in backups) {
             val dev = File(b.parentFile, b.name + ".device")
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text("${b.name}  ·  ${sizeText(treeSize(b) + if (dev.isDirectory) treeSize(dev) else 0)}",
                      style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
                      maxLines = 1, overflow = TextOverflow.Ellipsis)
-                QuietButton("恢复", onClick = { pendingRestore = b }, enabled = !busy)
-                QuietButton("分享", onClick = { shareBackup(b) }, enabled = !busy)
-                QuietButton("删除", onClick = { pendingDelete = b }, enabled = !busy)
+                QuietButton(locale.str(R.string.common_restore), onClick = { pendingRestore = b }, enabled = !busy)
+                QuietButton(locale.str(R.string.common_share), onClick = { shareBackup(b) }, enabled = !busy)
+                QuietButton(locale.str(R.string.common_delete), onClick = { pendingDelete = b }, enabled = !busy)
             }
         }
     }
@@ -784,53 +796,53 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
     if (askClose) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { askClose = false },
-            title = { Text("游戏还在运行") },
-            text = { Text("游戏运行的时候会往存档里写东西。退出游戏之后才能导出或导入存档。") },
+            title = { Text(locale.str(R.string.lib_game_running)) },
+            text = { Text(locale.str(R.string.lib_game_running_hint)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     askClose = false
                     actions.onStopGame()
-                }) { Text("退出游戏", color = NxPalette.Building) }
+                }) { Text(locale.str(R.string.drawer_exit), color = NxPalette.Building) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { askClose = false }) { Text("取消") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askClose = false }) { Text(locale.str(R.string.common_cancel)) } },
         )
     }
 
     pendingImport?.let { pkg ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { pendingImport = null },
-            title = { Text("导入这份存档？") },
-            text = { Text("${pkg.name}\n\n换进去之后，现在的进度会先留作一份备份。") },
+            title = { Text(locale.str(R.string.lib_import_confirm)) },
+            text = { Text(locale.str(R.string.lib_import_confirm_body, pkg.name)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     pendingImport = null
                     doImport(pkg)
-                }) { Text("导入", color = NxPalette.Building) }
+                }) { Text(locale.str(R.string.common_import), color = NxPalette.Building) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingImport = null }) { Text("取消") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingImport = null }) { Text(locale.str(R.string.common_cancel)) } },
         )
     }
 
     pendingRestore?.let { backup ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { pendingRestore = null },
-            title = { Text("恢复这份备份？") },
-            text = { Text("${backup.name}\n\n现在的进度会先留作一份备份。") },
+            title = { Text(locale.str(R.string.lib_restore_confirm)) },
+            text = { Text(locale.str(R.string.lib_restore_confirm_body, backup.name)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     pendingRestore = null
                     doRestore(backup)
-                }) { Text("恢复", color = NxPalette.Building) }
+                }) { Text(locale.str(R.string.common_restore), color = NxPalette.Building) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingRestore = null }) { Text("取消") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingRestore = null }) { Text(locale.str(R.string.common_cancel)) } },
         )
     }
 
     pendingDelete?.let { file ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除？") },
-            text = { Text("${file.name}\n\n删掉就找不回来了（游戏的进度不受影响）。") },
+            title = { Text(locale.str(R.string.lib_delete_confirm)) },
+            text = { Text(locale.str(R.string.lib_delete_confirm_body, file.name)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     pendingDelete = null
@@ -839,10 +851,10 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
                     val gone = if (file.isDirectory) file.deleteRecursively() else file.delete()
                     if (dev.isDirectory) dev.deleteRecursively()
                     reload++
-                    onToast(if (gone) "已删除 ${file.name}" else "删除失败")
-                }) { Text("删除", color = NxPalette.Danger) }
+                    onToast(if (gone) locale.str(R.string.lib_deleted, file.name) else locale.str(R.string.lib_delete_failed))
+                }) { Text(locale.str(R.string.common_delete), color = NxPalette.Danger) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text(locale.str(R.string.common_cancel)) } },
         )
     }
 }
@@ -869,7 +881,7 @@ private fun PickRow(label: String, options: List<Pair<String, String>>, current:
     // 现在的值不在选项里（驱动被删了、包里的文件没了）：显示它最后的名字，别把整条路径摊出来
     val shown = options.firstOrNull { it.first == current }?.second
         ?: current?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
-        ?: "系统默认"
+        ?: stringResource(R.string.driver_system_default)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
         Box {

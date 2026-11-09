@@ -3,6 +3,8 @@ package com.nx.android.appstate
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.nx.android.R
+import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PrefsStore.Companion.PORT_HISTORY
@@ -17,7 +19,7 @@ import org.json.JSONObject
  * thread; Compose's snapshot state takes writes from any thread. One instance lives in the AppContainer — the
  * service and the UI share it.
  */
-class PortState(private val prefs: PrefsStore) {
+class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
 
     enum class Phase { IDLE, RUNNING, DONE, FAILED, CANCELLED, INTERRUPTED }
 
@@ -65,7 +67,7 @@ class PortState(private val prefs: PrefsStore) {
         log = listOf()
         startedAt = System.currentTimeMillis()
         prefs.put(PORT_RUNNING, game)
-        say("移植开始：$game")
+        say(locale.str(R.string.port_begin, game))
     }
 
     /** One line of the porter's output: an event moves the state, plain text goes into the log */
@@ -77,7 +79,7 @@ class PortState(private val prefs: PrefsStore) {
             "stage" -> {
                 stageOf = ev.stage; stages = ev.stages
                 stageName = ev.name; stageStep = ""
-                say("▶ 阶段 ${ev.stage}/${ev.stages}：${ev.name}")
+                say(locale.str(R.string.port_log_stage, ev.stage, ev.stages, ev.name))
             }
             "progress" -> {
                 if (ev.frac >= 0) progress = ev.frac
@@ -126,10 +128,10 @@ class PortState(private val prefs: PrefsStore) {
         }
         say(
             when (p) {
-                Phase.DONE -> "完成：$outPath"
-                Phase.FAILED -> "移植结束（没有产物）：看看日志"
-                Phase.CANCELLED -> "已取消"
-                Phase.INTERRUPTED -> "移植被系统中断：$game（可以重新发起）"
+                Phase.DONE -> locale.str(R.string.port_done_path, outPath)
+                Phase.FAILED -> locale.str(R.string.port_failed_no_artifact)
+                Phase.CANCELLED -> locale.str(R.string.common_cancelled)
+                Phase.INTERRUPTED -> locale.str(R.string.port_interrupted, game)
                 else -> return
             }
         )

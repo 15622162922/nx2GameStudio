@@ -2,6 +2,7 @@ package com.nx.android.data
 
 import android.content.Context
 import android.os.Environment
+import com.nx.android.R
 import java.io.File
 
 /**
@@ -14,16 +15,16 @@ import java.io.File
 object StorageVolumes {
 
     /** 卷名 → 卷根目录（内部存储在前） */
-    fun list(ctx: Context): List<Pair<String, File>> {
+    fun list(ctx: Context, locale: AppLocale): List<Pair<String, File>> {
         val out = mutableListOf<Pair<String, File>>()
         val internal = Environment.getExternalStorageDirectory()
-        if (internal.isDirectory) out += "内部存储" to internal
+        if (internal.isDirectory) out += locale.str(R.string.storage_internal) to internal
         for (dir in ctx.getExternalFilesDirs(null)) {
             val path = dir?.path ?: continue
             if (!path.startsWith("/storage/")) continue
             val root = path.substringBefore("/Android/data")
             if (root == internal.path || out.any { it.second.path == root }) continue
-            if (File(root).isDirectory) out += "SD 卡（${root.substringAfterLast('/')}）" to File(root)
+            if (File(root).isDirectory) out += locale.str(R.string.storage_sd_card, root.substringAfterLast('/')) to File(root)
         }
         return out
     }
