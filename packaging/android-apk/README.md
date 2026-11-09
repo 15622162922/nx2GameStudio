@@ -5,7 +5,7 @@ device itself. The app is a shell — the environment (the Linux rootfs, the bui
 unpacked on the first start, and the porter runs inside it; the screen is Android's own.
 
 ```
-┌─ the app (ro.cobrabm.nx2android) ──────────────────────────────┐
+┌─ the app (com.nx.android) ─────────────────────────────────────┐
 │  Setup: prod.keys, output folder          Port: game file       │
 │  [准备环境] [下载 .NET SDK]                [开始移植]            │
 │  the log: the porter's own output                             │
