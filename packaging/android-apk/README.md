@@ -58,8 +58,9 @@ the Python of the rootfs is started through the loader directly and needs no rew
 - **Installs the APK** with the system installer (the app hands it over; Android asks the user).
 - **Copies the data pack** into the game's own folder (`/sdcard/Android/data/<package>/files`), where the game reads it.
 - **No adb**: Google ships platform-tools for Linux as x86-64 only, so they cannot run on an ARM64 phone. The tool
-  cannot install on a device by itself, and the games whose port needs the device (the ones with Oodle-compressed
-  shaders, Pokémon Legends) cannot be ported on the phone.
+  cannot install on a device by itself. The games whose shaders sit in Oodle-compressed archives (Pokémon Legends) are
+  ported on the phone all the same: the phone is the ARM64 machine that runs the game's own decoder, so the port decodes
+  them here, with no adb and no second device.
 - **The .NET SDK is in the APK** (221 MB, unpacked about 800 MB): the app unpacks it on the first start, so the
   first run needs no network. Build it with `--no-dotnet` to leave it out: the Setup screen then downloads it
   (the porter's own path, checked against Microsoft's SHA-512).

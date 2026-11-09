@@ -31,7 +31,7 @@ Tested on a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
 
 The app on the phone also looks for a newer release: when it starts, it checks the release page quietly, and if there is a newer version it says so on the home page. The **Settings** tab has a **Check for updates** entry that checks again on demand. The app downloads nothing by itself — the notice leads to the release page, where the APK is.
 
-Pokémon Legends: Arceus and Pokémon Legends: Z-A need the device during the port: their shaders are in Oodle-compressed archives, which the port decodes with the game's own decoder on the device. Have platform-tools (adb) from step 2, and plug in the device with USB debugging on before you click **Port**.
+Pokémon Legends: Arceus and Pokémon Legends: Z-A keep their shaders in Oodle-compressed archives, which only the game's own decoder can open. On the phone the port decodes them here — the phone is the ARM64 machine that runs the game's own code — so nothing else is needed. On the desktop tool the same decode runs on a device you plug in: have platform-tools (adb) from step 2, and connect the device with USB debugging on before you click **Port**.
 
 A game played by touch: tick **Touch game** on the Port tab (`--touch`). The on-screen gamepad then starts hidden and every touch but one on the menu button goes to the game; the pause menu shows the gamepad again.
 
