@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -68,7 +67,6 @@ import com.nx.android.domain.GameConfig
 import com.nx.android.ui.builds.BuildsScreen
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.FilePickerScreen
-import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.library.ConfigPanel
@@ -212,23 +210,16 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
     Box(Modifier.fillMaxSize()) {
         HeroBackground(lib, port, lib.visible().getOrNull(lib.heroIndex))
         Column(Modifier.fillMaxSize()) {
-        // 文件选择器的标题：回调里不能取词，先在外面取好
-        val chooseFolder = stringResource(R.string.app_choose_game_folder)
         TopBar(
             selected = tab,
             onSelect = { tab = it.ordinal },
-            onAddGameFolder = {
-                onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(lib.folder.ifBlank { "/storage" }), chooseFolder,
-                    onPicked = { dir -> lib.chooseFolder(dir.path) }))
-            },
             onRefresh = { lib.rescan() },
         )
         // 有新版本时的提示条：在顶栏下面、内容上面，不挡事，可以关掉
         UpdateBanner(container.update)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
+                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
                 Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, container.drivers, container.update, actions,
                     onRequest, onDrivers, onLog)
@@ -255,7 +246,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
 
 /** 一行式顶栏：品牌 + 三个纯文字 tab（选中亮/未选灰）+ 右侧图标与时钟（capyps5 的骨架，我们的颜色） */
 @Composable
-private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onAddGameFolder: () -> Unit, onRefresh: () -> Unit) {
+private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit) {
     val time by produceState(initialValue = "") {
         val format = SimpleDateFormat("HH:mm", Locale.getDefault())
         while (true) {
@@ -287,7 +278,6 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onAddGameFolder: () -
             )
         }
         Spacer(Modifier.weight(1f))
-        TopIcon(Icons.Filled.Add, stringResource(R.string.app_add_game_folder), onAddGameFolder)
         TopIcon(Icons.Filled.Refresh, stringResource(R.string.app_refresh_library), onRefresh)
         Text(time, style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))

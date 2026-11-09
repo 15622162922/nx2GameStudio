@@ -3,30 +3,10 @@ package com.nx.android.domain
 import java.io.File
 
 /**
- * The game files of a folder, and what the output folder says about them. Free of Android, so the tests run on
- * the JVM.
+ * What the game files and the finished data packs say about a game: its title ID, its display name, the
+ * pack it was ported into. Free of Android, so the tests run on the JVM.
  */
 object FolderScanner {
-
-    val GAME_EXTS = listOf(".nsp", ".xci", ".nsz", ".xcz")
-
-    fun isGameFile(f: File): Boolean = f.isFile && GAME_EXTS.any { f.name.lowercase().endsWith(it) }
-
-    /** Every game file of the folder and its subfolders, by name */
-    fun scan(folder: File): List<File> {
-        if (!folder.isDirectory) return emptyList()
-        val out = ArrayList<File>()
-        walk(folder, out, 0)
-        return out.sortedBy { it.name.lowercase() }
-    }
-
-    private fun walk(dir: File, out: MutableList<File>, depth: Int) {
-        if (depth > 8) return
-        for (f in dir.listFiles() ?: return) {
-            if (f.isHidden) continue
-            if (isGameFile(f)) out.add(f) else if (f.isDirectory) walk(f, out, depth + 1)
-        }
-    }
 
     /** A title ID in a file's name: `Zelda [0100000000010000][v0].nsp` → 0100000000010000 */
     fun titleIdIn(name: String): String? =

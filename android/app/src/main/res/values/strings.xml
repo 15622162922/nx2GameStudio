@@ -7,8 +7,6 @@
     <string name="app_storage_permission_needed">Storage permission needed</string>
     <string name="app_storage_permission_picker">The built-in file manager needs the \"All files access\" permission to list game files.</string>
     <string name="app_grant_permission">Grant access</string>
-    <string name="app_choose_game_folder">Choose a game folder</string>
-    <string name="app_add_game_folder">Add a game folder</string>
     <string name="app_refresh_library">Refresh the library</string>
     <string name="app_stage_and_time">Stage %1$s/%2$s %3$s min %4$s s</string>
     <string name="common_cancel">Cancel</string>
@@ -66,7 +64,6 @@
     <string name="onb_later">Later</string>
     <string name="onb_welcome">Welcome to %1$s</string>
     <string name="onb_prepare_env">Prepare the environment</string>
-    <string name="onb_game_folder">Game folder</string>
     <string name="onb_all_ready">Everything is ready</string>
     <string name="onb_waiting_env">Waiting for the environment…</string>
     <string name="onb_waiting_check">Waiting for the check…</string>
@@ -94,14 +91,9 @@
     <string name="onb_keys_common_places">The picker opens where the keys usually are (/sdcard/switch/) - pick your own prod.keys there</string>
     <string name="onb_keys_unreadable">Cannot read this file: %1$s</string>
     <string name="onb_skip_keys">Skip for now (you will be asked again when a port starts)</string>
-    <string name="onb_no_folder">No folder picked yet</string>
-    <string name="onb_choose_folder">Choose a folder</string>
-    <string name="onb_no_games_found">No game files here (NSP / XCI / NSZ / XCZ) - you can go on; the folder can be changed any time in the library</string>
-    <string name="onb_games_found">%1$s game files found; the updates and the DLC next to them are taken along by the port</string>
-    <string name="onb_and_more">…and %1$s more</string>
     <string name="onb_done">Done</string>
-    <string name="onb_done_text">The environment is ready, the keys are checked and the games are found.</string>
-    <string name="onb_done_next">Pick a game in the library to start a port. It runs in the background and the game is playable when it is done.</string>
+    <string name="onb_done_text">The environment is ready and the keys are checked.</string>
+    <string name="onb_done_next">Pick a game file on the build page to start a port. It runs in the background and the game is playable when it is done.</string>
     <string name="onb_skipped_steps">A step you skipped is no trouble: the settings can fill it in any time and the library will say what is missing</string>
     <string name="env_section">Environment</string>
     <string name="env_ready">The environment is ready</string>
@@ -241,10 +233,7 @@
     <string name="lib_port_config">Port configuration</string>
     <string name="lib_close_current_game">Close the game that is running (%1$s) before running this one</string>
     <string name="lib_empty_title">The library is empty</string>
-    <string name="lib_empty_hint">Pick a folder with game files (NSP / XCI / NSZ / XCZ); its subfolders are scanned too.</string>
-    <string name="lib_no_games">No games</string>
-    <string name="lib_no_games_hint">This folder holds no game files (NSP / XCI / NSZ / XCZ).</string>
-    <string name="lib_other_folder">Another folder</string>
+    <string name="lib_empty_hint">Go to the build page and pick a game file (NSP / XCI / NSZ / XCZ); it shows up here right away.</string>
     <string name="lib_view_builds">See the build</string>
     <string name="lib_log_needs_storage">Storage permission needed: the log is written to the download folder</string>
     <string name="lib_no_runtime_log">This game has no runtime log yet</string>

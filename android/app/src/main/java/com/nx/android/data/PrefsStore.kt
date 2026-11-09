@@ -27,7 +27,6 @@ class PrefsStore(ctx: Context) {
         // the app's own language: "" follows the phone, "zh" and "en" are the player's own choice
         const val LANG = "lang"
         // the library's memory
-        const val LIB_FOLDER = "lib.folder"
         const val LIB_CONFIGS = "lib.configs"
         const val LIB_PORTS = "lib.ports"
         const val LIB_EXTRA = "lib.extra"
@@ -35,7 +34,6 @@ class PrefsStore(ctx: Context) {
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"
         const val OB_COMPLETED = "ob.completed"
-        const val OB_FOLDER = "ob.folder"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
         const val PORT_HISTORY = "port.history"

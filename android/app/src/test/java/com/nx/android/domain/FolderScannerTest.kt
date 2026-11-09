@@ -7,31 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** The library's ground truth: which files are games, which APK is whose, which status a card wears */
+/** The library's ground truth: the title id in a game's name, the data packs of the output folder, its display name */
 class FolderScannerTest {
 
     private fun tmpDir(): File = File.createTempFile("nx2a-scan", "").let { f ->
         f.delete(); f.mkdirs(); f
-    }
-
-    @Test
-    fun `scanning finds the game files of the folder and its subfolders, by name`() {
-        val d = tmpDir()
-        File(d, "Zelda [0100000000010000][v0].nsp").writeText("")
-        File(d, "Hades II.xci").writeText("")
-        File(d, "DLC").mkdirs()
-        File(d, "DLC/pack.nsz").writeText("")
-        File(d, "notes.txt").writeText("")
-        File(d, ".hidden.xci").writeText("")
-        val found = FolderScanner.scan(d)
-        assertEquals(listOf("Hades II.xci", "pack.nsz", "Zelda [0100000000010000][v0].nsp"),
-                     found.map { it.name })
-        d.deleteRecursively()
-    }
-
-    @Test
-    fun `a missing folder scans as empty`() {
-        assertEquals(0, FolderScanner.scan(File("/no/such/folder")).size)
     }
 
     @Test

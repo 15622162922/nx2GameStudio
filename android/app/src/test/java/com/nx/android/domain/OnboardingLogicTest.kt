@@ -14,11 +14,10 @@ class OnboardingLogicTest {
         env: Boolean = true,
         keysOk: Boolean = true,
         keysSkipped: Boolean = false,
-        folder: Boolean = true,
     ) = ObFacts(
         storageOk = storage, freeGB = free, neededGB = 2,
         envReady = env, keysPath = if (keysOk) "/sdcard/switch/prod.keys" else "",
-        keysOk = keysOk, keysSkipped = keysSkipped, folderSet = folder,
+        keysOk = keysOk, keysSkipped = keysSkipped,
     )
 
     // ---- the gates ---------------------------------------------------------------------------------------------
@@ -44,9 +43,7 @@ class OnboardingLogicTest {
     }
 
     @Test
-    fun `games need a folder, done never advances by its gate`() {
-        assertTrue(OnboardingLogic.canAdvance(ObStep.GAMES, facts(folder = true)))
-        assertFalse(OnboardingLogic.canAdvance(ObStep.GAMES, facts(folder = false)))
+    fun `done never advances by its gate`() {
         assertFalse(OnboardingLogic.canAdvance(ObStep.DONE, facts()))
     }
 
@@ -56,7 +53,7 @@ class OnboardingLogicTest {
     fun `the last step's action is always available`() {
         // the way into the library: the player may always take it once they are there
         assertTrue(OnboardingLogic.canAct(ObStep.DONE, facts()))
-        assertTrue(OnboardingLogic.canAct(ObStep.DONE, facts(storage = false, env = false, keysOk = false, folder = false)))
+        assertTrue(OnboardingLogic.canAct(ObStep.DONE, facts(storage = false, env = false, keysOk = false)))
         // the gate itself still says no: the last step has no next step
         assertFalse(OnboardingLogic.canAdvance(ObStep.DONE, facts()))
     }
@@ -71,7 +68,6 @@ class OnboardingLogicTest {
         assertTrue(OnboardingLogic.canAct(ObStep.ENV, facts(env = true)))
         assertFalse(OnboardingLogic.canAct(ObStep.WELCOME, facts(storage = false)))
         assertFalse(OnboardingLogic.canAct(ObStep.KEYS, facts(keysOk = false)))
-        assertFalse(OnboardingLogic.canAct(ObStep.GAMES, facts(folder = false)))
     }
 
     // ---- the revalidation of a saved step ----------------------------------------------------------------------
@@ -79,29 +75,29 @@ class OnboardingLogicTest {
     @Test
     fun `a saved step whose premises hold stays`() {
         assertEquals(ObStep.KEYS, OnboardingLogic.revalidate(ObStep.KEYS, facts()))
-        assertEquals(ObStep.GAMES, OnboardingLogic.revalidate(ObStep.GAMES, facts()))
+        assertEquals(ObStep.DONE, OnboardingLogic.revalidate(ObStep.DONE, facts()))
     }
 
     @Test
     fun `a taken-away permission lands on welcome`() {
-        assertEquals(ObStep.WELCOME, OnboardingLogic.revalidate(ObStep.GAMES, facts(storage = false)))
+        assertEquals(ObStep.WELCOME, OnboardingLogic.revalidate(ObStep.DONE, facts(storage = false)))
     }
 
     @Test
     fun `a lost environment pulls a later step back to env`() {
-        assertEquals(ObStep.ENV, OnboardingLogic.revalidate(ObStep.GAMES, facts(env = false)))
+        assertEquals(ObStep.ENV, OnboardingLogic.revalidate(ObStep.DONE, facts(env = false)))
         assertEquals(ObStep.ENV, OnboardingLogic.revalidate(ObStep.KEYS, facts(env = false)))
     }
 
     @Test
     fun `invalid keys pull a later step back to keys, a skip does not`() {
-        assertEquals(ObStep.KEYS, OnboardingLogic.revalidate(ObStep.GAMES, facts(keysOk = false)))
+        assertEquals(ObStep.KEYS, OnboardingLogic.revalidate(ObStep.DONE, facts(keysOk = false)))
         assertEquals(ObStep.DONE, OnboardingLogic.revalidate(ObStep.DONE, facts(keysOk = false, keysSkipped = true)))
     }
 
     @Test
     fun `the earliest failing step wins`() {
         // the permission and the environment are both gone: welcome, not env
-        assertEquals(ObStep.WELCOME, OnboardingLogic.revalidate(ObStep.GAMES, facts(storage = false, env = false)))
+        assertEquals(ObStep.WELCOME, OnboardingLogic.revalidate(ObStep.DONE, facts(storage = false, env = false)))
     }
 }

@@ -92,7 +92,7 @@ fun BuildsScreen(lib: LibraryState, port: PortState, keys: String, envReady: Boo
                 )
                 CapsuleButton(stringResource(R.string.builds_choose_game_file), onClick = {
                     onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
-                        File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.builds_choose_game_file),
+                        File("/storage"), locale.str(R.string.builds_choose_game_file),
                         onPicked = { f ->
                             lib.registerExtra(f)
                             lib.buildsTarget = f
@@ -126,7 +126,7 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
             }
             QuietButton(stringResource(R.string.builds_change), onClick = {
                 onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
-                    File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.builds_choose_game_file),
+                    File("/storage"), locale.str(R.string.builds_choose_game_file),
                     onPicked = { nf ->
                         lib.registerExtra(nf)
                         lib.buildsTarget = nf

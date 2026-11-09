@@ -1,7 +1,7 @@
 package com.nx.android.domain
 
 /** The guided setup's steps */
-enum class ObStep { WELCOME, ENV, KEYS, GAMES, DONE }
+enum class ObStep { WELCOME, ENV, KEYS, DONE }
 
 /** What the machine can do right now: the facts the gates read */
 data class ObFacts(
@@ -12,7 +12,6 @@ data class ObFacts(
     val keysPath: String,
     val keysOk: Boolean,
     val keysSkipped: Boolean,
-    val folderSet: Boolean,
 )
 
 /**
@@ -25,7 +24,6 @@ object OnboardingLogic {
         ObStep.WELCOME -> f.storageOk && f.freeGB >= f.neededGB
         ObStep.ENV -> f.envReady
         ObStep.KEYS -> f.keysOk || f.keysSkipped
-        ObStep.GAMES -> f.folderSet
         ObStep.DONE -> false
     }
 

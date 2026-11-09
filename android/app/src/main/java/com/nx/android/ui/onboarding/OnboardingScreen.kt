@@ -44,7 +44,6 @@ import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.theme.NxPalette
-import java.io.File
 
 /**
  * The guided setup, five steps: the permission and the space, the environment's unpack, the keys, the games'
@@ -97,7 +96,6 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
                     ObStep.WELCOME -> WelcomeStep(ob, actions)
                     ObStep.ENV -> EnvStep(ob)
                     ObStep.KEYS -> KeysStep(ob, actions, onRequest)
-                    ObStep.GAMES -> GamesStep(ob, actions, onRequest)
                     ObStep.DONE -> DoneStep()
                 }
             }
@@ -124,7 +122,6 @@ private fun stepTitle(s: ObStep): String = when (s) {
     ObStep.WELCOME -> stringResource(R.string.onb_welcome, stringResource(R.string.app_name))
     ObStep.ENV -> stringResource(R.string.onb_prepare_env)
     ObStep.KEYS -> "prod.keys"
-    ObStep.GAMES -> stringResource(R.string.onb_game_folder)
     ObStep.DONE -> stringResource(R.string.onb_all_ready)
 }
 
@@ -133,7 +130,6 @@ private fun primaryLabel(s: ObStep, can: Boolean): String = when (s) {
     ObStep.WELCOME -> stringResource(R.string.common_start)
     ObStep.ENV -> if (can) stringResource(R.string.common_continue) else stringResource(R.string.onb_waiting_env)
     ObStep.KEYS -> if (can) stringResource(R.string.common_continue) else stringResource(R.string.onb_waiting_check)
-    ObStep.GAMES -> stringResource(R.string.common_continue)
     ObStep.DONE -> stringResource(R.string.onb_enter_library)
 }
 
@@ -239,42 +235,6 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (Picke
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = ob.keysSkipped, onCheckedChange = { if (it) ob.skipKeys() else ob.unskipKeys() })
             Text(stringResource(R.string.onb_skip_keys), style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun GamesStep(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    val locale = LocalAppLocale.current
-    Section(stringResource(R.string.onb_game_folder)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatusDot(if (ob.folder.isNotBlank()) NxPalette.Ready else NxPalette.Unbuilt)
-            Text(
-                ob.folder.ifEmpty { stringResource(R.string.onb_no_folder) },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f), maxLines = 2,
-            )
-            QuietButton(stringResource(R.string.onb_choose_folder), onClick = {
-                onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(ob.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
-                    onPicked = { dir -> ob.chooseFolder(dir.path) }))
-            })
-        }
-        if (ob.folder.isNotBlank()) {
-            Hint(if (ob.games.isEmpty()) stringResource(R.string.onb_no_games_found)
-                 else stringResource(R.string.onb_games_found, ob.games.size))
-            if (ob.games.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (g in ob.games.take(30)) {
-                        Text(
-                            "· ${g.name}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                        )
-                    }
-                    if (ob.games.size > 30) Hint(stringResource(R.string.onb_and_more, ob.games.size - 30))
-                }
-            }
         }
     }
 }

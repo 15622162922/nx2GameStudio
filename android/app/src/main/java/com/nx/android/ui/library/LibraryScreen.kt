@@ -105,15 +105,15 @@ import java.util.Locale
  */
 @Composable
 fun LibraryScreen(lib: LibraryState, port: PortState, player: PlayerState, actions: AppActions,
-                  onGoBuilds: () -> Unit, onRequest: (PickerRequest) -> Unit) {
+                  onGoBuilds: () -> Unit) {
 
-    // the folder changes, a port ends, or the page comes back: the cards' statuses are re-read
-    LaunchedEffect(lib.folder, port.phase) { lib.rescan() }
+    // a port ends: the cards' statuses are re-read
+    LaunchedEffect(port.phase) { lib.rescan() }
 
     val visible = lib.visible()
     LaunchedEffect(visible.size) { lib.selectHero(lib.heroIndex, visible.size) }
 
-    RowView(lib, port, player, visible, actions, onGoBuilds, onRequest)
+    RowView(lib, port, player, visible, actions, onGoBuilds)
 
     // 配置面板不在这里画：它要盖住顶栏，所以由页面的根（MainScreen）在最上层画（见 ui/App.kt）
 }
@@ -156,32 +156,15 @@ private fun rememberGameIcon(path: String?, maxSize: Int): androidx.compose.runt
 
 @Composable
 private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
-                    visible: List<File>, actions: AppActions, onGoBuilds: () -> Unit,
-                    onRequest: (PickerRequest) -> Unit) {
-    val locale = LocalAppLocale.current
+                    visible: List<File>, actions: AppActions, onGoBuilds: () -> Unit) {
     val sel = visible.getOrNull(lib.heroIndex)
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         if (visible.isEmpty()) {
-            // 空态：连文件夹都没有 → 引导选择；有文件夹但没扫到 → 提示
+            // 空态：只有一句提示，没有按钮——加游戏的路只有构建页那一条
             Spacer(Modifier.weight(1f))
-            if (lib.folder.isBlank() && lib.extras.isEmpty()) {
-                EmptyLibrary(onPick = {
-                onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                    File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
-                    onPicked = { dir -> lib.chooseFolder(dir.path) }))
-            })
-            } else {
-                Section(stringResource(R.string.lib_no_games)) {
-                    Text(stringResource(R.string.lib_no_games_hint), style = MaterialTheme.typography.bodyMedium)
-                    Row {
-                        QuietButton(stringResource(R.string.lib_other_folder), onClick = {
-                            onRequest(PickerRequest(PickerMode.DIR, emptySet(),
-                                File(lib.folder.ifBlank { "/storage" }), locale.str(R.string.app_choose_game_folder),
-                                onPicked = { dir -> lib.chooseFolder(dir.path) }))
-                        })
-                    }
-                }
+            Section(stringResource(R.string.lib_empty_title)) {
+                Text(stringResource(R.string.lib_empty_hint), style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(Modifier.weight(1f))
             return@Column
@@ -365,17 +348,6 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                 QuietButton(stringResource(R.string.drawer_exit), onClick = { actions.onStopGame() })
             }
         }
-    }
-}
-
-// ---- 网格视图 ---------------------------------------------------------------------------------------------------
-
-@Composable
-private fun EmptyLibrary(onPick: () -> Unit) {
-    Section(stringResource(R.string.lib_empty_title)) {
-        Text(stringResource(R.string.lib_empty_hint),
-             style = MaterialTheme.typography.bodyMedium)
-        Row { CapsuleButton(stringResource(R.string.app_choose_game_folder), onPick) }
     }
 }
 

@@ -11,11 +11,9 @@ import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PrefsStore.Companion.OB_COMPLETED
-import com.nx.android.data.PrefsStore.Companion.OB_FOLDER
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
 import com.nx.android.domain.DoctorOutput
-import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
@@ -24,8 +22,8 @@ import java.io.File
 /**
  * The guided setup's state: the step the player is on, what each step gathered, and where "later" lands next
  * launch. The gates' rules are OnboardingLogic's (pure, tested); this class wires them to the machine — the
- * storage permission, the environment's unpack, the doctor's keys check, the folder scan — and remembers
- * everything across restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
+ * storage permission, the environment's unpack, the doctor's keys check — and remembers everything across
+ * restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
  */
 class OnboardingState(private val prefs: PrefsStore, private val env: Env, private val locale: AppLocale,
                       private val storageOk: () -> Boolean) {
@@ -50,9 +48,6 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     var keysDetail by mutableStateOf(""); private set
     var keysSkipped by mutableStateOf(false); private set
 
-    var folder by mutableStateOf(prefs.str(OB_FOLDER))
-    var games by mutableStateOf(listOf<File>()); private set
-
     var unpacking by mutableStateOf(false); private set
     var unpackStep by mutableStateOf(""); private set
     var unpackError by mutableStateOf(""); private set
@@ -63,7 +58,8 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         refreshEnv()
         keysPath = prefs.keys      // the settings page may have set a keys file since the last time
         step = if (saved.isNotEmpty() && prefs.bool(OB_LATER)) {
-            OnboardingLogic.revalidate(ObStep.valueOf(saved), facts())
+            // 旧版本存的步名可能已经不存在了（游戏文件夹那步被删了）：认不出来就当从头开始
+            OnboardingLogic.revalidate(runCatching { ObStep.valueOf(saved) }.getOrNull() ?: ObStep.WELCOME, facts())
         } else {
             ObStep.WELCOME
         }
@@ -104,12 +100,11 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         prefs.put(OB_LATER, true)
     }
 
-    /** Arriving at a step sets it up (the keys prefill, the folder's scan) */
+    /** Arriving at a step sets it up (the keys prefill) */
     private fun enter() {
         refreshEnv()
         when (step) {
             ObStep.KEYS -> prefillKeys()
-            ObStep.GAMES -> rescan()
             else -> {}
         }
     }
@@ -133,7 +128,6 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     fun facts(): ObFacts = ObFacts(
         storageOk = storageOk(), freeGB = freeGB(), neededGB = NEEDED_GB,
         envReady = envReady, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
-        folderSet = folder.isNotBlank(),
     )
 
     /** The environment's readiness, read again: the screens watch the copy, not the filesystem */
@@ -254,17 +248,5 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
             keysOk = r.optBoolean("ok")
             keysDetail = r.optString("detail")
         }
-    }
-
-    // ---- the games -----------------------------------------------------------------------------------------------
-
-    fun chooseFolder(path: String) {
-        folder = path
-        prefs.put(OB_FOLDER, path)
-        rescan()
-    }
-
-    fun rescan() {
-        games = FolderScanner.scan(File(folder))
     }
 }

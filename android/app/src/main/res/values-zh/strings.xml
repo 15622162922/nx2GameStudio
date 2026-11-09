@@ -6,8 +6,6 @@
     <string name="app_storage_permission_needed">需要存储权限</string>
     <string name="app_storage_permission_picker">内置文件管理器需要「所有文件访问」权限才能列出游戏文件。</string>
     <string name="app_grant_permission">去授权</string>
-    <string name="app_choose_game_folder">选择游戏文件夹</string>
-    <string name="app_add_game_folder">添加游戏文件夹</string>
     <string name="app_refresh_library">刷新游戏库</string>
     <string name="app_stage_and_time">阶段 %1$s/%2$s %3$s 分 %4$s 秒</string>
     <string name="common_cancel">取消</string>
@@ -65,7 +63,6 @@
     <string name="onb_later">稍后再说</string>
     <string name="onb_welcome">欢迎来到 %1$s</string>
     <string name="onb_prepare_env">准备环境</string>
-    <string name="onb_game_folder">游戏文件夹</string>
     <string name="onb_all_ready">一切就绪</string>
     <string name="onb_waiting_env">等待环境…</string>
     <string name="onb_waiting_check">等待校验…</string>
@@ -93,14 +90,9 @@
     <string name="onb_keys_common_places">选择器会打开 keys 通常在的地方（/sdcard/switch/）——在那儿选你自己的 prod.keys</string>
     <string name="onb_keys_unreadable">读不了这个文件：%1$s</string>
     <string name="onb_skip_keys">暂时跳过（发起移植时会再提醒）</string>
-    <string name="onb_no_folder">还没有选择文件夹</string>
-    <string name="onb_choose_folder">选择文件夹</string>
-    <string name="onb_no_games_found">这里没有找到游戏文件（NSP / XCI / NSZ / XCZ）——可以直接继续，游戏库里随时能换文件夹</string>
-    <string name="onb_games_found">找到 %1$s 个游戏文件；同目录的更新和 DLC 会在移植时自动带上</string>
-    <string name="onb_and_more">…以及另外 %1$s 个</string>
     <string name="onb_done">完成了</string>
-    <string name="onb_done_text">环境就绪、钥匙校验过、游戏也找齐了。</string>
-    <string name="onb_done_next">接下来在游戏库里挑一个游戏发起移植，移植在后台跑，跑完在库里就能玩。</string>
+    <string name="onb_done_text">环境就绪、钥匙校验过了。</string>
+    <string name="onb_done_next">接下来在构建页选一个游戏文件发起移植，移植在后台跑，跑完在库里就能玩。</string>
     <string name="onb_skipped_steps">有跳过的步骤也不要紧：设置里随时能补，库里的入口会提醒缺什么</string>
     <string name="env_section">环境</string>
     <string name="env_ready">环境就绪</string>
@@ -240,10 +232,7 @@
     <string name="lib_port_config">移植配置</string>
     <string name="lib_close_current_game">先退出当前游戏（%1$s）再运行这个</string>
     <string name="lib_empty_title">游戏库是空的</string>
-    <string name="lib_empty_hint">选一个放游戏文件的文件夹（NSP / XCI / NSZ / XCZ），子目录也会被扫到。</string>
-    <string name="lib_no_games">没有游戏</string>
-    <string name="lib_no_games_hint">这个文件夹里没有游戏文件（NSP / XCI / NSZ / XCZ）。</string>
-    <string name="lib_other_folder">换个文件夹</string>
+    <string name="lib_empty_hint">去构建页选一个游戏文件（NSP / XCI / NSZ / XCZ），它会立刻出现在这里。</string>
     <string name="lib_view_builds">查看构建</string>
     <string name="lib_log_needs_storage">需要存储权限：日志要写进下载目录</string>
     <string name="lib_no_runtime_log">这个游戏还没有运行日志</string>

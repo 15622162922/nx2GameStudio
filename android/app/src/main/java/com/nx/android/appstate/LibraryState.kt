@@ -8,7 +8,6 @@ import com.nx.android.data.PrefsStore.Companion.LEGACY_EXPERIMENTAL
 import com.nx.android.data.PrefsStore.Companion.LEGACY_FPS60
 import com.nx.android.data.PrefsStore.Companion.LEGACY_TOUCH
 import com.nx.android.data.PrefsStore.Companion.LIB_CONFIGS
-import com.nx.android.data.PrefsStore.Companion.LIB_FOLDER
 import com.nx.android.data.PrefsStore.Companion.LIB_EXTRA
 import com.nx.android.data.PrefsStore.Companion.LIB_PORTS
 import com.nx.android.domain.FolderScanner
@@ -20,15 +19,14 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * The library: the game files of the chosen folder, what became of each one, and each game's own port options
- * (they follow the game now; the old app kept them global, and a game without its own entry keeps the old
- * defaults). A game counts as done when its pack and the host inside it are there — the ones this app ported
- * are remembered by source path, the ones from before are matched through the data packs' manifests (the title
- * ID in the file's name).
+ * The library: the game files the player registered from the build page, what became of each one, and each
+ * game's own port options (they follow the game now; the old app kept them global, and a game without its own
+ * entry keeps the old defaults). A game counts as done when its pack and the host inside it are there — the
+ * ones this app ported are remembered by source path, the ones from before are matched through the data
+ * packs' manifests (the title ID in the file's name).
  */
 class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
 
-    var folder by mutableStateOf(prefs.str(LIB_FOLDER))
     var games by mutableStateOf(listOf<File>()); private set
 
     /** The finished port of a game this app ported (source path → pack); re-checked against the disk at every scan */
@@ -112,17 +110,12 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         }
     }
 
-    /** 构建页选过的游戏文件登记进库（构建完成后库里有它的卡片） */
+    /** 构建页选过的游戏文件登记进库（登记完就进库，库页立刻看得见） */
     fun registerExtra(f: File) {
         extras = extras + f.absolutePath
         val a = org.json.JSONArray()
         for (p in extras) a.put(p)
         prefs.putArray(LIB_EXTRA, a)
-    }
-
-    fun chooseFolder(path: String) {
-        folder = path
-        prefs.put(LIB_FOLDER, path)
         rescan()
     }
 
@@ -131,12 +124,11 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         heroIndex = if (count > 0) index.coerceIn(0, count - 1) else 0
     }
 
-    /** The folder's game files, and the finished port each one has (the remembered ones, the packs' matches) */
+    /** 登记过的游戏文件，和每个游戏自己的数据包（记住的那些，与数据包清单对上的那些） */
     fun rescan() {
         scanning = true
         Thread {
-            val scanned = FolderScanner.scan(File(folder))
-            val real = (scanned + extras.map(::File)).filter { it.isFile }
+            val real = extras.map(::File).filter { it.isFile }
             var found = (if (FAKE_DATA) fakeGames() else emptyList()) + real
             found = found.distinctBy { it.absolutePath }.sortedBy { it.name.lowercase() }
             val byTitle = FolderScanner.outIndex(File(prefs.out))
@@ -201,6 +193,6 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         prefs.putJson(LIB_CONFIGS, o)
     }
 
-    /** 库的列表（扫描 ∪ 登记，已按名字排序） */
+    /** 库的列表（登记过的游戏，已按名字排序） */
     fun visible(): List<File> = games
 }
