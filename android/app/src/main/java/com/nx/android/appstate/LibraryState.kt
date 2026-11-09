@@ -51,8 +51,9 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
     private var configs = HashMap<String, GameConfig>()
 
     // ---- 调试假数据：往库里并 15 条看排版效果，看完把 FAKE_DATA 改回 false ----
+    // 假数据只在看排版时开（openspec 变更 library-ui-polish 的任务 1.1 已把它关掉）。
 
-    private val FAKE_DATA = true
+    private val FAKE_DATA = false
 
     private val fakeStatus = HashMap<String, GameStatus>()
     private val fakePorts = HashMap<String, Ported>()

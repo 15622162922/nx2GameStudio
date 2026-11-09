@@ -18,11 +18,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -261,8 +265,15 @@ private fun OptionRow(label: String, options: List<String>, current: String, onP
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Box {
-            QuietButton("$current ⌄", onClick = { open = !open })
-            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // 与库页的字段同一做法：按钮定宽，箭头钉在右端，几行的箭头排成一列
+            QuietButton(current, onClick = { open = !open },
+                modifier = Modifier.width(140.dp),
+                trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
+            androidx.compose.material3.DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                modifier = Modifier.width(140.dp),
+            ) {
                 for (o in options.distinct()) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(o, fontWeight = if (o == current) FontWeight.Bold else FontWeight.Normal) },

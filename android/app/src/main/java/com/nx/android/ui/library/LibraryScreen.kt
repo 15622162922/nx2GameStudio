@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -293,8 +294,9 @@ private fun HeroTile(lib: LibraryState, port: PortState, f: File, selected: Bool
 private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                         f: File, actions: AppActions, onGoBuilds: () -> Unit) {
     val status = lib.statusOf(f)
-    val titleId = FolderScanner.titleIdIn(f.name)
     val ported = lib.portOf(f)
+    // Title ID：文件名里的优先；文件名没有（多半是下载器改过名），就用数据包清单里的
+    val titleId = FolderScanner.titleIdIn(f.name) ?: ported?.titleId?.takeIf { it.isNotEmpty() }?.uppercase()
     // 单游戏：别的游戏在玩时，这个游戏的「▶ 运行」置灰并说明
     val locked = status == GameStatus.DONE && player.running && player.titleId != (ported?.titleId ?: "")
 
@@ -334,7 +336,7 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                      tint = if (locked) NxPalette.Background else Color.Black)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    when { building -> "查看构建"; running -> "▶ 运行"; else -> "构建" },
+                    when { building -> "查看构建"; running -> "运行"; else -> "构建" },
                     style = MaterialTheme.typography.titleMedium,
                     color = if (locked) NxPalette.Background else Color.Black,
                 )
@@ -386,7 +388,9 @@ private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
                         f: File, actions: AppActions, onGoBuilds: () -> Unit, onClose: () -> Unit) {
     BackHandler { onClose() }
     val status = lib.statusOf(f)
+    // Title ID：文件名里的优先，没有就用数据包清单里的
     val titleId = FolderScanner.titleIdIn(f.name)
+        ?: lib.portOf(f)?.titleId?.takeIf { it.isNotEmpty() }?.uppercase()
     val context = androidx.compose.ui.platform.LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -401,6 +405,7 @@ private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
                 .fillMaxHeight()
                 .background(NxPalette.Surface)
                 .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -419,7 +424,9 @@ private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
                 // 已完成的游戏才有可管理的产物
                 if (status == GameStatus.DONE) {
                     Box {
-                        QuietButton("管理 ⌄", onClick = { menuOpen = !menuOpen })
+                        QuietButton("管理", onClick = { menuOpen = !menuOpen },
+                            modifier = Modifier.width(112.dp),
+                            trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
                         androidx.compose.material3.DropdownMenu(
                             expanded = menuOpen,
                             onDismissRequest = { menuOpen = false },
@@ -435,7 +442,8 @@ private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
             }
             Hint(f.absolutePath, size = 11.sp)
 
-            Spacer(Modifier.weight(1f))
+            // 内容自上而下顺排：不用弹性 spacer 把它压到底（那会在路径与「产物：」之间开一大片空白）；
+            // 列本身可滚，存档多时也够得着。
 
             when {
                 status == GameStatus.PORTING -> {
@@ -584,8 +592,15 @@ private fun PickRow(label: String, options: List<String>, current: String?, onSe
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
         Box {
-            QuietButton("${current ?: "系统默认"} ⌄", onClick = { open = !open })
-            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
+            QuietButton(current ?: "系统默认", onClick = { open = !open },
+                modifier = Modifier.width(200.dp),
+                trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
+            androidx.compose.material3.DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                modifier = Modifier.width(200.dp),
+            ) {
                 for (o in options.distinct()) {
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(o, fontWeight = if (o == current) FontWeight.Bold else FontWeight.Normal) },

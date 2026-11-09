@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -64,13 +66,19 @@ fun CapsuleButton(
     }
 }
 
-/** The secondary action: a quiet capsule */
+/**
+ * The secondary action: a quiet capsule.
+ *
+ * `trailing` draws a mark at the button's right edge (a dropdown's arrow): the label then takes the rest of the
+ * button's width, so the mark sits in the same column in every field, whatever the label's length.
+ */
 @Composable
 fun QuietButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     OutlinedButton(
         onClick = onClick,
@@ -78,7 +86,13 @@ fun QuietButton(
         shape = RoundedCornerShape(50),
         modifier = modifier.height(44.dp),
     ) {
-        Text(text, fontSize = 14.sp)
+        if (trailing == null) {
+            Text(text, fontSize = 14.sp)
+        } else {
+            Text(text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            trailing()
+        }
     }
 }
 
