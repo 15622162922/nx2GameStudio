@@ -64,6 +64,7 @@ class PatchInterp(unittest.TestCase):
         self.assertEqual(3, struct.unpack_from('<I', data, 64)[0])        # the PT_INTERP segment is still there
         self.assertEqual(target.encode() + b'\0', data[struct.unpack_from('<Q', data, 72)[0]:][:len(target) + 1])
 
+    @unittest.skipIf(os.name != 'posix', 'the execute bit is a POSIX thing: Windows has none')
     def test_the_execute_bit_comes_back(self):
         # a program that lost its execute bit cannot be started: the patch gives it back
         target = '/data/user/0/com.nx.android/files/rootfs/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1'

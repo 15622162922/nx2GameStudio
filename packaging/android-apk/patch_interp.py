@@ -55,6 +55,8 @@ def _interp_of(path):
 def _ensure_executable(path):
     """A program with an interpreter is a program: it has to be executable. The write of an earlier round (or
     a file that came without the bit) would leave it unstartable."""
+    if os.name != 'posix':
+        return False        # Windows has no execute bit: there is nothing to give back, and nothing changed
     try:
         mode = os.stat(path).st_mode & 0o777
         if mode & 0o111: return False

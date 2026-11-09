@@ -41,9 +41,13 @@ def table(path):
 
 
 def sources():
-    """Every Kotlin source of the app, with its text."""
+    """Every Kotlin source of the app, with its text.
+
+    The path is written with slashes on every platform: the exemption below is a path, and on Windows
+    str() would give it a backslash.
+    """
     for p in sorted(KT.rglob('*.kt')):
-        rel = str(p.relative_to(KT))
+        rel = p.relative_to(KT).as_posix()
         yield rel, p.read_text(encoding='utf-8')
 
 
