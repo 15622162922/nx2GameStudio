@@ -35,12 +35,12 @@ def tag_ok(tag, v):
     base = tag_base(v)
     if not base: return False
     if tag == base: return True
-    return bool(re.fullmatch(re.escape(base) + r'-(?:alpha|beta|rc)\d+', tag))
+    return bool(re.fullmatch(re.escape(base) + '-' + STAGE, tag))
 
 
 def is_prerelease(tag):
     """Whether the tag is a pre-release of the base: an alpha, a beta, a candidate"""
-    return bool(re.search(r'-(?:alpha|beta|rc)\d+$', tag))
+    return bool(re.search('-' + STAGE + '$', tag))
 
 
 def has_prerelease(w):
