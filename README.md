@@ -4,11 +4,13 @@
 
 > **English**. 中文文档：[README.zh.md](README.zh.md)
 
-Port your own Nintendo Switch games to Android, natively: the game's own arm64 code runs on the device, with the Switch's system services stood in for by a host and NVN graphics replayed on Vulkan. Pick the game's file, click **Port**, and get the game's data pack, which the nx2androidX app on the phone runs. Bring your own game files and keys; nothing from any game is in this repository.
+Port your own Switch games to Android, natively: the game's own arm64 code runs on the device, with the Switch's system services stood in for by a host and NVN graphics replayed on Vulkan. Pick the game's file, click **Port**, and get the game's data pack, which the nx2androidX app on the phone runs. Bring your own game files and keys; this repository holds no game content and no keys.
 
 This repository is nx2androidX, built on nx2android — the PC tool that ports a Switch game and packages the APK. nx2androidX moves that to the phone: give it the game's files and it compiles and runs them on the device itself, with no computer in the loop. The games that play on Android are listed upstream: [Games](#games).
 
 The app is the whole tool on the phone: it ports the game on the device and plays the pack it makes. The game files it shows are the player's own.
+
+**This repository's releases hold the phone app itself** (the APK, its file named after the version). The PC tool is released upstream, by nx2android; both routes are in [For players](#for-players-port-a-game-without-programming).
 
 ---
 
@@ -18,7 +20,7 @@ This branch closed the loop on "playing it on the phone": the app went from a pl
 
 ### The app is now the whole tool
 
-Porting used to happen on the computer: install the tools, pick the file, click Port, copy the data pack back to the phone. Now the phone starts the port itself — pick a game file on the **Builds** tab, click **Port**, the port runs in the background (the notification bar shows "移植进度"), the data pack lands in the output folder, and the game is playable from the library.
+Porting used to happen on the computer: install the tools, pick the file, click Port, copy the data pack back to the phone. Now the phone starts the port itself — pick a game file on the **Builds** tab, tap **Start a port**, the port runs in the background (the notification bar shows "Port progress"), the data pack lands in the output folder, and the game is playable from the library.
 
 ![Four screens of the app: starting a port on the Builds tab, a game entry in the library, the in-game drawer's frame generation, and the Settings tab](docs/images/app-screens.png)
 
@@ -26,7 +28,7 @@ Porting used to happen on the computer: install the tools, pick the file, click 
 
 The library got simpler too: it used to take a folder to be the library, and the scan behind it was recursive — one root directory was a long freeze. Now **the library only holds the games registered on the Builds tab**, the whole folder scan is gone, and an empty library shows one line of guidance instead of buttons.
 
-### What this release added
+### What the current release added
 
 | Feature | What it is |
 |---|---|
@@ -58,17 +60,24 @@ An import is not taken on trust: a package carrying another game's title ID is r
 
 The ☰ menu button opens the in-game drawer, with two tabs: **frame generation** and **display & controls**.
 
-Frame generation uses Lossless.dll: the frames-per-game multiplier, the target frame rate and the optical flow quality are all adjustable, and the switch and the multiplier take effect at once; an updated DLL is copied to the private folder by itself. Lossless Scaling's resources are neither bundled nor downloaded.
+Frame generation uses Lossless.dll: the frames-per-game multiplier, the target frame rate and the optical flow quality are all adjustable, and the switch and the multiplier take effect at once; an updated DLL is copied to the private folder by itself. Lossless Scaling's resources are neither bundled nor downloaded, and the DLL is the player's own file: we do not distribute it and do not link to a download.
 
 The display & controls tab has the virtual gamepad: the layout editor (drag a control, pinch to resize, snap to grid), the pad's opacity, rumble, the frame rate counter and the docked mode.
 
 ### Vulkan drivers on the phone
 
-The drivers are the player's, not the pack's: the **Vulkan 驱动** section of the Settings tab can download them (Mesa's Turnip builds, from their own addresses), import one from a file, and remove one. One Turnip build — the Adreno 8xx one — ships inside the app: it unpacks itself into the app's own folder when the app starts (no network, no click) and is marked as the built-in one, so it is not the player's to remove.
+The drivers are the player's, not the pack's: the **Vulkan driver** section of the Settings tab can download them (Mesa's Turnip builds, from their own addresses), import one from a file, and remove one. One Turnip build — the Adreno 8xx one — ships inside the app: it unpacks itself into the app's own folder when the app starts (no network, no click) and is marked as the built-in one, so it is not the player's to remove.
 
-The driver a game runs with is picked in the library's drawer (**Vulkan 驱动**), the device's own driver first. The choice is kept in the data pack's `env.txt`, so it lasts, and it takes effect the next time the game starts.
+The driver a game runs with is picked in the library's drawer (**Vulkan driver**), the device's own driver first. The choice is kept in the data pack's `env.txt`, so it lasts, and it takes effect the next time the game starts.
 
 ---
+
+## Requirements
+
+- **Android 8.0 (API 26) or newer**.
+- **1.5 GB of free space to start**: the APK is about 272 MB, the environment unpacked on the first launch about 700 MB, on top of your own game files and the data packs.
+- **A GPU that reads BC-compressed textures**: Adreno (Snapdragon) and Xclipse (Exynos 2200 and later) do; Mali and PowerVR do not. The tested device is a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
+- **Your own game files and `prod.keys`**, dumped from your own Switch: the tool never downloads either.
 
 ## Games
 
@@ -76,53 +85,60 @@ The games that play on Android are listed upstream, with the nx2android version 
 rate it runs at: [Games](https://github.com/shirai91/nx2android#games). The games ported so far, and the ones
 next, are in [docs/PORT_CHECKLIST.md](docs/PORT_CHECKLIST.md).
 
-A game needs a device whose GPU reads BC-compressed textures (Adreno, Xclipse; not Mali or PowerVR).
-Tested on a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
-
 ## For players: port a game without programming
 
-1. Download `nx2android-<version>-windows-x64.zip` (Windows) or `nx2android-<version>-macos-arm64.zip` (Mac with Apple silicon) from [Releases](https://github.com/zFitness/nx2androidX/releases/latest), unzip it and start **nx2android** (on a Mac, see [packaging/INSTALL.md](packaging/INSTALL.md#1-start-the-app) first).
+### Route one: port on the phone (recommended)
+
+1. **Install the app**: download `nx2android-<version>.apk` from [Releases](https://github.com/zFitness/nx2androidX/releases/latest) and install it with the system's own installer.
+2. **First start**: walk the onboarding (storage access → environment → keys → done); the environment step downloads and unpacks about 700 MB.
+3. **Builds tab**: tap **Choose a game file**, pick the base game (the updates and the DLC next to it are taken along), then tap **Start a port**. The port runs in the background; the notification bar keeps the progress.
+4. **Library tab**: when the port is done the data pack is in the library — tap **Run** and play.
+
+The port's own options sit on the Builds tab too: **Touch game** (the on-screen gamepad starts hidden), **60 fps** and **Experimental port** (a game that is not adapted yet).
+
+### Route two: port on a computer
+
+The PC tool is released upstream, by nx2android; this repository's releases hold the APK only.
+
+1. Download `nx2android-<version>-windows-x64.zip` (Windows) or `nx2android-<version>-macos-arm64.zip` (Mac with Apple silicon) from the upstream [nx2android Releases](https://github.com/shirai91/nx2android/releases/latest), unzip it and start **nx2android** (on a Mac, see [packaging/INSTALL.md](packaging/INSTALL.md#1-start-the-app) first).
 2. **Setup** tab: click **Download missing tools** (the Android NDK, the .NET SDK and platform-tools, about 1 GB, from Google and Microsoft), then set your **prod.keys**. Every line turns green.
 3. **Port** tab: choose the folder with the game's NSP, XCI, NSZ or XCZ files (base game, update, DLC) and click **Port**.
-4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. The nx2androidX app on the phone is what plays a game: it ports on the phone itself, and it plays the packs it finds in its output folder.
+4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. To play it on the phone: copy the whole `<Game>-data/` directory into the app's output folder (**Settings** → **Output folder**) and register the game file on the **Builds** tab — the library then recognizes the data pack (the title IDs have to match).
 
-The app on the phone also looks for a newer release: when it starts, it checks the release page quietly, and if there is a newer version it says so on the home page. The **Settings** tab has a **Check for updates** entry that checks again on demand. The app downloads nothing by itself — the notice leads to the release page, where the APK is.
+   A computer is not needed at all: the app ports the game itself, see route one.
 
-Pokémon Legends: Arceus and Pokémon Legends: Z-A keep their shaders in Oodle-compressed archives, which only the game's own decoder can open. On the phone the port decodes them here — the phone is the ARM64 machine that runs the game's own code — so nothing else is needed. On the desktop tool the same decode runs on a device you plug in: have platform-tools (adb) from step 2, and connect the device with USB debugging on before you click **Port**.
+### Common switches
 
-A game played by touch: tick **Touch game** on the Port tab (`--touch`). The on-screen gamepad then starts hidden and every touch but one on the menu button goes to the game; the pause menu shows the gamepad again.
-
-A game slowed by its draw calls in busy scenes: tick **Multithread replay** on the Port tab (`--mt-replay`). The game's Vulkan commands are then recorded on a thread of their own. It stays on until you port the game again without it.
-
-To arrange the on-screen controls, open the pause menu's **Gamepad** tab and choose **Edit layout**: drag a control to move it, pinch or use **− / +** to resize it. **Save** keeps the layout for the next launch and **Cancel** discards your edits. **Snap to grid** (off at first, and remembered) shows a square grid and snaps each control's center to it as you drag.
-
-The game opens from the app's library page: it shows the game, where its files are, and the language and the Vulkan driver to run it with. The main action starts the game, and the choices are kept in the data pack's `env.txt`, so they last.
-
-To run a game with a Vulkan driver the device's own does not (Mesa's Turnip on Adreno GPUs), put the driver libraries (.so) in a folder and set **Vulkan driver folder** on the Port tab (`--vulkan-driver-dir`): the pack carries them all and the app lets the player pick one, the device's own driver being the first choice.
-
-On the phone the drivers are the player's, not the pack's: the app's **Settings** tab has a **Vulkan 驱动** section, where a driver can be downloaded (Mesa's Turnip builds, from their own addresses), imported from a file, and removed. One Turnip build — the Adreno 8xx one — ships inside the app: it unpacks itself into the app's own folder when the app starts (no network, no click) and is marked as the built-in one, so it is not the player's to remove. The game is run with one of them in the library's drawer, under **Vulkan 驱动**; the choice is kept in the data pack's `env.txt`, so it lasts, and it takes effect the next time the game starts.
-
-A game that crashes with "AllocateAddressRegion … refused (0x1803)" in its log needs more address space: port it again with a larger **Extra address space** on the Port tab (`--alias-headroom` on the command line). [packaging/INSTALL.md](packaging/INSTALL.md#when-something-goes-wrong) says more.
-
-The step-by-step guide is [packaging/INSTALL.md](packaging/INSTALL.md). You need your own game files and `prod.keys`, dumped from your own Switch; the tool never ships or downloads either. NSZ and XCZ files are decompressed during the port (into the build folder's `tmp/`, deleted once extracted).
+- **A game played by touch**: tick **Touch game** on the Builds tab (phone) or the Port tab (PC, `--touch`). The on-screen gamepad then starts hidden and every touch but one on the menu button goes to the game; the pause menu shows the gamepad again.
+- **A game slowed by its draw calls in busy scenes**: tick **Multithread replay** on the Port tab (`--mt-replay`). The game's Vulkan commands are then recorded on a thread of their own. It stays on until you port the game again without it.
+- **To arrange the on-screen controls**: open the pause menu's **Gamepad** tab and choose **Edit layout**: drag a control to move it, pinch or use **− / +** to resize it. **Save** keeps the layout for the next launch and **Cancel** discards your edits. **Snap to grid** (off at first, and remembered) shows a square grid and snaps each control's center to it as you drag.
+- **The game opens from the app's library page**: it shows the game, where its files are, and the language and the Vulkan driver to run it with. The main action starts the game, and the choices are kept in the data pack's `env.txt`, so they last.
+- **To run a game with a Vulkan driver the device's own does not** (Mesa's Turnip on Adreno GPUs): set **Vulkan driver folder** on the Port tab (`--vulkan-driver-dir`); the pack carries them all and the app lets the player pick one, the device's own driver being the first choice. On the phone the drivers are managed in the app's own **Vulkan driver** section — see [Vulkan drivers on the phone](#vulkan-drivers-on-the-phone) above.
+- **A game that crashes with "AllocateAddressRegion … refused (0x1803)" in its log** needs more address space: raise **Extra address space** on the Port tab (`--alias-headroom` on the command line), for example 16 GB, then 24 GB. [packaging/INSTALL.md](packaging/INSTALL.md#when-something-goes-wrong) says more.
+- **The app looks for a newer release too**: when it starts, it checks the release page quietly, and if there is a newer version it says so on the home page. The **Settings** tab has a **Check for updates** entry that checks again on demand. The app downloads nothing by itself — the notice leads to the release page, where the APK is.
+- **Pokémon Legends: Arceus and Pokémon Legends: Z-A keep their shaders in Oodle-compressed archives**, which only the game's own decoder can open. On the phone the port decodes them here — the phone is the ARM64 machine that runs the game's own code — so nothing else is needed. On the desktop tool the same decode runs on a device you plug in: have platform-tools (adb) from the Setup tab, and connect the device with USB debugging on before you click **Port**.
 
 ## Saves
 
-The game's pause menu (Game tab) has **Export save** and **Import save**: an export is a folder in `Android/data/<package>/files/saves/` on the device, the save's files as a console's save tools copy them, so a save from a console imports the same way. The app's **Saves** tab moves them between the device and the PC.
+**On the phone**: the library page → the drawer → **Saves**. **Export the saves** writes the save as a zip package into the download folder and hands it to the system share sheet; **Import the saves…** takes a package in from anywhere. The drawer also holds **Save packages** (the packages you shared) and **Backups** (the automatic backup of an import, which can be restored).
 
-An import replaces the save the game has; the app exports that one first on the device (a folder ending `-before-import`). Uninstalling the app deletes its saves and its exports: copy them to the PC first.
+An import replaces the save the game has, so the app keeps that one first (a folder ending `-before-import`). A package carrying another game's title ID is refused, and the unpacked size is capped. The game has to be closed before its save is touched — the host writes it while it runs. Uninstalling the app deletes its saves and its exports: copy them out first.
+
+**On a computer** (the desktop tool's **Saves** tab): the saves travel between the device and the PC over adb. An export is a folder in `Android/data/<package>/files/saves/` on the device, the save's files as a console's save tools copy them, so a save from a console imports the same way.
 
 ## For developers
+
+Start here: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — the tools to install, the two working loops (the desktop tool and the phone app), the tests and the release steps.
 
 Running from the repository, the command line, the repository layout, building the bundle, tests and commit messages: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md). How it is put together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Keys and game files
 
-nx2android decrypts your game files with your `prod.keys` while it ports them, as Switch emulators do. This repository and its releases contain no keys, no game files, no firmware and nothing extracted from them, and the tool never downloads either. Dump both from your own Switch, and don't share them or the data packs built from them.
+Reading your game files while it ports them needs your `prod.keys` — the keys your own console uses. This repository and its releases contain no keys, no game files, no firmware and nothing extracted from them; the tool never downloads any of them, and this project provides no method or link to obtain keys. Dump both from your own Switch, and don't share them or the data packs built from them.
+
+The tool is for running personal backups of the games you own. How you obtain the game files and the keys, and whether that is legal where you live, is for you to judge and to answer for.
 
 The game profiles under `nxnative/dm/games/` hold interoperation metadata only: the hashes that identify a game's shaders, the offsets inside a module, and patch stubs of a few bytes of machine code that make a particular game build run. They are the information the host needs to work with a game, not the game itself.
-
-Nintendo's takedown notices so far have gone to whoever hosts a project (13 Switch emulator repositories on GitHub in February 2026), not to players. Whether decrypting your own games for your own use is allowed depends on where you live.
 
 ## License
 
@@ -141,11 +157,10 @@ This project is one branch of a family, and it stands on other people's work:
 - **[BananaNative](https://github.com/Raphix91/BananaNative)** — the branch that takes the engine to Android and runs a few Switch 2 games natively on a phone. Thanks for taking it further than we did.
 - **[Mesa](https://www.mesa3d.org/)** — for Turnip, the Vulkan driver the app can download for Adreno GPUs.
 - **Lossless Scaling** — for Lossless.dll, the frame generator the app can use; its resources are neither bundled here nor downloaded by us.
-- **[Ryujinx](https://github.com/Ryujinx/Ryujinx)** — for the shader translator and the NVN declarations the graphics path is built on.
 - **Everyone who filed an issue, sent a patch, wrote a game profile or translated the docs** — this branch stands on their work too.
 
 Everything shipped in the tree keeps its own license; the index is [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Trademarks
 
-The game names and the trademarks in this README identify the games this tool is compatible with. They belong to Nintendo and to the respective publishers and developers. The screenshot is of the app itself, running the player's own game files. This project is not affiliated with or endorsed by them.
+Switch, NVN and the game names in this README are trademarks of Nintendo and of the respective publishers and developers; they are used here only to identify the games this tool is compatible with and to explain technical details. The screenshot is of the app itself, running the player's own game files. This project is not affiliated with, endorsed by or sponsored by them.
