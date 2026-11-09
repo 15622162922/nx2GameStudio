@@ -15,6 +15,7 @@ import com.nx.android.data.PrefsStore.Companion.OB_FOLDER
 import com.nx.android.data.PrefsStore.Companion.OB_KEYS
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
+import com.nx.android.domain.DoctorOutput
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
@@ -58,6 +59,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     /** Opens the flow: first run lands on Welcome; "later" resumes at its saved step, revalidated */
     fun open() {
         val saved = prefs.str(OB_STEP)
+        refreshEnv()
         step = if (saved.isNotEmpty() && prefs.bool(OB_LATER)) {
             OnboardingLogic.revalidate(ObStep.valueOf(saved), facts())
         } else {
@@ -76,25 +78,33 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
 
     /** Everything gathered so far is kept, and the next launch comes back to this step */
     fun skipForLater() {
-        prefs.put(OB_STEP, step.name)
-        prefs.put(OB_LATER, true)
+        saveStep()
         active = false
     }
 
     fun next() {
         if (!OnboardingLogic.canAdvance(step, facts()) || step >= ObStep.DONE) return
         step = ObStep.entries[step.ordinal + 1]
+        saveStep()
         enter()
     }
 
     fun back() {
         if (step <= ObStep.WELCOME) return
         step = ObStep.entries[step.ordinal - 1]
+        saveStep()
         enter()
+    }
+
+    /** The step is written down as the player walks it: a process killed mid-setup comes back to it */
+    private fun saveStep() {
+        prefs.put(OB_STEP, step.name)
+        prefs.put(OB_LATER, true)
     }
 
     /** Arriving at a step sets it up (the keys prefill, the folder's scan) */
     private fun enter() {
+        refreshEnv()
         when (step) {
             ObStep.KEYS -> prefillKeys()
             ObStep.GAMES -> rescan()
@@ -102,20 +112,32 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         }
     }
 
-    /** The environment's state, for the settings page's display */
-    val envReady: Boolean get() = env.ready
+    /**
+     * Whether the environment is ready: a copy the screens can watch. The environment is the truth (it asks
+     * the filesystem every time it is read), but a plain read cannot make a screen redraw itself, so the copy
+     * is refreshed wherever the environment can have changed.
+     */
+    var envReady by mutableStateOf(env.ready); private set
     val lastCheck: String get() = env.lastCheck
 
     /** Throws the unpacked environment away: the next prepare does everything again */
     fun resetEnv() {
-        Thread { env.reset() }.start()
+        Thread {
+            env.reset()
+            refreshEnv()
+        }.start()
     }
 
     fun facts(): ObFacts = ObFacts(
         storageOk = storageOk(), freeGB = freeGB(), neededGB = NEEDED_GB,
-        envReady = env.ready, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
+        envReady = envReady, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
         folderSet = folder.isNotBlank(),
     )
+
+    /** The environment's readiness, read again: the screens watch the copy, not the filesystem */
+    private fun refreshEnv() {
+        envReady = env.ready
+    }
 
     /** The free space where the environment is unpacked (the app's own, internal storage) */
     fun freeGB(): Long = try {
@@ -139,6 +161,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
                 unpackError = "${e.javaClass.simpleName}: ${e.message}"
                 AppLog.line(locale.str(R.string.onb_prepare_failed, e.message))
             }
+            refreshEnv()
         }.start()
     }
 
@@ -184,22 +207,21 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         val buf = StringBuilder()
         PortRunner(env, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
             keysChecking = false
-            val rows = runCatching { org.json.JSONArray(buf.toString().trim()) }.getOrNull()
+            // the runner's own lines are in the same stream: only the doctor's own rows are JSON
+            val rows = DoctorOutput.rows(buf.toString())
             if (rows == null) {
                 keysOk = false
                 keysDetail = locale.str(R.string.onb_check_no_output)
                 return@doctor
             }
-            for (i in 0 until rows.length()) {
-                val r = rows.getJSONObject(i)
-                if (r.optString("name") == "prod.keys") {
-                    keysOk = r.optBoolean("ok")
-                    keysDetail = r.optString("detail")
-                    return@doctor
-                }
+            val r = DoctorOutput.row(rows, "prod.keys")
+            if (r == null) {
+                keysOk = false
+                keysDetail = locale.str(R.string.onb_check_no_keys)
+                return@doctor
             }
-            keysOk = false
-            keysDetail = locale.str(R.string.onb_check_no_keys)
+            keysOk = r.optBoolean("ok")
+            keysDetail = r.optString("detail")
         }
     }
 

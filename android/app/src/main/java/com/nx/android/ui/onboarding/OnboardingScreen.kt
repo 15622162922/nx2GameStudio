@@ -53,7 +53,7 @@ import java.io.File
 @Composable
 fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val facts = ob.facts()
-    val can = OnboardingLogic.canAdvance(ob.step, facts)
+    val can = OnboardingLogic.canAct(ob.step, facts)
 
     // the back key walks the flow backwards, it does not leave the app
     BackHandler(enabled = ob.step > ObStep.WELCOME) { ob.back() }
@@ -169,7 +169,7 @@ private fun WelcomeStep(ob: OnboardingState, actions: AppActions) {
 
 @Composable
 private fun EnvStep(ob: OnboardingState) {
-    val ready = ob.facts().envReady
+    val ready = ob.envReady
     Section(stringResource(R.string.onb_runtime)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (ob.unpacking) {

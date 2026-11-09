@@ -30,6 +30,13 @@ object OnboardingLogic {
     }
 
     /**
+     * What the step's own action may do. The last step's action is the way into the library, and that is
+     * always allowed; the other steps move on to the next one, so their answer is the next one's premise.
+     */
+    fun canAct(step: ObStep, f: ObFacts): Boolean =
+        if (step == ObStep.DONE) true else canAdvance(step, f)
+
+    /**
      * Where a saved step lands now: back to the earliest one whose premise no longer holds. The permission
      * taken away lands on Welcome, an environment that went missing on Env, keys that stopped being valid on
      * Keys; a step before all that stays.

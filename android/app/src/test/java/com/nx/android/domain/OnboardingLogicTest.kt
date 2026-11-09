@@ -50,6 +50,30 @@ class OnboardingLogicTest {
         assertFalse(OnboardingLogic.canAdvance(ObStep.DONE, facts()))
     }
 
+    // ---- the action of a step ------------------------------------------------------------------------------------
+
+    @Test
+    fun `the last step's action is always available`() {
+        // the way into the library: the player may always take it once they are there
+        assertTrue(OnboardingLogic.canAct(ObStep.DONE, facts()))
+        assertTrue(OnboardingLogic.canAct(ObStep.DONE, facts(storage = false, env = false, keysOk = false, folder = false)))
+        // the gate itself still says no: the last step has no next step
+        assertFalse(OnboardingLogic.canAdvance(ObStep.DONE, facts()))
+    }
+
+    @Test
+    fun `acting on a step follows that step's own gate`() {
+        for (s in ObStep.entries) {
+            if (s == ObStep.DONE) continue
+            assertEquals(OnboardingLogic.canAdvance(s, facts()), OnboardingLogic.canAct(s, facts()))
+        }
+        assertFalse(OnboardingLogic.canAct(ObStep.ENV, facts(env = false)))
+        assertTrue(OnboardingLogic.canAct(ObStep.ENV, facts(env = true)))
+        assertFalse(OnboardingLogic.canAct(ObStep.WELCOME, facts(storage = false)))
+        assertFalse(OnboardingLogic.canAct(ObStep.KEYS, facts(keysOk = false)))
+        assertFalse(OnboardingLogic.canAct(ObStep.GAMES, facts(folder = false)))
+    }
+
     // ---- the revalidation of a saved step ----------------------------------------------------------------------
 
     @Test
