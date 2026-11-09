@@ -62,6 +62,16 @@ jobs:
           fi
         env:
           NIXPORT_TOKEN: ${{ secrets.NIXPORT_TOKEN }}
+      - name: the app's signing key
+        run: |
+          if [ -n "$NX2A_KEYSTORE_B64" ]; then
+            echo "$NX2A_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nx2android.keystore"
+            echo "NX2A_KEYSTORE=$RUNNER_TEMP/nx2android.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::the secret NX2A_KEYSTORE_B64 is missing: the APK carries the runner's debug key and cannot be installed over an earlier one"
+          fi
+        env:
+          NX2A_KEYSTORE_B64: ${{ secrets.NX2A_KEYSTORE_B64 }}
       - name: the tests
         run: |
           python -m pip install -r requirements.txt
