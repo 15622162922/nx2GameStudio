@@ -53,6 +53,8 @@ The game opens from the app's library page: it shows the game, where its files a
 
 To run a game with a Vulkan driver the device's own does not (Mesa's Turnip on Adreno GPUs), put the driver libraries (.so) in a folder and set **Vulkan driver folder** on the Port tab (`--vulkan-driver-dir`): the pack carries them all and the app lets the player pick one, the device's own driver being the first choice.
 
+On the phone the drivers are the player's, not the pack's: the app's **Settings** tab has a **Vulkan 驱动** section, where a driver can be downloaded (Mesa's Turnip builds, from their own addresses), imported from a file, and removed. One Turnip build — the Adreno 8xx one — ships inside the app: it unpacks itself into the app's own folder when the app starts (no network, no click) and is marked as the built-in one, so it is not the player's to remove. The game is run with one of them in the library's drawer, under **Vulkan 驱动**; the choice is kept in the data pack's `env.txt`, so it lasts, and it takes effect the next time the game starts.
+
 A game that crashes with "AllocateAddressRegion … refused (0x1803)" in its log needs more address space: port it again with a larger **Extra address space** on the Port tab (`--alias-headroom` on the command line). [packaging/INSTALL.md](packaging/INSTALL.md#when-something-goes-wrong) says more.
 
 The step-by-step guide is [packaging/INSTALL.md](packaging/INSTALL.md). You need your own game files and `prod.keys`, dumped from your own Switch; the tool never ships or downloads either. NSZ and XCZ files are decompressed during the port (into the build folder's `tmp/`, deleted once extracted).

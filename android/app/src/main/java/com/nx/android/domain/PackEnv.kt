@@ -23,6 +23,15 @@ object PackEnv {
         return text(File(pack, "drivers.txt")).map { it.trim() }.filter { it.isNotEmpty() && File(dir, it).isFile }
     }
 
+    /**
+     * The driver's field: the device's own driver, the drivers the app has installed, the ones the pack carries.
+     * Every choice is a value (what goes into env.txt) and a name (what the player reads): the installed drivers
+     * live in the app's own folder and are named by their path, the pack's by their file name. Free of Android,
+     * so the tests run on the JVM.
+     */
+    fun driverChoices(pack: File, installed: List<Pair<String, String>>): List<Pair<String, String>> =
+        listOf("" to "系统默认") + installed + drivers(pack).map { it to it }
+
     /** The rows' current values (DM_LANG, DM_VK_DRIVER), null when the row is absent */
     fun current(pack: File): Pair<String?, String?> {
         var lang: String? = null; var drv: String? = null

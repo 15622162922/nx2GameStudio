@@ -12,6 +12,12 @@ plugins {
 // outside the source tree: it is a few hundred megabytes and not committed.
 val assetsDir = rootProject.layout.projectDirectory.dir("../packaging/android-apk/.cache/assets")
 
+// The Vulkan driver loader (libadrenotools.so), built by packaging/android-apk/build_adrenotools.py and staged
+// outside the source tree as well. It is the app's own native library: the host dlopens it by name, and the
+// Android linker looks a bare name up in LD_LIBRARY_PATH, in the caller's DT_RUNPATH and in the namespace's
+// default library paths — the app's native library folder is the only one of those the app controls.
+val jniLibsDir = rootProject.layout.projectDirectory.dir("../packaging/android-apk/.cache/jniLibs")
+
 // The app's own signing key: a keystore of the project's, so that every build of the app (this machine, CI, the
 // release) carries the same signature and installs over the one before it. Android refuses an update whose
 // signature differs (INSTALL_FAILED_UPDATE_INCOMPATIBLE), and the debug keystore of a machine is that machine's:
@@ -56,13 +62,18 @@ android {
             if (!project.hasProperty("noPayload") && assetsDir.asFile.exists()) {
                 assets.directories.add(assetsDir.asFile.absolutePath)
             }
+            // The Vulkan driver loader, in the app's own native library folder: the host dlopens it by name and
+            // that folder is where the linker looks (jniLibs.useLegacyPackaging keeps it extracted there).
+            if (jniLibsDir.asFile.exists()) {
+                jniLibs.srcDir(jniLibsDir.asFile.absolutePath)
+            }
         }
     }
 
     // The payload is big: no compression of the assets that are already compressed (the rootfs tarball), and
     // the whole thing is a single big blob the app unpacks on the first start.
     androidResources {
-        noCompress += listOf("gz", "so")
+        noCompress += listOf("gz", "so", "zip")
     }
     packaging {
         jniLibs.useLegacyPackaging = true

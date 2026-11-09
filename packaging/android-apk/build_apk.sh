@@ -50,15 +50,21 @@ else
     python3 "$here/build_assets.py" --out "$cache/assets" --payload "$cache/payload-arm64.tar.gz" --toolchain "$cache/toolchain"
     # nx_extract for the phone, built here (the phone's .NET SDK cannot): after the assets, which it joins
     python3 "$here/build_nx_extract.py" || echo "   (no nx_extract for the phone: the .NET SDK is missing)"
-    # the Vulkan driver loader the game APK carries (the phone has no C++ compiler): built here, after the assets, which it joins
-    python3 "$here/build_adrenotools.py" --out "$cache/assets/tool/tools/adrenotools" \
-        || echo "   (no driver loader for the phone: a driver the player imports will not load)"
     # The phone runs the C# tools but cannot build them: without them it would try to build the shader
     # translator itself and wait for a network that is not there.
     for t in "$cache/assets/tool/tools/nx_extract/nx_extract" "$cache/assets/tool/tools/dmsh_xlate/dmsh_xlate.dll"; do
         [[ -f $t ]] || die "the app's C# tools are missing: $t (build_nx_extract.py needs the .NET SDK: install it or set DOTNET=/path/to/dotnet)"
     done
 fi
+
+# The Vulkan driver loader: the host dlopens it by name, so it goes into the app's own native library folder
+# (the one the Android linker searches). Its four hooks go into the app's assets, where the porter takes them
+# for the data pack (the host hands the loader the folder it sits in, and the loader looks the hooks up there).
+# The phone has no C++ compiler, so it is built here. Not part of the payload: the app needs it either way.
+echo ">> the Vulkan driver loader"
+python3 "$here/build_adrenotools.py" --out "$cache/assets/tool/tools/adrenotools" --jni-out "$cache/jniLibs/arm64-v8a" \
+    || die "the driver loader did not build: a Vulkan driver the player picks would not load"
+[[ -f "$cache/jniLibs/arm64-v8a/libadrenotools.so" ]] || die "the driver loader is not in the app's native library folder"
 
 # 4. the APK
 echo ">> the APK"

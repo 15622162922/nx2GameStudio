@@ -57,7 +57,12 @@ class MainActivity : ComponentActivity() {
         container.port.attach()   // a port the system killed shows up as interrupted
         setContent { AppRoot(container, actions, launchTab) }
         // the small tools come with the app: an update brings new ones, and the phone has to get them
-        Thread { container.env.refreshTools() }.start()
+        // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
+        Thread {
+            container.env.refreshTools()
+            container.drivers.ensureShipped(this)
+            container.drivers.refresh(this)
+        }.start()
     }
 
     /** The screens' way back to the activity's own privileges: the actions they may ask for, nothing else */

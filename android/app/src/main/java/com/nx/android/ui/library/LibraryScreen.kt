@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.data.Drivers
 import com.nx.android.data.GameIcon
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameStatus
@@ -515,23 +516,25 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
 
 /**
  * 运行前配置（数据包的 env.txt，下次运行生效）：游戏语言与 Vulkan 驱动，选项来自包内的清单文件。
- * 驱动保持它在 drivers.txt 里的名字：宿主在自己旁边找它（玩家目录里的副本）。
+ * 驱动有两个来源：数据包自己带的（写在 drivers.txt 里，宿主在自己旁边找它）和玩家装在 App 里的
+ * （在 App 的私有目录里，按绝对路径写进 env.txt）。
  */
 @Composable
 private fun RunOptions(ported: com.nx.android.domain.Ported) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val langs = remember { PackEnv.languages(ported.pack) }
-    val drivers = remember { PackEnv.drivers(ported.pack) }
+    val installed = remember { Drivers.list(context) }
     var current by remember { mutableStateOf(PackEnv.current(ported.pack)) }
 
-    PickRow("语言", langs.map { it.second }, current.first?.let { c -> langs.firstOrNull { it.first == c }?.second },
-        onSelect = { name ->
-            val code = langs.firstOrNull { it.second == name }?.first
+    PickRow("语言", langs.map { it.first to it.second }, current.first,
+        onSelect = { code ->
             PackEnv.set(ported.pack, code, current.second)
             current = PackEnv.current(ported.pack)
         })
-    PickRow("Vulkan 驱动", drivers + "系统默认", current.second ?: "系统默认",
-        onSelect = { name ->
-            PackEnv.set(ported.pack, current.first, name.takeIf { it != "系统默认" })
+    PickRow("Vulkan 驱动",
+        PackEnv.driverChoices(ported.pack, installed.map { it.library.absolutePath to it.label }), current.second,
+        onSelect = { value ->
+            PackEnv.set(ported.pack, current.first, value.takeIf { it.isNotEmpty() })
             current = PackEnv.current(ported.pack)
         })
 }
@@ -610,14 +613,22 @@ private fun exportNote(savesDir: File): String {
     }
 }
 
+/**
+ * 一个选项行：左边是名字，右边是一个按钮，点了展开选项。每一项是一对：值（写进 env.txt 的）和
+ * 名字（玩家看到的）——两者不一样的时候（装在 App 目录里的驱动，值是它的路径），按钮上显示的是名字。
+ */
 @Composable
-private fun PickRow(label: String, options: List<String>, current: String?, onSelect: (String) -> Unit) {
+private fun PickRow(label: String, options: List<Pair<String, String>>, current: String?, onSelect: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
+    // 现在的值不在选项里（驱动被删了、包里的文件没了）：显示它最后的名字，别把整条路径摊出来
+    val shown = options.firstOrNull { it.first == current }?.second
+        ?: current?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
+        ?: "系统默认"
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
         Box {
             // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
-            QuietButton(current ?: "系统默认", onClick = { open = !open },
+            QuietButton(shown, onClick = { open = !open },
                 modifier = Modifier.width(200.dp),
                 trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
             androidx.compose.material3.DropdownMenu(
@@ -625,10 +636,10 @@ private fun PickRow(label: String, options: List<String>, current: String?, onSe
                 onDismissRequest = { open = false },
                 modifier = Modifier.width(200.dp),
             ) {
-                for (o in options.distinct()) {
+                for ((value, name) in options.distinctBy { it.first }) {
                     androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(o, fontWeight = if (o == current) FontWeight.Bold else FontWeight.Normal) },
-                        onClick = { open = false; onSelect(o) },
+                        text = { Text(name, fontWeight = if (value == current) FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { open = false; onSelect(value) },
                     )
                 }
             }

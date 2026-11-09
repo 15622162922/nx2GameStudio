@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Build the Vulkan driver loader for the phone (arm64) and put it in the app's assets.
 
-The game's own page lets the player import a Vulkan driver (Mesa's Turnip) into the game app's own folder, and the host
-loads it through libadrenotools (dm/android/gfx_vk_core.c, DM_VK_DRIVER). The loader itself has to be in the game APK:
-without it the imported driver cannot be loaded and the game's own driver runs instead. The phone cannot build it (the
-NDK's clang++ is an x86_64 program, and the ARM64 LLVM the app ships has no C++ compiler), so it is built here, like
-nx_extract (build_nx_extract.py), and shipped in the app's assets.
+The host loads a Vulkan driver through libadrenotools (dm/android/gfx_vk_core.c, DM_VK_DRIVER). The loader itself has
+to be in the app's own native library folder: the host dlopens it by name, and the Android linker looks a bare name up
+in LD_LIBRARY_PATH, in the caller's DT_RUNPATH and in the namespace's default library paths — the app's native library
+folder is the only one of those the app controls (the app's private host folder, where the host itself lives, is none
+of them). The four hooks stay with the host: it hands the loader the folder it sits in, and the loader looks the hooks
+up there.
 
-    python3 build_adrenotools.py [--out <dir>] [--ndk <dir>]
+The phone cannot build them (the NDK's clang++ is an x86_64 program, and the ARM64 LLVM the app ships has no C++
+compiler), so it is built here, like nx_extract (build_nx_extract.py), and shipped: the loader in the app's native
+library folder (--jni-out), the hooks in the app's assets, where the porter takes them for the data pack.
+
+    python3 build_adrenotools.py [--out <dir>] [--jni-out <dir>] [--ndk <dir>]
 
 The output is libadrenotools.so and its four hooks (libhook_impl.so, libmain_hook.so, libfile_redirect_hook.so,
-libgsl_alloc_hook.so), built as dm/android/build.py --adrenotools builds them (the same sources, the same flags), so the
-game APK carries them and any driver the player imports later can be loaded.
+libgsl_alloc_hook.so), built as dm/android/build.py --adrenotools builds them (the same sources, the same flags), so
+the game APK carries them and any driver the player imports later can be loaded.
 """
 import argparse, os, shutil, subprocess, sys
 from pathlib import Path
@@ -20,7 +25,9 @@ REPO = Path(__file__).resolve().parent.parent.parent
 AT = REPO / 'nxnative' / 'dm' / 'third_party' / 'libadrenotools'
 LN = AT / 'lib' / 'linkernsbypass'
 DEFAULT_OUT = Path(__file__).resolve().parent / '.cache' / 'assets' / 'tool' / 'tools' / 'adrenotools'
+DEFAULT_JNI_OUT = Path(__file__).resolve().parent / '.cache' / 'jniLibs' / 'arm64-v8a'
 API = '31'                       # the API the host is built for (dm/android/build.py --api)
+LOADER = 'libadrenotools.so'     # the one the host dlopens by name: it goes into the app's native library folder
 
 
 def find_ndk(given):
@@ -43,9 +50,12 @@ def find_ndk(given):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default=str(DEFAULT_OUT))
+    ap.add_argument('--jni-out', default=str(DEFAULT_JNI_OUT),
+                    help='where the loader goes: the app\'s native library folder (the one the linker searches by name)')
     ap.add_argument('--ndk', default='', help='the Android NDK folder (r27c); found in the environment or in the SDK when not named')
     a = ap.parse_args()
     out = Path(a.out)
+    jni = Path(a.jni_out)
     ndk = find_ndk(a.ndk)
     if ndk is None:
         print('>> no Android NDK: the driver loader is not built (a driver the player imports will not load)')
@@ -80,6 +90,11 @@ def main():
         if strip.is_file():
             subprocess.run([str(strip), '--strip-unneeded', str(o)], capture_output=True, text=True)
         print(f'   {name:32} {o.stat().st_size / 1024:8.0f} KB')
+    # the loader alone goes into the app's native library folder: the host dlopens it by name, and that folder is
+    # the one the linker searches (the app's private host folder is not on any of its paths)
+    jni.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(out / LOADER, jni / LOADER)
+    print(f'   {LOADER:32} -> {jni} ({((jni / LOADER).stat().st_size / 1024):.0f} KB, the app\'s native library folder)')
     return 0
 
 

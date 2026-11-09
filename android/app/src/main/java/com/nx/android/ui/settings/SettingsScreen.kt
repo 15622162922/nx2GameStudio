@@ -1,7 +1,6 @@
 package com.nx.android.ui.settings
 
 import android.content.Intent
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,9 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +36,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.appstate.DriverState
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.data.Drivers
 import com.nx.android.data.Env
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PortRunner
@@ -51,15 +54,22 @@ import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.components.rememberPageScroll
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * Settings: the environment's state and its prepare/reset, the doctor's check and the keys' path, the output
- * folder, the log (view, clear, share), the version and the way back into the guided setup.
+ * folder, the Vulkan drivers, the log (view, clear, share), the version and the way back into the guided setup.
+ *
+ * The driver page and the log cover the whole screen; they are composed above this page (App.kt), so this page
+ * only asks for them.
  */
 @Composable
-fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env,
-                   actions: AppActions, onRequest: (PickerRequest) -> Unit) {
+fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: DriverState,
+                   actions: AppActions, onRequest: (PickerRequest) -> Unit,
+                   onDrivers: () -> Unit, onLog: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberPageScroll()).padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -67,10 +77,62 @@ fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env,
         EnvSection(ob, actions)
         DoctorSection(env, actions, onRequest)
         PathsSection(lib, env, actions, onRequest)
+        DriversSection(drivers, actions, onRequest, onDrivers)
         FrameGenSection(actions, onRequest)
-        LogSection(actions)
+        LogSection(actions, onLog)
         AboutSection(ob, actions)
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+/**
+ * Vulkan 驱动：设备级的驱动在这里装、删、下载。游戏用哪一个驱动是每个游戏自己的事，在库页的
+ * 抽屉里选（那里写的是数据包的 env.txt）。
+ */
+@Composable
+private fun DriversSection(state: DriverState, actions: AppActions, onRequest: (PickerRequest) -> Unit,
+                           onDrivers: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { state.refresh(context) }   // 页面重新出现时重读 App 自己的目录
+    val drivers = state.drivers
+
+    Section("Vulkan 驱动") {
+        // 装好的驱动。App 自带的那一个也在这里：它是 App 的一部分，没有「装上」这一步，也删不掉
+        for (d in drivers) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusDot(NxPalette.Ready)
+                Column(Modifier.weight(1f)) {
+                    Text(d.label, style = MaterialTheme.typography.bodyMedium)
+                    Hint(listOfNotNull(d.vendor.takeIf { it.isNotEmpty() }, d.library.name).joinToString(" · "), size = 11.sp)
+                }
+                if (d.shipped) {
+                    Hint("内置", size = 11.sp)
+                } else {
+                    QuietButton("删除", {
+                        if (Drivers.remove(context, d.id)) {
+                            state.refresh(context)
+                            actions.onToast("已删除：${d.name}")
+                        } else actions.onToast("删除失败：文件可能正被占用")
+                    })
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            CapsuleButton("下载驱动", onDrivers, modifier = Modifier.weight(1f))
+            QuietButton("从文件导入", {
+                onRequest(PickerRequest(PickerMode.FILE, setOf("zip", "so"), null, "选择驱动", onPicked = { f ->
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { Drivers.install(context, f) }
+                        r.fold(
+                            onSuccess = { state.refresh(context); actions.onToast("已安装：${it.label}") },
+                            onFailure = { actions.onToast("导入失败：${it.message.orEmpty()}") },
+                        )
+                    }
+                }))
+            }, modifier = Modifier.weight(1f))
+        }
+        Hint("驱动装在 App 自己的目录里，游戏运行时按路径加载；换了驱动下一次启动生效。", size = 11.sp)
     }
 }
 
@@ -221,25 +283,21 @@ private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions, onReq
 }
 
 @Composable
-private fun LogSection(actions: AppActions) {
-    var show by remember { mutableStateOf(false) }
+private fun LogSection(actions: AppActions, onLog: () -> Unit) {
     Section("日志") {
         Text("工具说的每一句都在一个文件里：出问题时可以从这里分享出去。",
              style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuietButton("查看", { show = true })
+            QuietButton("查看", onLog)
             QuietButton("分享", { actions.onShareLog() })
             QuietButton("清空", { actions.onClearLog() })
         }
     }
-    if (show) {
-        BackHandler { show = false }
-        LogOverlay(onClose = { show = false }, text = remember { actions.readLog() })
-    }
 }
 
+/** 日志浮层：盖住整屏（在页面之外组合，App.kt） */
 @Composable
-private fun LogOverlay(onClose: () -> Unit, text: String) {
+internal fun LogOverlay(onClose: () -> Unit, text: String) {
     Box(
         Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f))
             .clickable { onClose() },

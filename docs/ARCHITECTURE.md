@@ -61,7 +61,7 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 | shaders | `shader_split.py` (the DLC's own shaders too, `aoc/` given as `DM_SPLIT_AOC`), then `shader_vk.py` (SPIR-V) with the translator built from the repository's source (`dm/gfx/tools/dmsh_xlate` over `dm/third_party/ryujinx`, once per player in their nx2android folder), plus the shaders captured on the device (below) | `shader/pkg`, `android/shaders.dmsv`, `android/captured_shaders/` |
 | host | `dm/android/build.py --release` with the player's NDK (`--debug`: a development build, debug information and `DM_CTL`) | `android/host/libdmhost.so` (`android/host-debug/`); with `--app`: `libdmplay.so` instead (the host statically linked with the player's JNI entry, the app's `:play` process loads it) |
 | apk | The legacy path only (`--game-apk`): `dm/android/apk/mkapk.py`, signed with the player's own key, with the game's gamepad theme only (`dm/android/themes/themes.tsv`: its pack, else the ergo pack) as `assets/overlay/` | `<out>/<App>.apk` — unmaintained in this fork, and it has no launcher page any more (the game is the entry) |
-| data | The files the app reads from the pack's own folder | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/`; the pack also carries the host (`host/libdmplay.so`), the Vulkan drivers (`drivers/`), the gamepad's theme (`overlay/`) and the icon (`icon.png`), all named in the manifest |
+| data | The files the app reads from the pack's own folder | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/`; the pack also carries the host (`host/libdmplay.so`), the Vulkan drivers (`drivers/`: the player's own, plus the loader's four hooks — the loader itself is the app's, see below), the gamepad's theme (`overlay/`) and the icon (`icon.png`), all named in the manifest |
 | install | The legacy path only (`--game-apk`): `adb install`, the profile's `requires` checked against the device, the data pack pushed (optional) | |
 
 RomFS in the data pack is hard-linked to the extraction when the volume allows it, so it takes no extra space.
@@ -149,3 +149,24 @@ the game, so a crash takes the game down, not the app or a port that is running.
 the app's files folder per title id (`DM_GAME_ID`); the game's language and Vulkan driver are picked in the
 library's drawer and written into the pack's `env.txt`. The assets are built by `packaging/android-apk/` and are
 not committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).
+
+### The Vulkan drivers
+
+A game runs on the device's own Vulkan driver unless the player picks another one in the library's drawer. The
+drivers the player picks are **the app's**, not the pack's: they live in the app's own folder, one folder each
+(`files/drivers/<id>/`), and the drawer writes the chosen one's **absolute path** into the pack's `env.txt`
+(`DM_VK_DRIVER`). The host reads that row (`dm/android/gfx_vk_core.c`), splits it at the last slash and hands the
+directory to `libadrenotools`, which loads the library from it in a linker namespace of its own — so a driver may
+live anywhere the app can read. One folder per driver because every Turnip build's library is called
+`libvulkan_freedreno.so`. The app downloads the drivers (fixed addresses, no release listing: the GitHub API
+allows 60 requests an hour per address and a phone shares its address), ships one of them in its assets
+(`drivers/Turnip_Gen8_V39.zip`, unpacked into the app's own folder by the app itself when it starts — no network,
+no click — and marked as the built-in one, so it is the app's own and not the player's to remove) and imports any
+other from the device's files.
+
+The **loader** (`libadrenotools.so`) is the app's own native library, and it has to be: the host `dlopen`s it **by
+name**, and the Android linker looks a bare name up in `LD_LIBRARY_PATH`, in the caller's `DT_RUNPATH` and in the
+namespace's default library paths — the app's native library folder is the only one of those the app controls (the
+app's private host folder, where the host itself lives, is none of them, so a loader copied there is never found).
+Its four hooks travel with the host instead: the host hands the loader the folder it sits in, and the loader looks
+the hooks up there.

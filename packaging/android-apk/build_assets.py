@@ -12,6 +12,7 @@ The result is what the Gradle build takes as the app's assets:
     <out>/rootfs.pkg      the rootfs (the payload's tarball, gzipped)
     <out>/tool/            the tool: porter/, nxnative/ and the Python modules
     <out>/toolchain/       the NDK, the ARM64 compiler, glslc
+    <out>/drivers/         the Vulkan driver the app ships (Mesa's Turnip), unpacked by the app itself
     <out>/manifest.json    what is in there and what it is for
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys, tarfile, urllib.request
@@ -139,6 +140,37 @@ DOTNET_MAJOR = 10
 DOTNET_INDEX = f'https://builds.dotnet.microsoft.com/dotnet/release-metadata/{DOTNET_MAJOR}.0/releases.json'
 
 
+# The Vulkan driver the app ships, so that a player has one without a network: Mesa's Turnip for the Adreno 8xx,
+# from the release v39 of StevenMXZ's Adreno-Tools-Drivers. An archive and not the library: the library is 8.4 MB and
+# the APK does not compress a .so, while the archive is 2.5 MB (a zip of a zip does not shrink either, but it is a
+# quarter of the size). The app unpacks it into its own folder when it starts.
+DRIVER_NAME = 'Turnip_Gen8_V39.zip'
+DRIVER_URL = f'https://github.com/StevenMXZ/Adreno-Tools-Drivers/releases/download/v39/{DRIVER_NAME}'
+DRIVER_SHA256 = '572e415c11b636ea2a4c4968c60a9b24e459302549c8ea38e814dbd07e40654d'
+
+
+def driver_archive(cache: Path, out: Path):
+    """The Vulkan driver the app ships, fetched once and kept in the cache (the download needs the network).
+    The checksum is pinned: the archive is a binary the app hands to the phone's graphics driver."""
+    target = out / DRIVER_NAME
+    local = cache / DRIVER_NAME
+    if not (local.exists() and hashlib.sha256(local.read_bytes()).hexdigest() == DRIVER_SHA256):
+        print(f'>> the Vulkan driver ({DRIVER_NAME})')
+        req = urllib.request.Request(DRIVER_URL, headers={'User-Agent': 'nx2android-android-apk'})
+        part = local.with_suffix('.part')
+        with urllib.request.urlopen(req, timeout=120) as r, open(part, 'wb') as f:
+            shutil.copyfileobj(r, f, 1 << 20)
+        part.replace(local)
+    got = hashlib.sha256(local.read_bytes()).hexdigest()
+    if got != DRIVER_SHA256:
+        local.unlink(missing_ok=True)
+        raise SystemExit(f'android-apk: the driver archive is not the one we pinned ({got})')
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(local, target)
+    print(f'   {DRIVER_NAME} ({target.stat().st_size / 2**20:.1f} MB)')
+    return target
+
+
 def dotnet_runtime(cache):
     """The .NET runtime for an ARM64 Linux host: the newest one of the major the port builds with, checked against the
     SHA-512 in Microsoft's release list. The runtime, not the SDK: the phone only runs the two C# tools (nx_extract and
@@ -226,6 +258,10 @@ def main():
         dotnet = dotnet_runtime(cache)
         shutil.copy2(dotnet['file'], out / 'dotnet.pkg')
 
+    # The Vulkan driver the app ships: a player has one without a network. The app unpacks it into its own folder
+    # when it starts (the archive travels; the library does not).
+    driver_archive(cache, out / 'drivers')
+
     # The APK's assets have no permissions, so the modes of the tool's tree travel in a file of their own: the
     # guest's programs have to be executable, or the porter cannot start them.
     modes = {}
@@ -255,7 +291,8 @@ def main():
                 'toolchain': 'toolchain',
                 'modules': MODULES if not a.no_wheels else [],
                 'dotnet': 'dotnet.pkg' if dotnet else '',
-                'dotnet_sha512': dotnet['hash'] if dotnet else ''}
+                'dotnet_sha512': dotnet['hash'] if dotnet else '',
+                'drivers': 'drivers'}
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     size = sum(f.stat().st_size for f in out.rglob('*') if f.is_file())
     print(f'>> the payload at {out}: {size / 2**20:.0f} MB')

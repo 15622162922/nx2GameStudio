@@ -1,5 +1,6 @@
 package com.nx.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,6 +72,8 @@ import com.nx.android.ui.library.ConfigPanel
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
 import com.nx.android.ui.onboarding.OnboardingScreen
+import com.nx.android.ui.settings.DriverScreen
+import com.nx.android.ui.settings.LogOverlay
 import com.nx.android.ui.settings.SettingsScreen
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
@@ -109,17 +112,29 @@ data class AppActions(
 )
 
 /** The app's root: the guided setup until it is done, the main shell after */
+/**
+ * The app's root: the guided setup until it is done, the main shell after.
+ *
+ * The pages that cover the whole screen (the file picker, the driver page, the log) are composed here, above
+ * the pages themselves: a page's own content sits in a scrolling column, and a cover inside one never fills
+ * the screen — it is laid out in the column's flow instead.
+ */
 @Composable
 fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
     NxTheme {
         var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
+        var driversOpen by remember { mutableStateOf(false) }
+        var logOpen by remember { mutableStateOf(false) }
+        val ctx = androidx.compose.ui.platform.LocalContext.current
         Box(Modifier.fillMaxSize().background(NxPalette.Background)) {
             if (container.onboarding.active) {
                 OnboardingScreen(container.onboarding, actions) { pickerReq = it }
             } else {
-                MainScreen(container, actions, startTab) { pickerReq = it }
+                MainScreen(container, actions, startTab,
+                    onRequest = { pickerReq = it },
+                    onDrivers = { driversOpen = true },
+                    onLog = { logOpen = true })
             }
-            val ctx = androidx.compose.ui.platform.LocalContext.current
             val volumes = remember(ctx) { StorageVolumes.list(ctx) }
             pickerReq?.let { req ->
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
@@ -158,13 +173,24 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                     }
                 }
             }
+            // 驱动页：盖住整屏，在页面之外
+            if (driversOpen) {
+                DriverScreen(container.drivers, onClose = { driversOpen = false })
+            }
+            // 日志浮层：同样盖住整屏
+            if (logOpen) {
+                BackHandler { logOpen = false }
+                LogOverlay(onClose = { logOpen = false }, text = remember { actions.readLog() })
+            }
         }
     }
 }
 
 @Composable
 fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
-               onRequest: (PickerRequest) -> Unit) {
+               onRequest: (PickerRequest) -> Unit,
+               onDrivers: () -> Unit,
+               onLog: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     val port = container.port
     val lib = container.library
@@ -192,7 +218,8 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
-                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, actions, onRequest)
+                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, container.drivers, actions,
+                    onRequest, onDrivers, onLog)
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })

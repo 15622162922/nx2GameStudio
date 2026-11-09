@@ -168,6 +168,20 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
+    def test_the_loader_is_the_app_s_own(self):   # the host dlopens the loader by name: only the app's native library folder is on the linker's path, so the loader lives there and the pack carries the hooks
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_loader_'))
+        try:
+            port = pipeline.Port(pipeline.Options(t))
+            (t / pipeline.ADRENOTOOLS_LOADER).write_bytes(b'AT')
+            for n in pipeline.ADRENOTOOLS_HOOKS: (t / n).write_bytes(b'HOOK')
+            port.so = t / 'libdmplay.so'; port.so.write_bytes(b'ELF')
+            hooks = sorted(p.name for p in port.loader_libs())
+            self.assertNotIn(pipeline.ADRENOTOOLS_LOADER, hooks)          # the loader is not the pack's
+            self.assertEqual(sorted(pipeline.ADRENOTOOLS_HOOKS), hooks)    # the hooks travel with the host
+            self.assertEqual([pipeline.ADRENOTOOLS_LOADER], [p.name for p in port.loader_so()])
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
     @unittest.skipUnless(any(Path(p).is_file() for p in pipeline.LETTER_FONTS), 'no letter font on this machine')
     def test_button_font(self):   # the Nintendo extension stand-in: made once, in the pack, named in env.txt (Super Mario Bros. Wonder's "Press L+R" drew '?' without it)
         try: from fontTools.ttLib import TTFont

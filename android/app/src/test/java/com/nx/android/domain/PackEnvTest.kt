@@ -47,4 +47,35 @@ class PackEnvTest {
         assertNull(lang); assertNull(drv)
         assertEquals(0, PackEnv.languages(pack()).size)
     }
+
+    @Test
+    fun `the driver's field offers the device's own, the installed and the pack's own`() {
+        val p = pack()
+        File(p, "drivers.txt").writeText("libvulkan_freedreno.so\n")
+        File(p, "drivers").mkdirs()
+        File(p, "drivers/libvulkan_freedreno.so").writeText("DRV")
+        val installed = listOf("/data/user/0/com.nx.android/files/drivers/Turnip_Gen8_V39/libvulkan_freedreno.so" to "Turnip Gen8 V39")
+        assertEquals(
+            listOf(
+                "" to "系统默认",
+                installed[0],
+                "libvulkan_freedreno.so" to "libvulkan_freedreno.so",
+            ),
+            PackEnv.driverChoices(p, installed),
+        )
+        p.deleteRecursively()
+    }
+
+    @Test
+    fun `an installed driver and a pack's own may carry the same name and stay two choices`() {
+        val p = pack()
+        File(p, "drivers.txt").writeText("libvulkan_freedreno.so\n")
+        File(p, "drivers").mkdirs()
+        File(p, "drivers/libvulkan_freedreno.so").writeText("DRV")
+        val choices = PackEnv.driverChoices(p, listOf("/app/files/drivers/x/libvulkan_freedreno.so" to "Turnip Gen8 V39"))
+        assertEquals(3, choices.size)
+        assertEquals("/app/files/drivers/x/libvulkan_freedreno.so", choices[1].first)
+        assertEquals("libvulkan_freedreno.so", choices[2].first)
+        p.deleteRecursively()
+    }
 }
