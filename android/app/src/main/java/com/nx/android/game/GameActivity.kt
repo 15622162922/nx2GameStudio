@@ -46,6 +46,15 @@ import com.nx.android.ui.game.PadView
 import com.nx.android.ui.theme.NxTheme
 
 /**
+ * 音量键归 Android：游戏的音频走媒体音量组（AAUDIO_USAGE_GAME），系统拿不到这些键就永远调不了音量
+ * （音量条不出现，游戏的声音也一点不变）。其余按键照旧交给游戏。
+ */
+internal fun forwardsKeyToGame(keyCode: Int): Boolean =
+    keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
+        keyCode != KeyEvent.KEYCODE_VOLUME_DOWN &&
+        keyCode != KeyEvent.KEYCODE_VOLUME_MUTE
+
+/**
  * One game in this process (":play"): the host (libdmplay.so, the copy the library made in the app's private
  * folder) is loaded here and started with the pack folder, the SurfaceView's surface goes to the host's Vulkan
  * swapchain and every input event is forwarded as the snapshot the shared core reads (jni_android.h). The
@@ -225,11 +234,14 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         e.getAxisValue(MotionEvent.AXIS_BRAKE), e.getAxisValue(MotionEvent.AXIS_GAS))
 
     /**
-     * everything is consumed here (as the NativeActivity's queue did). Back goes to the frontmost thing:
+     * everything is consumed here (as the NativeActivity's queue did) — except the volume keys, which belong to
+     * Android (the game's audio is in the media volume group, so the system's volume bar is the game's volume).
+     * Back goes to the frontmost thing:
      * the drawer closes it, the host's own panel (text entry, layout editor, save picker) steps back in it
      * (dm_menu_state: -1 closed, else a panel is up), and with nothing up Back opens the drawer.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (!forwardsKeyToGame(e.keyCode)) return false   // 音量键：系统的事，游戏与宿主都不沾
         if (e.keyCode == KeyEvent.KEYCODE_BACK && !paused) {
             if (e.action == KeyEvent.ACTION_DOWN) {
                 val hostPanel = !drawerOpen && hostPanelUp()   // 抽屉在前面时，Back 归抽屉
