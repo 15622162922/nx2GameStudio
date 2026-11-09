@@ -5,13 +5,17 @@
 # The payload is a private release (NixPort/nixport-rootfs): the build needs a token with read access to it in the
 # repository's secret NIXPORT_TOKEN (a fine-grained token with that one repository). Everything else is public.
 #
-# The APK is the run's artifact (nx2android-android-apk), and a published release gets it as an asset.
+# The build is the release variant: the APK a player installs, signed with the project's own key (the secret
+# NX2A_KEYSTORE_B64), so it installs over an earlier one instead of beside it.
+#
+# The APK is the run's artifact (nx2android-android-apk), and a published release gets it as an asset named
+# after the version (nx2android-v0.3-android.apk).
 name: Android app
 
 on:
   workflow_dispatch:   # a build of the branch, kept as the run's artifact
   push:
-    branches: [main]
+    branches: [android]
     paths:
       - 'android/**'
       - 'packaging/android-apk/**'
@@ -64,6 +68,9 @@ jobs:
           NIXPORT_TOKEN: ${{ secrets.NIXPORT_TOKEN }}
       - name: the app's signing key
         run: |
+          # A release is signed with the project's own key: it must be the key every earlier build was signed
+          # with, or a phone that installed one can never install this one over it. Without the secret the
+          # build falls back to the runner's throwaway debug key - fine for a look, useless for a player.
           if [ -n "$NX2A_KEYSTORE_B64" ]; then
             echo "$NX2A_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nx2android.keystore"
             echo "NX2A_KEYSTORE=$RUNNER_TEMP/nx2android.keystore" >> "$GITHUB_ENV"
@@ -79,17 +86,31 @@ jobs:
       - name: the app
         run: |
           export DOTNET="$(which dotnet)"
-          bash packaging/android-apk/build_apk.sh debug
+          bash packaging/android-apk/build_apk.sh release
         env:
           GH_TOKEN: ${{ secrets.NIXPORT_TOKEN }}   # the private payload release
+      - name: the APK's name
+        id: apk
+        run: |
+          # The name carries the version, the way the desktop bundles' names do: a release gets the tag's
+          # own name, a build of the branch the version the app says.
+          if [ "${{ github.event_name }}" = "release" ]; then
+            ver="${{ github.event.release.tag_name }}"
+          else
+            ver="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)"
+          fi
+          echo "name=nx2android-${ver}.apk" >> "$GITHUB_OUTPUT"
+          echo "name: nx2android-${ver}.apk"
       - name: the APK
-        run: ls -la android/app/build/outputs/apk/debug/*.apk
+        run: ls -la android/app/build/outputs/apk/release/*.apk
       - uses: actions/upload-artifact@v7
         with:
           name: nx2android-android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
       - if: github.event_name == 'release'
-        run: gh release upload "${{ github.event.release.tag_name }}" android/app/build/outputs/apk/debug/app-debug.apk --clobber
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}"
+          gh release upload "${{ github.event.release.tag_name }}" "android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
