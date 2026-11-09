@@ -55,7 +55,7 @@ android {
         // be exec'd at all. The app is not on Google Play (it ships as an APK from the project's releases).
         targetSdk = 28
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.3-android"
         ndk { abiFilters += listOf("arm64-v8a") }
         // -PnxLsfg=false: the host the app builds is built without the frame generation's GPL code (the lsfg/ folder),
         // so it is under the repository's MIT license. The default is the current behaviour: the code is linked, and
@@ -86,6 +86,13 @@ android {
     }
     packaging {
         jniLibs.useLegacyPackaging = true
+    }
+
+    lint {
+        // targetSdk = 28 is deliberate: SDK 29 and later enforce W^X for app data, and the guest programs
+        // under files/rootfs could not be exec'd at all. This check only says the target is old - it is
+        // not an error here, and it is the one check that stands between the tree and a release build.
+        disable += "ExpiredTargetSdkVersion"
     }
 
     // The screen is Jetpack Compose (Material 3).
