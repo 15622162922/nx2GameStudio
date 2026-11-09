@@ -37,4 +37,11 @@ object SaveShare {
             .setType("application/zip")
             .putExtra(Intent.EXTRA_STREAM, uri(context, file))
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+    /** the share of one text file (a game's log): a file as well, so a long log arrives whole */
+    fun textIntent(context: Context, file: File): Intent =
+        Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_STREAM, uri(context, file))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }

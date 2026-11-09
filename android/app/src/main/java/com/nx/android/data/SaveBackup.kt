@@ -48,7 +48,7 @@ object SaveBackup {
     }
 
     /** a name that is safe in a file name and in a zip entry */
-    private fun sanitize(name: String): String =
+    internal fun sanitize(name: String): String =
         name.map { if (it.isLetterOrDigit() || it == '-' || it == '_' || it == '.') it else '_' }
             .joinToString("").trim('_', '.', ' ').take(60)
 

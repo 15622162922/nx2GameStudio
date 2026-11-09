@@ -1,5 +1,6 @@
 package com.nx.android.ui.library
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
@@ -67,6 +69,7 @@ import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.Drivers
 import com.nx.android.data.GameIcon
+import com.nx.android.data.GameLog
 import com.nx.android.data.Player
 import com.nx.android.data.SaveBackup
 import com.nx.android.data.SaveShare
@@ -389,8 +392,37 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     val titleId = FolderScanner.titleIdIn(f.name)
         ?: lib.portOf(f)?.titleId?.takeIf { it.isNotEmpty() }?.uppercase()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    // 完成的移植：数据包里带着宿主写的运行日志（log.txt）
+    val ported = lib.portOf(f)
+
+    /** 游戏运行日志：宿主把它写在了数据包里，拷进下载目录再发出去（整份文件，不截断） */
+    fun shareGameLog(target: Ported) {
+        if (!actions.storageOk()) { actions.onToast("需要存储权限：日志要写进下载目录"); return }
+        val game = FolderScanner.displayName(f)
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching { GameLog.copyTo(target.pack, SaveShare.packagesDir(context), game) }
+            }
+            r.onSuccess { copied ->
+                if (copied == null) {
+                    actions.onToast("这个游戏还没有运行日志")
+                } else {
+                    runCatching {
+                        context.startActivity(
+                            Intent.createChooser(SaveShare.textIntent(context, copied), "分享日志"))
+                    }.onFailure { e ->
+                        actions.onToast(if (e is ActivityNotFoundException) "没有可以接收的应用"
+                        else "分享失败：${e.message ?: "原因不明"}")
+                    }
+                }
+            }.onFailure {
+                actions.onToast("日志导出失败：${it.message ?: "原因不明"}")
+            }
+        }
+    }
 
     Box(
         Modifier.fillMaxSize()
@@ -439,6 +471,16 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                             onDismissRequest = { menuOpen = false },
                         ) {
                             androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("分享日志") },
+                                leadingIcon = { Icon(Icons.Filled.Description, null, Modifier.size(18.dp)) },
+                                onClick = {
+                                    menuOpen = false
+                                    val p = ported
+                                    if (p == null) actions.onToast("产物不见了（输出目录里没找到）")
+                                    else shareGameLog(p)
+                                },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("删除产物", color = NxPalette.Danger) },
                                 leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = NxPalette.Danger) },
                                 onClick = { menuOpen = false; confirmDelete = true },
@@ -463,7 +505,6 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                     }, modifier = Modifier.fillMaxWidth())
                 }
                 status == GameStatus.DONE -> {
-                    val ported = lib.portOf(f)
                     if (ported == null) {
                         Hint("产物不见了（输出目录里没找到）——状态回落为未移植")
                     } else {
