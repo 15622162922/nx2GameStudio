@@ -15,10 +15,9 @@ The app is the whole tool on the phone: it ports the game on the device and play
 
 ## Games
 
-The games nx2android can run are the ones nxnative has a profile for. The
-[tested games table upstream](https://github.com/seedds/nxnative/blob/main/dm/games/README.md#games)
-lists every profile with its title ID, tested build, SDK, engine and graphics API; the games ported to
-Android so far, and the ones next, are in [docs/PORT_CHECKLIST.md](docs/PORT_CHECKLIST.md).
+The games that play on Android are listed upstream, with the nx2android version each was tested on and the frame
+rate it runs at: [Games](https://github.com/shirai91/nx2android#games). The games ported so far, and the ones
+next, are in [docs/PORT_CHECKLIST.md](docs/PORT_CHECKLIST.md).
 
 A game needs a device whose GPU reads BC-compressed textures (Adreno, Xclipse; not Mali or PowerVR).
 Tested on a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
