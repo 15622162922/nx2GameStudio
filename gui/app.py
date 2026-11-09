@@ -68,30 +68,19 @@ class PortTab(QWidget):
         self.language = QComboBox()
         for code, name in LANGUAGES: self.language.addItem(name, code)
         self.out = QLineEdit(); self.out.setPlaceholderText("the game's folder")
-        self.install = QCheckBox('Install on the device when done')
-        self.device = QComboBox(); self.device.setMinimumWidth(260)
-        refresh = QPushButton('Refresh'); refresh.clicked.connect(self.refresh_devices)
-        dev = QWidget(); dh = QHBoxLayout(dev); dh.setContentsMargins(0, 0, 0, 0); dh.addWidget(self.install); dh.addWidget(self.device, 1); dh.addWidget(refresh)
-        self.replace_signer = QCheckBox('Replace an app of the same package signed with another key (uninstalls it first: its saves are deleted)')
-        self.package = QLineEdit(); self.package.setPlaceholderText('the profile\'s package')   # porter port --package: a test install beside the player's other build
-        self.package.setToolTip('Install under another package than the profile\'s (org.nx2a.<game>.test), beside your other build of the game.\n'
-                                'An app of another package has its own saves.')
         self.fps60 = QCheckBox('60 fps (the profile\'s own frame-rate cap, else the community\'s FPSLocker-Warehouse config of the game\'s build, fetched from GitHub)')
         self.touch = QCheckBox('Touch game: start with the on-screen gamepad hidden, so every touch but the menu button\'s goes to the game (the pause menu shows it again)')   # porter port --touch
         self.driver = QLineEdit(); self.driver.setPlaceholderText('the device\'s own')   # porter port --vulkan-driver
-        self.driver.setToolTip('A Vulkan driver library (.so) to pack in the APK and use instead of the device\'s own,\n'
+        self.driver.setToolTip('A Vulkan driver library (.so) to pack in the data pack and use instead of the device\'s own,\n'
                                'such as Mesa\'s Turnip for Adreno GPUs. Empty: the device\'s driver.\n'
                                'If the library does not load on the device, the app uses the device\'s driver.')
         self.driver_dir = QLineEdit(); self.driver_dir.setPlaceholderText('none')   # porter port --vulkan-driver-dir
-        self.driver_dir.setToolTip('A folder of Vulkan driver libraries (.so): the APK carries them all and the game\'s launcher lets\n'
-                                   'the player pick one (the device\'s own driver is the first choice).')
+        self.driver_dir.setToolTip('A folder of Vulkan driver libraries (.so): the pack carries them all and the app\'s\n'
+                                   'configuration panel lets the player pick one (the device\'s own driver is the first choice).')
         self.mt_replay = QCheckBox('Multithread replay: record the game\'s Vulkan commands on a thread of their own (faster in busy scenes; port again to turn it off)')   # porter port --mt-replay
         self.debug = QCheckBox('Development build (debuggable, debug information, DM_CTL key presses)')
         self.experimental = QCheckBox('Experimental: try a game that is not ported to Android yet (it may not start)')
         self.experimental.toggled.connect(lambda _: self.update_port_button())
-        self.vercode = QSpinBox(); self.vercode.setRange(0, 65535); self.vercode.setSpecialValueText('none'); self.vercode.setMaximumWidth(120)   # porter port --vercode-offset (0: none, or $NX2A_VERCODE_OFFSET)
-        self.vercode.setToolTip('Added to the APK\'s versionCode. Android does not install an APK over one with a higher versionCode;\n'
-                                'raise this to install a rebuild of the same game version over an earlier rebuild that had an offset, and keep its saves.')
         self.headroom = QSpinBox(); self.headroom.setRange(-1, 48); self.headroom.setSpecialValueText('Auto'); self.headroom.setValue(-1); self.headroom.setSuffix(' GB')
         self.headroom.setMaximumWidth(120)   # porter port --alias-headroom (Auto: none passed)
         headroom = with_info(self.headroom, 'Extra address space (the alias region) for a game that takes its memory as address regions.\n'
@@ -99,8 +88,7 @@ class PortTab(QWidget):
                              'Auto: 8 GB for a game version the profile was not tested with, none for a tested one.\n'
                              'Raise it (16, 24 …) if the game still runs out. It uses no memory and does not change the speed.')
         f.addRow('App name', self.app_name); f.addRow('Game language', self.language)
-        f.addRow('Output folder', path_row(self.out, self.pick_out)); f.addRow('Device', dev); f.addRow('', self.replace_signer)
-        f.addRow('Package', self.package); f.addRow('versionCode offset', self.vercode); f.addRow('Extra address space', headroom)
+        f.addRow('Output folder', path_row(self.out, self.pick_out)); f.addRow('Extra address space', headroom)
         f.addRow('Vulkan driver', path_row(self.driver, self.pick_driver))
         f.addRow('Vulkan driver folder', path_row(self.driver_dir, self.pick_driver_dir))
         f.addRow('', self.fps60); f.addRow('', self.touch); f.addRow('', self.mt_replay); f.addRow('', self.debug); f.addRow('', self.experimental)
@@ -112,10 +100,9 @@ class PortTab(QWidget):
         self.port_btn.clicked.connect(self.start)
         self.cancel_btn = QPushButton('Cancel'); self.cancel_btn.setEnabled(False); self.cancel_btn.clicked.connect(self.cancel)
         self.open_btn = QPushButton('Open output folder'); self.open_btn.setEnabled(False); self.open_btn.clicked.connect(self.open_out)
-        self.inst_btn = QPushButton('Install on device'); self.inst_btn.setEnabled(False); self.inst_btn.clicked.connect(self.install_now)
         for b in (self.port_btn, self.cancel_btn): bar.addWidget(b)
         bar.addStretch(1)
-        for b in (self.open_btn, self.inst_btn): bar.addWidget(b)
+        bar.addWidget(self.open_btn)
         v.addLayout(bar)
 
         self.step = QLabel(''); self.prog = QProgressBar(); self.prog.setTextVisible(True); self.prog.setRange(0, 1000); self.prog.setValue(0)
@@ -127,7 +114,6 @@ class PortTab(QWidget):
         split.addWidget(self.stages); split.addWidget(self.log); split.setSizes([180, 220])
         v.addWidget(split, 1)
         self.tick = QTimer(self); self.tick.timeout.connect(self.on_tick); self.tick.start(1000)
-        self.refresh_devices()
 
     # ---- the game file ----
     def pick_folder(self):
@@ -172,23 +158,11 @@ class PortTab(QWidget):
         if info.get('reason'): rows.append(f'<span style="color:{"#ef6c00" if info["supported"] else "#c62828"}">{info["reason"]}</span>')
         self.card.setText('<br>'.join(rows))
         self.app_name.setPlaceholderText(info.get('name') or 'the game\'s name')
-        self.package.setPlaceholderText(a.get('package') or 'the profile\'s package')
         self.update_port_button()
 
     def update_port_button(self):   # a supported game, or any game with Experimental ticked
         i = self.info or {}
         self.port_btn.setEnabled(bool(i.get('supported') or (i.get('experimental') and self.experimental.isChecked())) and not self.porter.running())
-
-    def refresh_devices(self):
-        cur = self.device.currentData() or config.load().get('device')
-        def got(rows, code):
-            self.device.clear()
-            for r in rows or []:
-                if r['state'] == 'device': self.device.addItem(f'{r["serial"]}  {r["info"]}', r['serial'])
-            if not self.device.count(): self.device.addItem('no device connected', '')
-            i = self.device.findData(cur)
-            if i >= 0: self.device.setCurrentIndex(i)
-        call_json(self, ['devices', '--json'], got)
 
     # ---- the port ----
     def start(self):
@@ -199,12 +173,6 @@ class PortTab(QWidget):
         if self.app_name.text().strip(): args += ['--app-name', self.app_name.text().strip()]
         if self.language.currentData(): args += ['--language', self.language.currentData()]
         if self.out.text().strip(): args += ['--out', self.out.text().strip()]
-        if self.install.isChecked():
-            args.append('--install')
-            if self.device.currentData(): args += ['--device', self.device.currentData()]
-            if self.replace_signer.isChecked(): args.append('--replace-signer')
-        if self.package.text().strip(): args += ['--package', self.package.text().strip()]
-        if self.vercode.value(): args += ['--vercode-offset', str(self.vercode.value())]
         if self.headroom.value() >= 0: args += ['--alias-headroom', str(self.headroom.value())]
         if self.fps60.isChecked(): args.append('--fps60')
         if self.touch.isChecked(): args.append('--touch')
@@ -215,17 +183,10 @@ class PortTab(QWidget):
         if self.experimental.isChecked() and not self.info.get('supported'): args.append('--experimental')
         self.run(args)
 
-    def install_now(self):
-        if not self.result: return
-        args = ['install', self.result['data'], '--apk', self.result['apk'], '--progress', 'json']
-        if self.device.currentData(): args += ['--device', self.device.currentData()]
-        if self.replace_signer.isChecked(): args.append('--replace-signer')
-        self.run(args)
-
     def run(self, args):
         self.stages.clear(); self.items = {}; self.log.clear(); self.prog.setValue(0); self.step.setText('starting…')
         self.result = None; self.t0 = time.time(); self.cancelled = False
-        for b in (self.port_btn, self.open_btn, self.inst_btn): b.setEnabled(False)
+        for b in (self.port_btn, self.open_btn): b.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self.append('$ porter ' + ' '.join(f'"{a}"' if ' ' in a else a for a in args))
         self.porter.start(args)
@@ -279,13 +240,13 @@ class PortTab(QWidget):
         took = hms(time.time() - self.t0)
         if code == 0:
             self.step.setText(f'done in {took}'); self.prog.setRange(0, 1000); self.prog.setValue(1000)
-            if self.result: self.open_btn.setEnabled(True); self.inst_btn.setEnabled(True)
+            if self.result: self.open_btn.setEnabled(True)
         else:
             self.step.setText('cancelled' if self.cancelled or code == 130 else f'failed after {took} (the log says why)')
             self.prog.setRange(0, 1000); self.prog.setValue(0)
 
     def open_out(self):
-        if self.result: QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.result['apk']).parent)))
+        if self.result: QDesktopServices.openUrl(QUrl.fromLocalFile(self.result['data']))
 
 
 # ---------------- Setup ----------------

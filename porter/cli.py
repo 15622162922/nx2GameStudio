@@ -10,22 +10,27 @@ def _parser():
     p = sub.add_parser('profiles', help='list the games the tool can port'); p.add_argument('--all', action='store_true', help='also the iOS profiles not ported to Android'); p.add_argument('--json', action='store_true')
     i = sub.add_parser('inspect', help='what a game holds and whether it can be ported'); i.add_argument('folder', help='the game file (NSP / XCI / NSZ / XCZ) or the folder with it'); i.add_argument('--json', action='store_true')
     i.add_argument('-k', '--keys', help='prod.keys (default: the configured one): reads the title ID of a dump with no [title ID] in its name')
-    po = sub.add_parser('port', help='make the APK and the data pack (and install them)')
+    po = sub.add_parser('port', help='make the data pack (the phone app runs the game)')
     po.add_argument('folder', help='the game file (NSP / XCI / NSZ / XCZ) or its folder: the updates and the DLC next to it are taken')
     po.add_argument('-k', '--keys', help='prod.keys (default: the configured one)')
-    po.add_argument('-o', '--out', help='folder for the APK and the data pack (default: the game folder)')
+    po.add_argument('-o', '--out', help='folder for the data pack (default: the game folder)')
     po.add_argument('-p', '--version', default='', help='version to pack, v<N> (default: the newest in the folder)')
     po.add_argument('-l', '--language', default='', help='game language, a code or a name (default: English)')
     po.add_argument('--app-name', default='', help='the app\'s name on the device (default: the game\'s name)')
-    po.add_argument('--app', action='store_true',
-                    help="the nx2android app's mode: no APK and no install step — the data pack carries the host "
-                         "(libdmplay.so), the Vulkan drivers and the icon, and the app runs the game itself")
-    po.add_argument('--install', action='store_true', help='install on the connected device afterwards')
-    po.add_argument('--device', default='', help='adb serial of the device to install on')
-    po.add_argument('--replace-signer', action='store_true', help='uninstall an app of the same package signed with another key first (deletes its saves)')
+    mode = po.add_mutually_exclusive_group()
+    mode.add_argument('--app', action='store_true', dest='app',
+                      help="the nx2android app's mode (the default): no APK and no install step — the data pack carries the host "
+                           "(libdmplay.so), the Vulkan drivers and the icon, and the app runs the game itself")
+    mode.add_argument('--game-apk', action='store_false', dest='app',
+                      help="the fork's legacy path: a per-game APK as well (a separate app per game, installed over adb); unmaintained here — "
+                           "--install, --replace-signer, --package and --vercode-offset belong to it")
+    po.set_defaults(app=True)
+    po.add_argument('--install', action='store_true', help='install the APK on the connected device afterwards (with --game-apk)')
+    po.add_argument('--device', default='', help='adb serial of the device to install on (with --game-apk)')
+    po.add_argument('--replace-signer', action='store_true', help='uninstall an app of the same package signed with another key first (deletes its saves) (with --game-apk)')
     po.add_argument('--debug', action='store_true', help='a development build: debug information, debuggable, DM_CTL key presses')
     po.add_argument('--experimental', action='store_true', help='try a game not ported to Android yet (a profile guessed from a survey of its files; it may not start)')
-    po.add_argument('--package', default='', help="the app's package instead of the profile's (a test install beside another build of the game)")
+    po.add_argument('--package', default='', help="the app's package instead of the profile's (a test install beside another build of the game) (with --game-apk)")
     po.add_argument('--fps60', action='store_true', help='60 fps: the profile\'s own frame-rate cap, else the community\'s FPSLocker-Warehouse config of the game\'s build, fetched from GitHub')
     po.add_argument('--touch', action='store_true',
                     help='a game played by touch: the on-screen gamepad starts hidden, so every touch but the menu button\'s goes to the game (the pause menu shows it again; '
@@ -34,14 +39,14 @@ def _parser():
                     help='multithread replay: the game\'s Vulkan commands are recorded on a thread of their own (DM_VK_MT_REPLAY=1 in env.txt), for a game whose replay '
                          'thread holds its frame rate back; it needs a port again (or env.txt edited) to turn off')
     po.add_argument('--vulkan-driver', default=None, metavar='FILE',
-                    help='an arm64 Vulkan driver library (.so, such as Mesa\'s Turnip for Adreno) to pack in the APK and use instead of the device\'s own driver '
+                    help='an arm64 Vulkan driver library (.so, such as Mesa\'s Turnip for Adreno) to pack in the data pack and use instead of the device\'s own driver '
                          '(DM_VK_DRIVER in env.txt); the app falls back to the device\'s driver when the library does not load')
     po.add_argument('--vulkan-driver-dir', default=None, metavar='DIR',
-                    help='a folder of arm64 Vulkan driver libraries (.so, such as Mesa\'s Turnip for Adreno): the APK carries them all and the game\'s launcher lets '
+                    help='a folder of arm64 Vulkan driver libraries (.so, such as Mesa\'s Turnip for Adreno): the pack carries them all and the app\'s configuration panel lets '
                          'the player pick one (the device\'s own driver is the first choice); needs --vulkan-driver or this folder alone')
     po.add_argument('--vercode-offset', type=int, default=None, metavar='N',
                     help='add N (0-65535) to the APK\'s versionCode, so a rebuild of the same game version installs over a build with a higher one and keeps its saves '
-                         '(default: $NX2A_VERCODE_OFFSET, else 0)')
+                         '(default: $NX2A_VERCODE_OFFSET, else 0) (with --game-apk)')
     po.add_argument('--alias-headroom', type=int, default=None, metavar='GB',
                     help='GB (0-48) of extra guest address space (the alias region) for a game with virtual address memory, for a game whose log shows '
                          '"AllocateAddressRegion refused (0x1803)" before it crashes; it uses no memory (default: 8 for a game version the profile was not '

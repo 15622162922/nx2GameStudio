@@ -204,7 +204,7 @@ private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions, onReq
     Section("输出目录") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("移植产物（APK 和数据包）写在这里", style = MaterialTheme.typography.bodyMedium)
+                Text("移植产物（数据包）写在这里", style = MaterialTheme.typography.bodyMedium)
                 Text(out, style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }

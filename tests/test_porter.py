@@ -1,5 +1,5 @@
 # Unit tests of the port pipeline's own parts (python -m unittest discover tests). They need no game files, toolchains or device.
-import hashlib, importlib.util, json, os, random, re, shutil, struct, sys, tempfile, unittest
+import contextlib, hashlib, importlib.util, io, json, os, random, re, shutil, struct, sys, tempfile, unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -279,10 +279,13 @@ class Misc(unittest.TestCase):
         self.assertTrue(cli._parser().parse_args(['port', 'x', '--mt-replay']).mt_replay); self.assertFalse(cli._parser().parse_args(['port', 'x']).mt_replay)
         self.assertFalse(pipeline.Options(Path(".")).mt_replay)
 
-    def test_app_option(self):   # --app: the nx2android app's mode (no APK, no install; the pack carries the host) — off unless given
+    def test_app_option(self):   # the nx2android app's mode is the default (no APK, no install; the pack carries the host); --game-apk turns it off
         from porter import cli
-        self.assertTrue(cli._parser().parse_args(['port', 'x', '--app']).app); self.assertFalse(cli._parser().parse_args(['port', 'x']).app)
-        self.assertFalse(pipeline.Options(Path(".")).app)
+        self.assertTrue(cli._parser().parse_args(['port', 'x']).app); self.assertTrue(cli._parser().parse_args(['port', 'x', '--app']).app)
+        self.assertFalse(cli._parser().parse_args(['port', 'x', '--game-apk']).app)
+        self.assertFalse(pipeline.Options(Path(".")).app)   # the pipeline's own default is untouched: the CLI decides the mode
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit): cli._parser().parse_args(['port', 'x', '--app', '--game-apk'])
 
     def test_vulkan_driver_option(self):   # --vulkan-driver FILE: parsed, and a file that is not a .so library fails before any stage
         from porter import cli

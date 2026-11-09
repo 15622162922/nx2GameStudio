@@ -29,11 +29,11 @@ A few antivirus engines may flag `nx2android.exe` (on VirusTotal, 3 of 69 flagge
 
 1. Choose the game's folder. The card under it says which game it found and whether it can be ported: the **Games** tab lists the supported ones.
 2. Click **Port**. The first port of a game takes a while: extraction, rewriting the game's code, translating its shaders (2 to 6 minutes on a fast 20-thread PC with an SSD, much longer on a slow one or a hard disk). Later ports reuse what has not changed.
-3. The APK and the game's data folder (`<Game>-data`) appear in the game's folder. **Open output folder** shows them.
+3. The game's data folder (`<Game>-data`) appears in the game's folder. **Open output folder** shows it.
 
 ## 4. Put it on the device
 
-With **USB debugging** on (Settings → About → tap *Build number* seven times, then Settings → Developer options → USB debugging) and the device plugged in, tick **Install on the device when done** before porting, or click **Install on device** afterwards. Allow the computer when the device asks.
+The nx2android app on the phone is what plays a game: it ports on the phone itself, and it plays the data packs it finds in its output folder. The pack this tool wrote is the same thing the app's own port produces.
 
 ## When something goes wrong
 

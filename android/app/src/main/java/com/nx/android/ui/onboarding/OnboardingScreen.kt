@@ -275,7 +275,7 @@ private fun DoneStep() {
     Section("完成了") {
         Text(
             "环境就绪、钥匙校验过、游戏也找齐了。\n" +
-                "接下来在游戏库里挑一个游戏发起移植，移植在后台跑，跑完装上 APK 就能玩。",
+                "接下来在游戏库里挑一个游戏发起移植，移植在后台跑，跑完在库里就能玩。",
             style = MaterialTheme.typography.bodyMedium,
         )
         Hint("有跳过的步骤也不要紧：设置里随时能补，库里的入口会提醒缺什么")

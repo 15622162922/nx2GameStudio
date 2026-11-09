@@ -103,7 +103,7 @@ class PortService : Service() {
             port.phase == PortState.Phase.DONE -> "完成：${File(port.outPath).name}"
             port.phase == PortState.Phase.CANCELLED -> "已取消"
             port.phase == PortState.Phase.INTERRUPTED -> "被系统中断，可重新发起"
-            else -> "移植结束（没有产出 APK）：看看日志"
+            else -> "移植结束（没有产出数据包）：看看日志"
         }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher)

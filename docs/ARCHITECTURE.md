@@ -1,13 +1,13 @@
 # Architecture
 
-nx2android turns a player's own Switch game files into an Android app. The player picks the game's file, clicks **Port**, and gets an APK plus the game's data, which the tool can install on a connected device. Every game the tool supports is a **game profile**; everything all games share is the **core**.
+nx2android turns a player's own Switch game files into a data pack the phone app runs. The player picks the game's file, clicks **Port**, and gets the pack; the app runs the game from it, with no per-game app of its own. Every game the tool supports is a **game profile**; everything all games share is the **core**.
 
 ```
 gui/  (PySide6 desktop app)
   │  runs `python -m porter port … --progress json`, draws the JSON events
   ▼
 porter/  (headless port pipeline, also a CLI)
-  │  inputs → extract → rewrite → shaders → host → apk → data pack → [install]
+  │  inputs → extract → rewrite → shaders → host → data pack   (the legacy --game-apk adds the apk stage)
   │  reuses nxnative/scripts/build_ipa_from_nsp.py's steps (imported, not copied)
   ▼
 nxnative/  (our fork of seedds/nxnative + the Android port)
@@ -23,8 +23,8 @@ nxnative/  (our fork of seedds/nxnative + the Android port)
 | **Core, shared** | `nxnative/dm/{host,gfx,tools,third_party}` | What every game and both platforms need. Android differences behind `DM_ANDROID` / `__APPLE__` / `DM_TARGET`. | Game-specific branches. |
 | **Core, Android runtime** | `nxnative/dm/android/` | Vulkan replay backend (`gfx_vk_*`), the NativeActivity front end (on-screen gamepad, pause menu, settings, the save manager's export and import, text entry with an on-screen keyboard, haptics, shaking the device as shaking the controller, audio, performance hints), the NDK build (`build.py`), the APK writer (`apk/mkapk.py`), the Vulkan shader bundle (`tools/shader_vk.py`), the profile's Android header (`tools/android_profile.py`), the gamepad's layouts (`overlay_default.tsv`: tablet and phone) and its themes (`themes/`: a sprite pack per design, and `themes.tsv`, the table of which game wears which; `themes/README.md`). | Code that depends on a game: no title IDs, game names or per-game branches in code (comments may name the game a rule was found with, as upstream's do). A game that needs something different gets a profile key. |
 | **Game profile** | `nxnative/dm/games/<title ID>/` | Data only: `game.tsv` (upstream keys), shader tables, `patches.py` (per-build rewriter cuts), and `android.tsv` (Android keys, below). | Code paths. |
-| **Port pipeline** | `porter/` | The stages that turn game files into the APK and data pack; the toolchain check; the profile registry; installing over adb. Runs headless. | UI. |
-| **GUI** | `gui/` | Screens over `porter`: setup check, game file, profile status, options, progress, install. | Pipeline logic: everything it does, the CLI does too. |
+| **Port pipeline** | `porter/` | The stages that turn game files into the data pack; the toolchain check; the profile registry. Runs headless. | UI. |
+| **GUI** | `gui/` | Screens over `porter`: setup check, game file, profile status, options, progress. | Pipeline logic: everything it does, the CLI does too. |
 | **Distribution** | `packaging/` | The player's bundle (`build_bundle.py`, PyInstaller): one executable that is the GUI and the Python the pipeline runs the engine's tools with (`nx2android.py`), the committed `nxnative/` beside it, the install guide (`INSTALL.md`). | Pipeline logic or toolchains. |
 | **Dev tools** | `devtools/` | Scripts for bringing up a game on a connected device (pushing files, screen recording, soak tests, pass traces). The device comes from `devtools/device.json` or `NX2A_DEVICE`. | Anything the port needs. |
 
@@ -40,7 +40,7 @@ A profile is offered for Android when it has an `android.tsv`; the profiles with
 | `tested` | `<version> <device>`: the version and device the status was checked on |
 | `package` | The app's package name (default `org.nx2a.t<title ID in lowercase>`) |
 | `orientation` | `landscape` (default) or `any` |
-| `requires` | Device features the game needs, checked by the installer: `bcn` (BC texture compression) |
+| `requires` | Device features the game needs, checked by the installer (the legacy path): `bcn` (BC texture compression) |
 | `setting` | `<name>=<value>`: the pause menu's defaults on first launch (`overlay`, `rumble`, `docked`, `fps`: the frame rate counter in the top left corner, off by default; `opacity`: the gamepad's, 20 to 80 percent by 5, 60 by default), written to the data pack's `settings.txt`, where the app also keeps the player's own gamepad layout from the pause menu's layout editor (`ui=` rows) and its Snap to grid (`grid`, off by default) |
 | `env` | `<KEY>=<VALUE>`: a host switch the game needs on Android, written to the data pack's `env.txt` |
 | `overlay` | `<tablet\|phone> <control> <x> <y>`: moves one on-screen control of that layout (`dm/android/overlay_default.tsv`) to x, y as fractions of the window, compiled into `android_profile.h` |
@@ -49,7 +49,7 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 
 ## The port
 
-`python -m porter port <game file> -k <prod.keys>` (the GUI's **Port** button) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the APK and the data pack are made again each time (seconds).
+`python -m porter port <game file> -k <prod.keys>` (the GUI's **Port** button) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the data pack is made again each time (seconds).
 
 | Stage | What | Output (in `<game folder>/<title ID>_build/`) |
 |---|---|---|
@@ -60,9 +60,9 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 | rewrite | `patch_nso.py` with `DM_TARGET=android` | `android/patched_<version>/` |
 | shaders | `shader_split.py` (the DLC's own shaders too, `aoc/` given as `DM_SPLIT_AOC`), then `shader_vk.py` (SPIR-V) with the translator built from the repository's source (`dm/gfx/tools/dmsh_xlate` over `dm/third_party/ryujinx`, once per player in their nx2android folder), plus the shaders captured on the device (below) | `shader/pkg`, `android/shaders.dmsv`, `android/captured_shaders/` |
 | host | `dm/android/build.py --release` with the player's NDK (`--debug`: a development build, debug information and `DM_CTL`) | `android/host/libdmhost.so` (`android/host-debug/`); with `--app`: `libdmplay.so` instead (the host statically linked with the player's JNI entry, the app's `:play` process loads it) |
-| apk | `dm/android/apk/mkapk.py`, signed with the player's own key, with the game's gamepad theme only (`dm/android/themes/themes.tsv`: its pack, else the ergo pack) as `assets/overlay/` | `<out>/<App>.apk` — skipped with `--app` (the phone line: the app runs the game itself, no per-game APK) |
-| data | The files the app reads from `/sdcard/Android/data/<package>/files` | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/`; with `--app` the pack also carries the host (`host/libdmplay.so`), the Vulkan drivers (`drivers/`), the gamepad's theme (`overlay/`) and the icon (`icon.png`), all named in the manifest |
-| install | `adb install`, the profile's `requires` checked against the device, the data pack pushed (optional) | |
+| apk | The legacy path only (`--game-apk`): `dm/android/apk/mkapk.py`, signed with the player's own key, with the game's gamepad theme only (`dm/android/themes/themes.tsv`: its pack, else the ergo pack) as `assets/overlay/` | `<out>/<App>.apk` — unmaintained in this fork, and it has no launcher page any more (the game is the entry) |
+| data | The files the app reads from the pack's own folder | `<out>/<App>-data/{mods,RomFS,aoc,shaders.dmsv,nintendo_ext.ttf,env.txt,settings.txt,nx2a-data.json}` (+ `fpslock.tsv` with `--fps60`); the button-icon font is made in `android/font/`; the pack also carries the host (`host/libdmplay.so`), the Vulkan drivers (`drivers/`), the gamepad's theme (`overlay/`) and the icon (`icon.png`), all named in the manifest |
+| install | The legacy path only (`--game-apk`): `adb install`, the profile's `requires` checked against the device, the data pack pushed (optional) | |
 
 RomFS in the data pack is hard-linked to the extraction when the volume allows it, so it takes no extra space.
 
@@ -76,9 +76,9 @@ The app keeps the game's save in its internal storage (`$DM_SAVE`, and `<DM_SAVE
 - `porter saves` (the GUI's **Saves** tab) does the same from the PC: `apps`, `list`, `export [dest] [--name …]` (a fresh export: the app is stopped and started with `saves/export.txt`, exports and ends without starting the game, then the folder is pulled), `import <folder or .zip>` (pushed under a hidden name, renamed, named in `saves/import.txt`, and the app started to apply it). Each request carries a token the app writes back in `saves/result.txt` with its outcome.
 - The files are not changed. A save made on a console belongs to that console's user; a game that keeps its user's id inside its own files (Animal Crossing: New Horizons, issue #16) reads it as another user's, since the host's one user (`hle_account.c`) is not mapped into it.
 
-Shaders captured on the device: a game can set shaders whose code is in no game file (Xenoblade Chronicles 3, hundreds: effects and model materials), which the split cannot find. When a draw needs a shader the bundle lacks, the app saves it to `captured_shaders/<key>.bin` in its files folder (`gfx_vk_shader.c` `vk_shader_missing`; the draw is skipped this time). A port with `--install` first pulls that folder into `<build folder>/android/captured_shaders/`, which is kept from port to port, and `shader_vk.py --capture` translates it into the bundle. These shaders are not in the profile's tables: the tables stay what the game files give. So such a game draws everything only after it has been played that far once and ported again.
+Shaders captured on the device: a game can set shaders whose code is in no game file (Xenoblade Chronicles 3, hundreds: effects and model materials), which the split cannot find. When a draw needs a shader the bundle lacks, the app saves it to `captured_shaders/<key>.bin` in its files folder (`gfx_vk_shader.c` `vk_shader_missing`; the draw is skipped this time). A port with `--install` (the legacy path) first pulls that folder into `<build folder>/android/captured_shaders/`, which is kept from port to port, and `shader_vk.py --capture` translates it into the bundle. These shaders are not in the profile's tables: the tables stay what the game files give. So such a game draws everything only after it has been played that far once and ported again.
 
-The install starts the app once before pushing anything: Android makes the app's files folder, owned by the app with the app's group, when the app first asks for it, and a folder the shell makes first lacks that group underneath FUSE, so the app cannot read what is pushed below it. Files whose path passes Windows' 260 characters are pushed through short hard links (adb.exe is not long-path aware). A file already on the device at its size is skipped; the port's own outputs (everything but `RomFS/` and `aoc/`, which change only with the game's version) are also compared by MD5, because a rewriter cut changes a module without changing its size.
+The legacy path's install starts the app once before pushing anything: Android makes the app's files folder, owned by the app with the app's group, when the app first asks for it, and a folder the shell makes first lacks that group underneath FUSE, so the app cannot read what is pushed below it. Files whose path passes Windows' 260 characters are pushed through short hard links (adb.exe is not long-path aware). A file already on the device at its size is skipped; the port's own outputs (everything but `RomFS/` and `aoc/`, which change only with the game's version) are also compared by MD5, because a rewriter cut changes a module without changing its size.
 
 What the port refuses: a game whose `main` renders with Vulkan or OpenGL (the Android host replays NVN only so far), and one whose shaders need a step upstream runs by booting the game in the Mac host (GLSLC capture, Unreal / Oodle decoding).
 
@@ -90,11 +90,11 @@ What the port refuses: a game whose `main` renders with Vulkan or OpenGL (the An
 
 **Experimental ports** (`--experimental`, the GUI's Experimental box): a game without an Android profile. With no profile at all, upstream's survey (`<game folder>/<title ID>_survey/survey.md`) guesses a provisional one; with only an iOS profile, that profile is copied. Either way it goes to `<title ID>_build/profile/<title ID>/` with an `android.tsv` of status `experimental`, and every tool finds it there (`DM_GAMES_DIR`). That folder is where a bring-up starts; a game that works gets its profile into `nxnative/dm/games/`.
 
-`--package` installs a port under another package than the profile's, beside the player's other build of the game (a test).
+`--package` (the legacy path) installs a port under another package than the profile's, beside the player's other build of the game (a test).
 
-**versionCode.** The APK's versionCode is the packed Switch version number + 1 (v196608 → 196609), so a port of a game update installs over the base game's port. Android installs an APK over one with the same versionCode, but never over a higher one (`INSTALL_FAILED_VERSION_DOWNGRADE`); the only other way past that is an uninstall, which deletes the saves. `--vercode-offset N` (or `NX2A_VERCODE_OFFSET`) adds N, 0 to 65535, so a rebuild of the same version installs over an earlier rebuild with an offset; 65535 at most keeps it below the next version's port, as Switch versions are 65536 apart. A refused downgrade names the installed versionCode.
+**versionCode** (the legacy path). The APK's versionCode is the packed Switch version number + 1 (v196608 → 196609), so a port of a game update installs over the base game's port. Android installs an APK over one with the same versionCode, but never over a higher one (`INSTALL_FAILED_VERSION_DOWNGRADE`); the only other way past that is an uninstall, which deletes the saves. `--vercode-offset N` (or `NX2A_VERCODE_OFFSET`) adds N, 0 to 65535, so a rebuild of the same version installs over an earlier rebuild with an offset; 65535 at most keeps it below the next version's port, as Switch versions are 65536 apart. A refused downgrade names the installed versionCode.
 
-**Touch games** (`--touch`, the GUI's Touch game box). On Android the game's touch screen takes every touch in both modes, for every game (`hle_hid.c` `touch_on`), but the on-screen gamepad's controls take the touches that go down on them or near them (`front_android.c` `ctl_at`; about a quarter of a tablet's screen, at its sides), and the gamepad is shown by default. `--touch` writes `overlay=0` into the data pack's `settings.txt` over the profile's settings (`pipeline.TOUCH_SETTINGS`), as Unpacking's profile does: the gamepad starts hidden, only the menu button takes touches, and the pause menu shows the gamepad again. It is the first launch's default: the installer keeps a `settings.txt` the app already has. It costs nothing at run time (the host's touch reads are the same with the gamepad shown or hidden). A game that ignores touch while docked needs handheld mode too (the pause menu's mode item).
+**Touch games** (`--touch`, the GUI's Touch game box). On Android the game's touch screen takes every touch in both modes, for every game (`hle_hid.c` `touch_on`), but the on-screen gamepad's controls take the touches that go down on them or near them (`front_android.c` `ctl_at`; about a quarter of a tablet's screen, at its sides), and the gamepad is shown by default. `--touch` writes `overlay=0` into the data pack's `settings.txt` over the profile's settings (`pipeline.TOUCH_SETTINGS`), as Unpacking's profile does: the gamepad starts hidden, only the menu button takes touches, and the pause menu shows the gamepad again. It is the first launch's default: the legacy path's installer keeps a `settings.txt` the app already has. It costs nothing at run time (the host's touch reads are the same with the gamepad shown or hidden). A game that ignores touch while docked needs handheld mode too (the pause menu's mode item).
 
 **60 fps** (`--fps60`). A Switch game capped at 30 needs per-build knowledge to run at 60: which memory holds its frame limit, or which code counts frames. A profile that has it (`fps_target`: the rewriter's frame-step stubs or `hle_fpslock.c`'s rows) gets `DM_FPS_TARGET=60` in `env.txt`. Otherwise the port fetches the community's config for the packed `main` build from masagrator's FPSLocker-Warehouse (`porter/fpslocker.py`; GitHub, `SaltySD/plugins/FPSLocker/patches/<title ID>/<build ID>.yaml`) and converts it: the `ALL_FPS` memory writes (pointer chains from `main`, compares; the expressions evaluated for 30 and 60) become `fpslock.tsv` in the data pack, which `hle_fpslock.c` writes on every present (`DM_FPS_LOCKS`); `MASTER_WRITE` bytes become cuts for the rewriter (`patch_nso.py` `DM_PATCHES_EXTRA`, original bytes from the game's `main`); presents follow the display (`DM_PRESENT_INTERVAL=display`), as FPSLocker paces them itself. A config using what the host lacks (`asm_a64`, `DECLARATIONS`, non-`MAIN` regions, `refresh_rate`) is refused whole, and the game keeps its own frame rate; 1,160 of the 1,462 configs convert (2026-10-28). The warehouse has no license, so its configs are fetched per port and never committed. Whether 60 holds on a device, and whether the config fixes every speed issue, is the config's and the device's: it is the player's choice.
 
@@ -103,13 +103,13 @@ Events: with `--progress json`, every line on stdout is one JSON object, the pro
 ## What the player installs
 
 The player gets the bundle (`dist/nx2android-<version>-<os>-<cpu>.zip` from `python packaging/build_bundle.py`, for Windows and macOS): unzip, start `nx2android.exe` (`nx2android` on a Mac), nothing to install with pip. It does not ship toolchains; the Setup tab (`nx2android.exe -m porter doctor`, or `python -m porter doctor` from the repository) checks them and the free disk space, and its **Download missing tools** button (`porter tools --download`, `porter/fetch.py`) fetches the missing NDK, .NET SDK and platform-tools from Google's SDK repository and Microsoft's release list, checks each archive against the checksum its list gives, and unpacks them into the player's nx2android folder (`toolchains/`), which the finders search:
-- **Android NDK r27c** (`ANDROID_NDK_HOME`, the configured path, or the usual install folders). No Android SDK or JDK: `mkapk.py` writes and signs the APK itself.
+- **Android NDK r27c** (`ANDROID_NDK_HOME`, the configured path, or the usual install folders). No Android SDK or JDK: the pack path signs nothing, and the legacy APK path wrote and signed the APK itself (`mkapk.py`).
 - **.NET SDK 10**: builds `nx_extract` and the shader translator, and runs them.
 - From the repository instead of the bundle: **Python 3.11+** with `requirements.txt` (`lz4`, `capstone`, `pillow`, `fonttools`, and `PySide6` for the GUI): the port runs the engine's own Python tools (the rewriter, the shader split). The bundle carries that Python.
-- **adb** (platform-tools), only to install from the tool.
+- **adb** (platform-tools), only for the legacy path's install and for the save manager.
 - Their own **prod.keys**. Keys and game files are never copied into the repository or the app.
 
-The player's settings, APK signing key and built translator live in their nx2android folder: `%APPDATA%\nx2android` on Windows, `~/Library/Application Support/nx2android` on a Mac, `~/.config/nx2android` elsewhere (`NX2A_HOME` overrides it). An app keeps the same signer across ports, so updates install over it.
+The player's settings, the legacy path's APK signing key and the built translator live in their nx2android folder: `%APPDATA%\nx2android` on Windows, `~/Library/Application Support/nx2android` on a Mac, `~/.config/nx2android` elsewhere (`NX2A_HOME` overrides it). The legacy path's app keeps the same signer across ports, so updates install over it.
 
 ## Repository layout
 
@@ -131,9 +131,9 @@ The engine is our own fork since 2026-10-29: no subtree pull from upstream, and 
 
 ## Adding a game
 
-1. `python -m porter port <folder> --experimental --install`: the survey, a provisional profile and a first try on the device. Bring it up from there with the upstream tools and `devtools/` (docs in `nxnative/docs/agents`): the profile moves to `dm/games/<title ID>/`, fixes go into the core as general rules.
+1. `python -m porter port <folder> --experimental`: the survey and a provisional profile. Bring it up from there with the upstream tools and `devtools/` (docs in `nxnative/docs/agents`): the profile moves to `dm/games/<title ID>/`, fixes go into the core as general rules.
 2. Add `android.tsv` with `status` and `tested`.
-3. `python -m porter port` on its folder, install, play. Raise `status` to `playable` when it is.
+3. `python -m porter port` on its folder: the data pack is the artifact, and the phone app runs the game from it. Raise `status` to `playable` when it is.
 
 ## The phone app
 

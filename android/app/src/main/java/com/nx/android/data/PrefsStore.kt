@@ -46,7 +46,7 @@ class PrefsStore(ctx: Context) {
     var keys by mutableStateOf(prefs.getString(KEYS, "") ?: "")
         private set
 
-    /** 移植产物（APK 与数据包）的输出目录 */
+    /** 移植产物（数据包）的输出目录 */
     var out by mutableStateOf(prefs.getString(OUT, OUT_DEFAULT) ?: OUT_DEFAULT)
         private set
 

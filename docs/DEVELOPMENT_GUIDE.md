@@ -7,7 +7,7 @@ How to run nx2android from the repository, build the player's bundle and send ch
 Install [Python](https://www.python.org) 3.11 or later and `python -m pip install -r requirements.txt`, then `python -m porter tools --download` (or install them yourself):
 - [Android NDK r27c](https://developer.android.com/ndk/downloads) (only the NDK: no Android Studio, SDK or JDK)
 - [.NET SDK 10](https://dotnet.microsoft.com/download)
-- Android [platform-tools](https://developer.android.com/tools/releases/platform-tools) (adb), to install from the tool
+- Android [platform-tools](https://developer.android.com/tools/releases/platform-tools) (adb), for the legacy path's install and the save manager
 - your own `prod.keys`, dumped from your Switch
 
 ## Port a game
@@ -24,10 +24,10 @@ Or the command line:
 
 ```
 python -m porter doctor
-python -m porter port "D:\Games\NEO" -k "D:\keys\prod.keys" --install
+python -m porter port "D:\Games\NEO" -k "D:\keys\prod.keys"
 ```
 
-The APK (`NeoTheWorldEndsWithYou.apk`) and the data pack (`NeoTheWorldEndsWithYou-data/`) appear in the game folder (`-o` picks another). The first port takes a while (extraction, rewriting the game's code, translating its shaders); later ones reuse what has not changed. `python -m porter -h` lists the commands.
+The data pack (`NeoTheWorldEndsWithYou-data/`) appears in the game folder (`-o` picks another); the phone app runs the game from it. The first port takes a while (extraction, rewriting the game's code, translating its shaders); later ones reuse what has not changed. `python -m porter -h` lists the commands.
 
 ### Saves
 
@@ -115,8 +115,8 @@ The commits before 2026-10-28 predate the rule.
 
 ## The phone app
 
-`android/` is an Android app that runs the porter **on the phone**: the game files are turned into an APK on the
-device. It is a shell — the environment (the Linux rootfs from the nixport payload, the build tools, the tool's own
+`android/` is an Android app that runs the porter **on the phone**: the game files are turned into a data pack on the
+device, and the app plays the game from it. It is a shell — the environment (the Linux rootfs from the nixport payload, the build tools, the tool's own
 tree) is unpacked on the first start, and the porter runs inside it; the screen is Android's own.
 
 ```bash
