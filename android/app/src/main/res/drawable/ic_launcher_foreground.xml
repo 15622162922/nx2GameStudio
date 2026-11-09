@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher's foreground layer: the logo's mark (docs/images/icon.svg, the same mark the README's logo and
+     the desktop app's icon carry), drawn in the 72 dp safe zone of the 108 dp canvas. The three shapes are the
+     mark's, in the mark's order: the purple bar, then the white rectangle's outline, then the orange one. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.72" android:scaleY="0.72" android:translateX="18" android:translateY="18">
+        <path android:fillColor="#8A88FF" android:pathData="M50,32 L68,32 L68,68 L50,68 Z" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="6"
+            android:pathData="M22,32 L58,32 A10,10 0 0 1 68,42 L68,58 A10,10 0 0 1 58,68 L22,68 A10,10 0 0 1 12,58 L12,42 A10,10 0 0 1 22,32 Z" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF8A00" android:strokeWidth="6"
+            android:pathData="M60,14 L72,14 A10,10 0 0 1 82,24 L82,76 A10,10 0 0 1 72,86 L60,86 A10,10 0 0 1 50,76 L50,24 A10,10 0 0 1 60,14 Z" />
+    </group>
+</vector>

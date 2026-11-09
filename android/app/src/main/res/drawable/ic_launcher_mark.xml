@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The logo's mark, whole: the blue rounded square and the three shapes in it (docs/images/icon.svg, the same
+     mark the README's logo and the desktop app's icon carry). The app's own header shows this; the launcher's
+     icon splits the same mark into a background and a foreground layer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="100" android:viewportHeight="100">
+    <path android:fillColor="#2E2BD9"
+        android:pathData="M23,0 L77,0 A23,23 0 0 1 100,23 L100,77 A23,23 0 0 1 77,100 L23,100 A23,23 0 0 1 0,77 L0,23 A23,23 0 0 1 23,0 Z" />
+    <path android:fillColor="#8A88FF" android:pathData="M50,32 L68,32 L68,68 L50,68 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="6"
+        android:pathData="M22,32 L58,32 A10,10 0 0 1 68,42 L68,58 A10,10 0 0 1 58,68 L22,68 A10,10 0 0 1 12,58 L12,42 A10,10 0 0 1 22,32 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF8A00" android:strokeWidth="6"
+        android:pathData="M60,14 L72,14 A10,10 0 0 1 82,24 L82,76 A10,10 0 0 1 72,86 L60,86 A10,10 0 0 1 50,76 L50,24 A10,10 0 0 1 60,14 Z" />
+</vector>

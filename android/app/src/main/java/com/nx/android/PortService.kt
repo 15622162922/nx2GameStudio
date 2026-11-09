@@ -106,7 +106,7 @@ class PortService : Service() {
             else -> "移植结束（没有产出数据包）：看看日志"
         }
         return Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)   // the mark's shapes: the notification tints the silhouette
             .setContentTitle(if (port.gameFile.isEmpty()) "nx2android" else File(port.gameFile).name)
             .setContentText(what)
             .setProgress(100, (port.progress * 100).toInt(), port.running && port.progress <= 0f)

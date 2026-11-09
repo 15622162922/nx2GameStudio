@@ -30,7 +30,7 @@ def main():
     for src, dst in (('packaging/INSTALL.md', 'INSTALL.md'), ('README.md', 'README.md'), ('docs/ARCHITECTURE.md', 'docs/ARCHITECTURE.md'), ('docs/DEVELOPMENT_GUIDE.md', 'docs/DEVELOPMENT_GUIDE.md'),
                      ('LICENSE', 'LICENSE'), ('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'), ('android/NOTICE.md', 'android/NOTICE.md')):
         (APP / dst).parent.mkdir(parents=True, exist_ok=True); shutil.copy2(ROOT / src, APP / dst)
-    shutil.copytree(ROOT / 'docs/images', APP / 'docs/images', dirs_exist_ok=True)   # the README's games table
+    shutil.copytree(ROOT / 'docs/images', APP / 'docs/images', dirs_exist_ok=True)   # the README's logo and the app's screenshot
     ver = subprocess.run(['git', '-C', str(ROOT), 'describe', '--always', '--dirty'], capture_output=True, text=True).stdout.strip() or 'dev'
     (APP / 'VERSION').write_text(ver + '\n', encoding='utf-8')   # which commit the bundle was built from
     z = DIST / f'nx2android-{ver}-{PLATFORM}.zip'; z.unlink(missing_ok=True)

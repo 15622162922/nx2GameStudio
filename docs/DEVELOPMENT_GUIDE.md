@@ -53,7 +53,7 @@ How the export folders are laid out: [ARCHITECTURE.md](ARCHITECTURE.md#saves).
 
 ## Adding a game
 
-Each game is a profile in `nxnative/dm/games/<title ID>/` with an `android.tsv`: [ARCHITECTURE.md](ARCHITECTURE.md#adding-a-game). A finished port updates, in the profile's commit, the games table in the [README](../README.md#games) (its row, with a gameplay frame captured on the device in `docs/images/` and the tag of the nx2android version it was tested on) and [PORT_CHECKLIST.md](PORT_CHECKLIST.md).
+Each game is a profile in `nxnative/dm/games/<title ID>/` with an `android.tsv`: [ARCHITECTURE.md](ARCHITECTURE.md#adding-a-game). A finished port updates, in the profile's commit, [PORT_CHECKLIST.md](PORT_CHECKLIST.md) (the game's line: ticked when it plays, with the nx2android version it was tested on). The README keeps no table of the games: the list of every profile lives upstream, in [nxnative's games table](https://github.com/seedds/nxnative/blob/main/dm/games/README.md#games).
 
 ## Releases and version numbers
 
