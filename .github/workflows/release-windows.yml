@@ -1,12 +1,12 @@
-# Builds the Windows bundle (packaging/build_bundle.py) and attaches it to each published release, beside the macOS zip (release-macos.yml).
+# Builds the Windows bundle (packaging/build_bundle.py): the desktop app, for a player who ports on a computer.
 #
-# The bundle is the desktop app: the phone app is the other workflow's (android-apk.yml).
+# The phone app is the other workflow's (android-apk.yml), and this line's release carries that one only.
+# This bundle is not built on a published release: it is built by hand when it is wanted (Actions -> this
+# workflow -> Run workflow), and it stays as the run's artifact.
 name: Windows release
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:   # a test build of the branch, kept as the run's artifact
+  workflow_dispatch:   # a build of the branch, kept as the run's artifact
 
 permissions:
   contents: write
@@ -29,12 +29,7 @@ jobs:
       - run: python packaging/build_bootloader.py
       - run: python -m unittest discover tests
       - run: python packaging/build_bundle.py
-      - if: github.event_name == 'release'
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/nx2android-*-windows-*.zip --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: nx2android-windows
           path: dist/nx2android-*-windows-*.zip

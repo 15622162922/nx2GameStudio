@@ -1,6 +1,7 @@
 # PreToolUse hook (.claude/settings.json): checks release commands against CLAUDE.md's release rules before they run.
-#   gh release create|upload|edit  needs --repo zFitness/nx2androidX (gh here defaults to seedds/nxnative) and attaches no zip (the
-#                                  release-windows.yml and release-macos.yml workflows build and attach them on publish, --clobber)
+#   gh release create|upload|edit  needs --repo zFitness/nx2androidX (gh here defaults to seedds/nxnative) and attaches no zip (this
+#                                  line's release carries the phone app's APK only; the desktop bundles are built by hand when
+#                                  they are wanted, and never attached to a release)
 #   gh release create <tag>        and git tag <tag>: the tag is the upstream base this line carries with the line's
 #                                  name on it: v<major>.<minor>-android (or that with a revision number), the base
 #                                  being porter/__init__.py's __version__ (bump it first)
@@ -48,8 +49,8 @@ def check_gh(w):
     if repo != REPO:
         return f'gh release {sub} needs --repo {REPO}: gh in this checkout defaults to seedds/nxnative, which is not this project.'
     if sub in ('create', 'upload') and any(a.lower().endswith('.zip') or '.zip#' in a.lower() for a in w):
-        return ('Do not attach the bundle zips by hand: on publish, .github/workflows/release-windows.yml and release-macos.yml build them on '
-                "GitHub's runners and attach them with --clobber (CLAUDE.md, Releases). Create the release without a zip.")
+        return ('Do not attach the bundle zips by hand: this line\'s release carries the phone app\'s APK only, and the desktop '
+                'bundles are built by hand when they are wanted (CLAUDE.md, Releases). Create the release without a zip.')
     if sub == 'create':
         tag = next((a for a in w[3:] if not a.startswith('-')), None)
         v = version()
@@ -72,8 +73,9 @@ def check_git_tag(w):
     return None
 
 
-AFTER = ('Release rules (CLAUDE.md, Releases): after publishing, watch the "Windows release" and "macOS release" runs '
-         f'(gh run list --repo {REPO} --limit 4) and check that both zips are on the release; a failed run means the release has no zip for that OS.')
+AFTER = ('Release rules (CLAUDE.md, Releases): the release carries the phone app\'s APK, which .github/workflows/android-apk.yml '
+         'builds and attaches when the release is published; watch that run (gh run list --repo ' + REPO + ' --limit 4) and check '
+         'that the APK is on the release - a failed run means the release has no app in it.')
 
 
 def main():
