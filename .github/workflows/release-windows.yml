@@ -1,4 +1,6 @@
 # Builds the Windows bundle (packaging/build_bundle.py) and attaches it to each published release, beside the macOS zip (release-macos.yml).
+#
+# The bundle is the desktop app: the phone app is the other workflow's (android-apk.yml).
 name: Windows release
 
 on:
