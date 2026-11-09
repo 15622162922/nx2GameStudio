@@ -5,11 +5,11 @@
   </picture>
 </h1>
 
-Port your own Nintendo Switch games to Android, natively: the game's own arm64 code runs on the device, with the Switch's system services stood in for by a host and NVN graphics replayed on Vulkan. Pick the game's file, click **Port**, and get the game's data pack, which the nx2android app on the phone runs. Bring your own game files and keys; nothing from any game is in this repository.
+Port your own Nintendo Switch games to Android, natively: the game's own arm64 code runs on the device, with the Switch's system services stood in for by a host and NVN graphics replayed on Vulkan. Pick the game's file, click **Port**, and get the game's data pack, which the nx2androidX app on the phone runs. Bring your own game files and keys; nothing from any game is in this repository.
 
 This is the Android port of [nxnative](https://github.com/seedds/nxnative), which does the same on iPhone and iPad. Supported games: [Games](#games).
 
-![The nx2android app's game library](docs/images/app-library.png)
+![The nx2androidX app's game library](docs/images/app-library.png)
 
 The app is the whole tool on the phone: it ports the game on the device and plays the pack it makes. The game files it shows are the player's own.
 
@@ -27,7 +27,7 @@ Tested on a Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830).
 1. Download `nx2android-<version>-windows-x64.zip` (Windows) or `nx2android-<version>-macos-arm64.zip` (Mac with Apple silicon) from [Releases](https://github.com/zFitness/nx2androidX/releases/latest), unzip it and start **nx2android** (on a Mac, see [packaging/INSTALL.md](packaging/INSTALL.md#1-start-the-app) first).
 2. **Setup** tab: click **Download missing tools** (the Android NDK, the .NET SDK and platform-tools, about 1 GB, from Google and Microsoft), then set your **prod.keys**. Every line turns green.
 3. **Port** tab: choose the folder with the game's NSP, XCI, NSZ or XCZ files (base game, update, DLC) and click **Port**.
-4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. The nx2android app on the phone is what plays a game: it ports on the phone itself, and it plays the packs it finds in its output folder.
+4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. The nx2androidX app on the phone is what plays a game: it ports on the phone itself, and it plays the packs it finds in its output folder.
 
 The app on the phone also looks for a newer release: when it starts, it checks the release page quietly, and if there is a newer version it says so on the home page. The **Settings** tab has a **Check for updates** entry that checks again on demand. The app downloads nothing by itself — the notice leads to the release page, where the APK is.
 

@@ -26,12 +26,14 @@ import androidx.compose.ui.unit.sp
 
 /**
  * The palette: the launcher's colors from the desktop (NX2Apple), the same six the ported games' launcher pages
- * wear — near-black ground, deep panels, cream for the main action, one color per status.
+ * wear — near-black ground, deep panels, cream for the main action, one color per status — plus the brand's
+ * orange, the one the app's own icon carries.
  */
 object NxPalette {
     val Background = Color(0xFF0E0E0F)
     val Surface = Color(0xFF1A1A1C)
     val Cream = Color(0xFFFFF0D6)
+    val Brand = Color(0xFFFF8A00)
     val Ready = Color(0xFF40D678)
     val Building = Color(0xFFFFC73D)
     val Unbuilt = Color(0xFF91949B)

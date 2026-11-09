@@ -121,7 +121,7 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
 
 @Composable
 private fun stepTitle(s: ObStep): String = when (s) {
-    ObStep.WELCOME -> stringResource(R.string.onb_welcome)
+    ObStep.WELCOME -> stringResource(R.string.onb_welcome, stringResource(R.string.app_name))
     ObStep.ENV -> stringResource(R.string.onb_prepare_env)
     ObStep.KEYS -> "prod.keys"
     ObStep.GAMES -> stringResource(R.string.onb_game_folder)

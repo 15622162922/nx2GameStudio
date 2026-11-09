@@ -110,7 +110,7 @@ class PortService : Service() {
         }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)   // the mark's shapes: the notification tints the silhouette
-            .setContentTitle(if (port.gameFile.isEmpty()) "nx2android" else File(port.gameFile).name)
+            .setContentTitle(if (port.gameFile.isEmpty()) locale.str(R.string.app_name) else File(port.gameFile).name)
             .setContentText(what)
             .setProgress(100, (port.progress * 100).toInt(), port.running && port.progress <= 0f)
             .setOngoing(port.running)

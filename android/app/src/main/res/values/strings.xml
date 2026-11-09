@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">nx2android</string>
+    <string name="app_name" translatable="false">nx2androidX</string>
     <string name="app_tab_library">Library</string>
     <string name="app_tab_builds">Builds</string>
     <string name="app_tab_settings">Settings</string>
@@ -64,7 +64,7 @@
     <string name="runner_exit_code">[RED] exit %1$s</string>
     <string name="onb_step_of">Step %1$s of %2$s</string>
     <string name="onb_later">Later</string>
-    <string name="onb_welcome">Welcome to nx2android</string>
+    <string name="onb_welcome">Welcome to %1$s</string>
     <string name="onb_prepare_env">Prepare the environment</string>
     <string name="onb_game_folder">Game folder</string>
     <string name="onb_all_ready">Everything is ready</string>

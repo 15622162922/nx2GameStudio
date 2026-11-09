@@ -63,7 +63,7 @@
     <string name="runner_exit_code">[RED] 退出 %1$s</string>
     <string name="onb_step_of">第 %1$s 步，共 %2$s 步</string>
     <string name="onb_later">稍后再说</string>
-    <string name="onb_welcome">欢迎来到 nx2android</string>
+    <string name="onb_welcome">欢迎来到 %1$s</string>
     <string name="onb_prepare_env">准备环境</string>
     <string name="onb_game_folder">游戏文件夹</string>
     <string name="onb_all_ready">一切就绪</string>
