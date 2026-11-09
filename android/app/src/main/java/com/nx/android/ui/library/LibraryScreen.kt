@@ -1,5 +1,6 @@
 package com.nx.android.ui.library
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,9 +39,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,9 +67,13 @@ import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.Drivers
 import com.nx.android.data.GameIcon
+import com.nx.android.data.Player
+import com.nx.android.data.SaveBackup
+import com.nx.android.data.SaveShare
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.PackEnv
+import com.nx.android.domain.Ported
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
@@ -77,8 +84,12 @@ import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 游戏库：主机式行视图——横向瓦片（88/128dp），选中的放大，选中游戏铺满背景并在左下给出详情面板（大标题、
@@ -370,7 +381,8 @@ private fun EmptyLibrary(onPick: () -> Unit) {
  */
 @Composable
 internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
-                        f: File, actions: AppActions, onGoBuilds: () -> Unit, onClose: () -> Unit) {
+                        f: File, actions: AppActions, onGoBuilds: () -> Unit,
+                        onRequest: (PickerRequest) -> Unit, onClose: () -> Unit) {
     BackHandler { onClose() }
     val status = lib.statusOf(f)
     // Title ID：文件名里的优先，没有就用数据包清单里的
@@ -459,7 +471,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         Spacer(Modifier.height(8.dp))
                         RunOptions(ported)
                         Spacer(Modifier.height(10.dp))
-                        SaveImportRows(ported.pack, onToast = actions.onToast)
+                        SaveRows(ported, FolderScanner.displayName(f), player, actions, onRequest, actions.onToast)
                         Spacer(Modifier.height(6.dp))
                         val playing = player.running && player.titleId == ported.titleId
                         if (playing) {
@@ -540,77 +552,270 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
 }
 
 /**
- * 存档（库页侧）：导出与导入都在这里，两个都是写请求——宿主在下次启动游戏时做。
- * 导出写 saves/export.txt（带 request=export 的记号），宿主做完把结果写回 saves/result.txt。
+ * 存档（库页侧）：导出成一个可以发出去的包，导入把别人发来的包换进去。
+ *
+ * 活存档是应用自己的文件（宿主把它挂在 filesDir/save/<titleId>），所以这里直接动它：不写请求文件，
+ * 也不用等下次启动游戏。游戏在跑的时候不动它——那会儿它正往存档里写。
  */
 @Composable
-private fun SaveImportRows(pack: File, onToast: (String) -> Unit) {
-    var listing by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf<String?>(null) }
-    val savesDir = File(pack, "saves")
+private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, actions: AppActions,
+                     onRequest: (PickerRequest) -> Unit, onToast: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val titleId = ported.titleId
+    val live = remember(titleId) { SaveBackup.liveDir(context.filesDir, titleId) }
+    val liveDevice = remember(titleId) { SaveBackup.deviceDir(context.filesDir, titleId) }
+    val packSaves = remember(ported.pack) { File(ported.pack, "saves") }
+    val packagesDir = remember { SaveShare.packagesDir(context) }
+
+    var busy by remember { mutableStateOf(false) }
+    var reload by remember { mutableIntStateOf(0) }
+    var note by remember { mutableStateOf("") }          // 上一次做了什么（留在面板里，不只弹一下）
+    var askClose by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<File?>(null) }
+    var pendingRestore by remember { mutableStateOf<File?>(null) }
+    var pendingDelete by remember { mutableStateOf<File?>(null) }
+
+    // 下载目录里的包，和数据包 saves/ 里的快照（备份）
+    val packages = remember(reload, packagesDir) {
+        packagesDir.listFiles()?.filter { it.isFile && it.name.endsWith(".${SaveBackup.EXT}") }
+            ?.sortedByDescending { it.name }.orEmpty()
+    }
+    val backups = remember(reload, packSaves) {
+        packSaves.listFiles()
+            ?.filter { it.isDirectory && !it.name.startsWith(".") && !it.name.endsWith(".device") }
+            ?.sortedByDescending { it.name }.orEmpty()
+    }
+
+    fun stamp(): String = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+
+    // 游戏在跑的时候它的存档正被写着：这时不碰它
+    fun gameRunning(): Boolean = player.running || Player.playProcessAlive(context)
+
+    fun sharePackage(file: File) {
+        runCatching { context.startActivity(Intent.createChooser(SaveShare.intent(context, file), "分享存档")) }
+            .onFailure { onToast("没有可以接收的应用") }
+    }
+
+    fun doExport() {
+        if (gameRunning()) { askClose = true; return }
+        if (!actions.storageOk()) { onToast("需要存储权限：包要写进下载目录"); return }
+        busy = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = SaveBackup.packageName(gameName, titleId, stamp())
+                    SaveBackup.export(live, liveDevice, File(packagesDir, name))
+                        ?: error("这个游戏还没有存档")
+                }
+            }
+            busy = false
+            reload++
+            r.onSuccess {
+                note = "已导出到 ${it.parentFile?.absolutePath}"
+                onToast(note)
+            }.onFailure {
+                note = "导出失败：${it.message ?: "原因不明"}"
+                onToast(note)
+            }
+        }
+    }
+
+    fun doImport(pkg: File) {
+        if (gameRunning()) { askClose = true; return }
+        busy = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tmp = File(context.cacheDir, "save-import")
+                    tmp.deleteRecursively()
+                    val unpacked = SaveBackup.unpack(pkg, tmp)
+                    val backup = SaveBackup.backup(live, liveDevice, packSaves, stamp())   // 换掉的进度先留着
+                    SaveBackup.swapIn(unpacked.tree, unpacked.device, live, liveDevice)
+                    tmp.deleteRecursively()
+                    backup?.name
+                }
+            }
+            busy = false
+            reload++
+            r.onSuccess {
+                note = if (it != null) "已导入：换掉的进度留作 $it" else "已导入"
+                onToast(note)
+            }.onFailure {
+                note = "导入失败：${it.message ?: "原因不明"}"
+                onToast(note)
+            }
+        }
+    }
+
+    fun doRestore(backup: File) {
+        if (gameRunning()) { askClose = true; return }
+        busy = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val kept = SaveBackup.backup(live, liveDevice, packSaves, stamp())
+                    val dev = File(backup.parentFile, backup.name + ".device").takeIf { it.isDirectory }
+                    SaveBackup.swapIn(backup, dev, live, liveDevice)
+                    kept?.name
+                }
+            }
+            busy = false
+            reload++
+            r.onSuccess {
+                note = if (it != null) "已恢复到这份备份：换掉的进度留作 $it" else "已恢复到这份备份"
+                onToast(note)
+            }.onFailure {
+                note = "恢复失败：${it.message ?: "原因不明"}"
+                onToast(note)
+            }
+        }
+    }
+
+    fun shareBackup(backup: File) {
+        busy = true
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = SaveBackup.packageName(gameName, titleId, stamp())
+                    val dest = SaveBackup.freeName(File(packagesDir, name))
+                    val dev = File(backup.parentFile, backup.name + ".device").takeIf { it.isDirectory }
+                    SaveBackup.writePackage(backup, dev, dest.name.removeSuffix(".${SaveBackup.EXT}"), dest)
+                    dest
+                }
+            }
+            busy = false
+            reload++
+            r.onSuccess { sharePackage(it) }.onFailure { onToast("打包失败：${it.message ?: "原因不明"}") }
+        }
+    }
+
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     Text("存档", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        QuietButton("导出存档", onClick = { requestExport(savesDir, onToast) }, modifier = Modifier.weight(1f))
-        QuietButton("导入存档…", onClick = { listing = !listing }, modifier = Modifier.weight(1f))
+        QuietButton("导出存档", onClick = { doExport() }, modifier = Modifier.weight(1f), enabled = !busy)
+        QuietButton("导入存档…", onClick = {
+            onRequest(PickerRequest(PickerMode.FILE, setOf(SaveBackup.EXT), packagesDir, "选择存档包", onPicked = { pkg ->
+                val id = SaveBackup.titleIdIn(pkg.name)
+                if (id != null && !id.equals(titleId, ignoreCase = true)) {
+                    note = "这是别的游戏的存档（$id），没有导入"
+                    onToast(note)
+                } else {
+                    pendingImport = pkg
+                }
+            }))
+        }, modifier = Modifier.weight(1f), enabled = !busy)
     }
-    Hint(exportNote(savesDir), size = 11.sp)
-    if (!listing) return
-    val exports = remember(listing) { savesDir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name } ?: emptyList() }
-    if (exports.isEmpty()) {
-        Hint("还没有导出的存档。导出在下次启动游戏时生效，之后在这里导入。")
-        return
-    }
-    for (d in exports) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(d.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1)
-            QuietButton("导入", onClick = { confirm = d.name })
+    Hint("导出的包在 ${packagesDir.absolutePath}，可以直接发给别人；导入从任何地方选一个 zip。", size = 11.sp)
+    if (note.isNotEmpty()) Hint(note, size = 11.sp)
+
+    if (packages.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Text("存档包", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        for (p in packages) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("${p.name}  ·  ${sizeText(p.length())}",
+                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
+                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                QuietButton("分享", onClick = { sharePackage(p) }, enabled = !busy)
+                QuietButton("删除", onClick = { pendingDelete = p }, enabled = !busy)
+            }
         }
     }
-    confirm?.let { name ->
+
+    if (backups.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Text("备份", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        for (b in backups) {
+            val dev = File(b.parentFile, b.name + ".device")
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("${b.name}  ·  ${sizeText(treeSize(b) + if (dev.isDirectory) treeSize(dev) else 0)}",
+                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
+                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                QuietButton("恢复", onClick = { pendingRestore = b }, enabled = !busy)
+                QuietButton("分享", onClick = { shareBackup(b) }, enabled = !busy)
+                QuietButton("删除", onClick = { pendingDelete = b }, enabled = !busy)
+            }
+        }
+    }
+
+    // 游戏还在跑：存档正被它写着，先让它退出
+    if (askClose) {
         androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text("导入这份存档？") },
-            text = { Text("$name\n\n下次启动游戏时换入（当前进度会先被导出保留）。") },
+            onDismissRequest = { askClose = false },
+            title = { Text("游戏还在运行") },
+            text = { Text("游戏运行的时候会往存档里写东西。退出游戏之后才能导出或导入存档。") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    confirm = null
-                    val ok = runCatching {
-                        File(savesDir, "import.txt").writeText(name + "\n")
-                        true
-                    }.getOrDefault(false)
-                    onToast(if (ok) "已选「$name」：下次启动游戏时导入" else "写入导入请求失败")
+                    askClose = false
+                    actions.onStopGame()
+                }) { Text("退出游戏", color = NxPalette.Building) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askClose = false }) { Text("取消") } },
+        )
+    }
+
+    pendingImport?.let { pkg ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("导入这份存档？") },
+            text = { Text("${pkg.name}\n\n换进去之后，现在的进度会先留作一份备份。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    pendingImport = null
+                    doImport(pkg)
                 }) { Text("导入", color = NxPalette.Building) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = null }) { Text("取消") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingImport = null }) { Text("取消") } },
+        )
+    }
+
+    pendingRestore?.let { backup ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingRestore = null },
+            title = { Text("恢复这份备份？") },
+            text = { Text("${backup.name}\n\n现在的进度会先留作一份备份。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    pendingRestore = null
+                    doRestore(backup)
+                }) { Text("恢复", color = NxPalette.Building) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingRestore = null }) { Text("取消") } },
+        )
+    }
+
+    pendingDelete?.let { file ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除？") },
+            text = { Text("${file.name}\n\n删掉就找不回来了（游戏的进度不受影响）。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    pendingDelete = null
+                    // 一份备份还有它的设备存档在旁边：一起删
+                    val dev = File(file.parentFile, file.name + ".device")
+                    val gone = if (file.isDirectory) file.deleteRecursively() else file.delete()
+                    if (dev.isDirectory) dev.deleteRecursively()
+                    reload++
+                    onToast(if (gone) "已删除 ${file.name}" else "删除失败")
+                }) { Text("删除", color = NxPalette.Danger) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
         )
     }
 }
 
-/** 写导出的请求：宿主在下次启动游戏时导出这份存档，并把结果写回 saves/result.txt */
-private fun requestExport(savesDir: File, onToast: (String) -> Unit) {
-    val ok = runCatching {
-        savesDir.mkdirs()
-        File(savesDir, "export.txt").writeText("request=export\n")
-        true
-    }.getOrDefault(false)
-    onToast(if (ok) "已请求导出：下次启动游戏时导出一份存档" else "写入导出请求失败")
-}
+/** 一棵目录树里的文件加起来多大 */
+private fun treeSize(dir: File): Long =
+    if (!dir.isDirectory) 0L else dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
-/** 导出现在是什么状态：等着的请求、上一次导出的结果（成功或失败），或者只是一句说明 */
-private fun exportNote(savesDir: File): String {
-    if (File(savesDir, "export.txt").isFile) return "已请求导出：下次启动游戏时导出一份存档"
-    val lines = runCatching { File(savesDir, "result.txt").readText() }.getOrDefault("").lines()
-    val fields = lines.mapNotNull { line ->
-        val i = line.indexOf('=')
-        if (i < 0) null else line.substring(0, i).trim() to line.substring(i + 1).trim()
-    }.toMap()
-    if (fields["request"] != "export") return "导出与导入都在下次启动游戏时生效。"
-    return when (fields["result"]) {
-        "ok" -> "上次导出：${fields["name"] ?: "存档"}"
-        "error" -> "上次导出失败：${fields["error"] ?: "原因不明"}"
-        else -> "导出与导入都在下次启动游戏时生效。"
-    }
+/** 一个人看得懂的大小 */
+private fun sizeText(bytes: Long): String = when {
+    bytes >= 1024L * 1024 * 1024 -> "%.1f GB".format(bytes / 1024.0 / 1024 / 1024)
+    bytes >= 1024L * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024)
+    bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+    else -> "$bytes B"
 }
 
 /**

@@ -234,7 +234,8 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         ) {
             panelFile.value?.let { f ->
                 ConfigPanel(lib, port, container.player, f, actions,
-                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onClose = { lib.selected = null })
+                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest,
+                    onClose = { lib.selected = null })
             }
         }
     }
@@ -254,7 +255,7 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onAddGameFolder: () -
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
     ) {
-        Image(painterResource(R.drawable.ic_launcher), null, Modifier.size(32.dp))
+        Image(painterResource(R.drawable.ic_launcher_mark), null, Modifier.size(32.dp))
         Text(
             buildAnnotatedString {
                 withStyle(SpanStyle(color = MaterialTheme.colorScheme.onBackground)) { append("nx2") }

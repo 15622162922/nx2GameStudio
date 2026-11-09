@@ -94,7 +94,8 @@ def export(adb, package, dest, name=''):
 
 
 def _unpacked(src, tmp):
-    """A save folder from src: a folder as it is, or a .zip's contents (the one folder in it when it holds only that)"""
+    """A save folder from src: a folder as it is, or a .zip's contents (the one save folder in it when it holds
+    only that; a package the phone wrote holds the save folder with its device save beside it)"""
     src = Path(src)
     if src.is_dir(): return src
     if src.suffix.lower() != '.zip' or not src.is_file(): raise BuildError(f'{src}: not a folder or a .zip')
@@ -103,7 +104,14 @@ def _unpacked(src, tmp):
             if n.startswith(('/', '\\')) or '..' in Path(n).parts: raise BuildError(f'{src}: {n} points outside the archive')
         z.extractall(tmp)
     top = [p for p in Path(tmp).iterdir() if p.name != '__MACOSX']
-    return top[0] if len(top) == 1 and top[0].is_dir() else Path(tmp)
+    saves = [p for p in top if p.is_dir() and not p.name.endswith('.device')]
+    return saves[0] if len(saves) == 1 else Path(tmp)
+
+
+def _device_of(folder):
+    """The device save beside a save folder (a package the phone wrote holds it there), or None"""
+    d = Path(str(folder) + '.device')
+    return d if d.is_dir() else None
 
 
 def import_(adb, package, src, name=''):
@@ -112,9 +120,11 @@ def import_(adb, package, src, name=''):
         folder = _unpacked(src, tmp)
         files = [p for p in folder.rglob('*') if p.is_file()]
         if not files: raise BuildError(f'{src}: no files in it')
-        device = Path(str(folder) + '.device') if Path(src).is_dir() else None
+        device = _device_of(folder)
         name = name or (Path(src).stem if not Path(src).is_dir() else folder.name)
-        name = re.sub(r'[^A-Za-z0-9._ +()-]', '_', name).lstrip('.').removesuffix('.device') or 'save'
+        # a package from the phone starts with the game's name, which may be all underscores once the
+        # characters the PC's names do not hold are replaced
+        name = re.sub(r'[^A-Za-z0-9._ +()-]', '_', name).lstrip('._').removesuffix('.device') or 'save'
         if not NAME_OK.match(name): name = name[:60]
         taken = {r['name'] for r in listing(adb, package)}
         base, k = name, 2
