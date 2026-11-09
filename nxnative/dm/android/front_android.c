@@ -117,7 +117,14 @@ static _Atomic int g_tx_on;   // text entry open (front_text_input): the game is
 static void hold_sync(void) {
     pthread_mutex_lock(&g_hold_mu);
     int want = atomic_load(&g_bg) || atomic_load(&g_menu) || atomic_load(&g_tx_on);
-    if (want != g_held) { g_held = want; if (want) { dm_movie_hold(1); dm_audio_suspend(1); guest_clock_freeze_for(1, 1); } else { guest_clock_freeze_for(1, 0); dm_audio_suspend(0); dm_movie_hold(0); } }
+    if (want != g_held) {
+        g_held = want;
+        // the log says why the game is held: "audio suspended" alone reads like the app was sent to the background, and it sent the
+        // wrong way once (a game's software keyboard opens: the panel is drawn over the last frame, the game waits for the text)
+        if (want) { LOG("[hold] the game is held: %s", atomic_load(&g_bg) ? "the app is in the background" : atomic_load(&g_menu) ? "the pause menu is open" : "a text entry is open");
+                    dm_movie_hold(1); dm_audio_suspend(1); guest_clock_freeze_for(1, 1); }
+        else { LOG("[hold] the game runs again"); guest_clock_freeze_for(1, 0); dm_audio_suspend(0); dm_movie_hold(0); }
+    }
     pthread_mutex_unlock(&g_hold_mu);
 }
 static void shake_sensor(int on);   // the accelerometer, off in the background (input, below)

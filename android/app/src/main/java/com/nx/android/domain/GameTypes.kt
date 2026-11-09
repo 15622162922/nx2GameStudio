@@ -20,4 +20,5 @@ data class Ported(
     val icon: File?,       // 包内的图标（icon.png），没有为 null
     val titleId: String,   // 清单里的 title id（存档、私有目录都按它分）
     val name: String = "", // 清单里的游戏名
+    val status: String = "", // 清单里的档案状态（playable / wip / boots / experimental）：experimental 的移植提醒玩家它还没被正式调通
 )

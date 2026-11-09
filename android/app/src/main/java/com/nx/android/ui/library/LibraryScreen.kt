@@ -131,6 +131,14 @@ private fun statusLabel(s: GameStatus): String = when (s) {
     GameStatus.DONE -> stringResource(R.string.common_done)
 }
 
+/**
+ * 实验性移植的标记：档案还没在 Android 上调通（清单里的 status 是 experimental），玩家该知道
+ * 这个游戏随时可能卡在某条没走过的路上 —— 而不是以为它坏了。
+ */
+@Composable
+private fun experimentalTag(ported: Ported?): String? =
+    if (ported?.status == "experimental") stringResource(R.string.lib_experimental) else null
+
 /** The cover's two colors, picked by the name so one game always wears the same coat */
 private fun coverColors(name: String): List<Color> {
     val h = name.hashCode()
@@ -294,7 +302,8 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
         Spacer(Modifier.height(4.dp))
         Text(
             listOfNotNull(titleId, statusLabel(status) +
-                if (status == GameStatus.PORTING) " ${(port.progress * 100).toInt()}%" else "").joinToString("  ·  "),
+                if (status == GameStatus.PORTING) " ${(port.progress * 100).toInt()}%" else "",
+                experimentalTag(ported)).joinToString("  ·  "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -431,7 +440,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(titleId, statusLabel(status)).joinToString("  ·  "),
+                        listOfNotNull(titleId, statusLabel(status), experimentalTag(ported)).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

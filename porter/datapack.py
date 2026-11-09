@@ -60,6 +60,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     (tmp / 'env.txt').write_text('\n'.join(rows) + '\n', encoding='utf-8', newline='\n')
     if sets := {**profile.settings, **(settings or {})}: (tmp / 'settings.txt').write_text(''.join(f'{k}={v}\n' for k, v in sets.items()), encoding='utf-8', newline='\n')
     man = dict(title_id=profile.id, name=profile.name, package=package, version=version, display=display, language=language, requires=profile.requires,
+               status=profile.status,   # the profile's own state (playable / wip / boots / experimental): the app tells the player what to expect
                files=n, bytes=b, dlc=sorted(int(p.name) for p in aoc.iterdir() if p.is_dir() and p.name.isdigit()) if aoc else [], made=time.strftime('%Y-%m-%d %H:%M:%S'))
     if host: man['host'] = host         # the app's mode: the game's host (libdmplay.so) in the pack, the app copies it into its private folder to run the game
     if icon: man['icon'] = icon

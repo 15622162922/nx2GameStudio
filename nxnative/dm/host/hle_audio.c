@@ -464,7 +464,7 @@ void dm_audio_suspend(int on) {
                 // The session may still be held by someone else (back in the game with a call not yet hung up): not fatal, the silent sink keeps covering and the watchdog retries
                 null_stop(a); a->stalled = 0; au_go(a, now_ns()); failed |= a->backend != BK_AU; }
         }
-        LOG("audio %s", on ? "suspended (background / interruption)" : failed ? "resumed, an AudioUnit still refuses to start (retrying)" : "resumed (foreground / interruption ended)");
+        LOG("audio %s", on ? "suspended (the game is held, the app is in the background, or an interruption began)" : failed ? "resumed, an AudioUnit still refuses to start (retrying)" : "resumed (the game runs again)");
     }
     pthread_mutex_unlock(&g_aos_lock);
 }

@@ -47,6 +47,25 @@ class FolderScannerTest {
     }
 
     @Test
+    fun `the pack's own status is read, so an experimental port says so`() {
+        val out = tmpDir()
+        val pack = File(out, "DarkSouls-data")
+        File(pack, "host").mkdirs()
+        File(pack, "nx2a-data.json").writeText("""{"title_id":"01004AB00A260000","name":"DARK SOULS","status":"experimental"}""")
+        File(pack, "host/libdmplay.so").writeText("ELF")
+
+        val p = FolderScanner.outIndex(out)["01004AB00A260000"]!!
+        assertEquals("experimental", p.status)
+        // a pack from before the manifest carried the status: it is not experimental
+        val old = File(out, "Old-data")
+        File(old, "host").mkdirs()
+        File(old, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
+        File(old, "host/libdmplay.so").writeText("ELF")
+        assertEquals("", FolderScanner.outIndex(out)["0100000000010000"]!!.status)
+        out.deleteRecursively()
+    }
+
+    @Test
     fun `a display name drops the brackets and the extension`() {
         assertEquals("Zelda", FolderScanner.displayName(File("Zelda [0100000000010000][v0].nsp")))
         assertEquals("Hades II", FolderScanner.displayName(File("Hades II.xci")))

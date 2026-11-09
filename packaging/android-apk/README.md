@@ -55,6 +55,8 @@ the Python of the rootfs is started through the loader directly and needs no rew
 ## What the phone does and does not do
 
 - **Makes the APK and the data pack** on the phone, into the output folder (`/sdcard/Switch/Ports` by default).
+- **Says what a port is**: the pack's manifest carries the profile's own status, so the library shows an experimental port as one
+  (`experimental` = the game was never brought up on Android: it may stop at a path that was never walked).
 - **Installs the APK** with the system installer (the app hands it over; Android asks the user).
 - **Copies the data pack** into the game's own folder (`/sdcard/Android/data/<package>/files`), where the game reads it.
 - **No adb**: Google ships platform-tools for Linux as x86-64 only, so they cannot run on an ARM64 phone. The tool

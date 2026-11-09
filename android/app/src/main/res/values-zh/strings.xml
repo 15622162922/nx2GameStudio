@@ -228,8 +228,10 @@
     <string name="builds_history">历史</string>
     <string name="builds_history_seconds">%1$s 分 %2$s 秒</string>
     <string name="builds_build_again">再次构建</string>
+    <string name="builds_needs_storage">移植需要「所有文件访问」权限才能读取游戏文件</string>
     <string name="lib_run_config">运行配置</string>
     <string name="lib_port_config">移植配置</string>
+    <string name="lib_experimental">实验性移植</string>
     <string name="lib_close_current_game">先退出当前游戏（%1$s）再运行这个</string>
     <string name="lib_empty_title">游戏库是空的</string>
     <string name="lib_empty_hint">去构建页选一个游戏文件（NSP / XCI / NSZ / XCZ），它会立刻出现在这里。</string>

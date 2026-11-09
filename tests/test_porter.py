@@ -133,6 +133,7 @@ class DataPack(unittest.TestCase):
             self.assertIn('DM_LANG=ja', env); self.assertIn(f'DM_AOC_DIR={t / "out-data"}/aoc', env)   # the pack's own folder
             self.assertEqual((o / 'settings.txt').read_text(), 'docked=0\noverlay=1\nrumble=1\n')
             self.assertEqual((man['files'], man['bytes'], man['dlc'], man['requires']), (4, 35, [1], ['bcn']))   # the installer checks requires
+            self.assertEqual(man['status'], p.status)   # the app tells the player what to expect (an experimental port says so)
             self.assertEqual(datapack.read_manifest(o)['package'], 'org.nx2a.neo')
             datapack.build(t / 'touch-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv',
                            settings=pipeline.TOUCH_SETTINGS)   # --touch: the gamepad starts hidden, the profile's other settings stay

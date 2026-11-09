@@ -229,8 +229,10 @@
     <string name="builds_history">History</string>
     <string name="builds_history_seconds">%1$s min %2$s s</string>
     <string name="builds_build_again">Build again</string>
+    <string name="builds_needs_storage">The app needs the all-files permission to read the game file</string>
     <string name="lib_run_config">Run configuration</string>
     <string name="lib_port_config">Port configuration</string>
+    <string name="lib_experimental">Experimental port</string>
     <string name="lib_close_current_game">Close the game that is running (%1$s) before running this one</string>
     <string name="lib_empty_title">The library is empty</string>
     <string name="lib_empty_hint">Go to the build page and pick a game file (NSP / XCI / NSZ / XCZ); it shows up here right away.</string>

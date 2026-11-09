@@ -43,7 +43,8 @@ object FolderScanner {
         if (!host.isFile) return null
         return Ported(pack = pack, host = host,
                       icon = File(pack, "icon.png").takeIf { it.isFile },
-                      titleId = id, name = man.optString("name"))
+                      titleId = id, name = man.optString("name"),
+                      status = man.optString("status"))
     }
 
     /** The game's display name: the file's name without its brackets and extension */
