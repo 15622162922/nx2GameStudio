@@ -12,7 +12,6 @@ import com.nx.android.data.PortRunner
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PrefsStore.Companion.OB_COMPLETED
 import com.nx.android.data.PrefsStore.Companion.OB_FOLDER
-import com.nx.android.data.PrefsStore.Companion.OB_KEYS
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
 import com.nx.android.domain.DoctorOutput
@@ -34,8 +33,8 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     companion object {
         /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
         const val NEEDED_GB = 1L
-        /** Where prod.keys usually lies on a phone (the common folders of the file managers) */
-        val COMMON_KEYS = listOf("/sdcard/switch/prod.keys", "/sdcard/Switch/prod.keys", "/sdcard/switch/keys/prod.keys")
+        /** The folder prod.keys usually lies in, on the phone's own storage (/sdcard/switch) */
+        const val USUAL_KEYS_FOLDER = "switch"
     }
 
     /** The flow is on screen (first run, or Settings' run-again); otherwise the main screen shows */
@@ -43,7 +42,9 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
 
     var step by mutableStateOf(ObStep.WELCOME); private set
 
-    var keysPath by mutableStateOf(prefs.str(OB_KEYS))
+    /** The keys file: the app's own setting (the port is started with the same one) */
+    var keysPath by mutableStateOf(prefs.keys); private set
+
     var keysOk by mutableStateOf(false); private set
     var keysChecking by mutableStateOf(false); private set
     var keysDetail by mutableStateOf(""); private set
@@ -60,6 +61,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     fun open() {
         val saved = prefs.str(OB_STEP)
         refreshEnv()
+        keysPath = prefs.keys      // the settings page may have set a keys file since the last time
         step = if (saved.isNotEmpty() && prefs.bool(OB_LATER)) {
             OnboardingLogic.revalidate(ObStep.valueOf(saved), facts())
         } else {
@@ -170,7 +172,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     fun chooseKeys(path: String) {
         keysPath = path
         keysSkipped = false
-        prefs.put(OB_KEYS, path)
+        prefs.writeKeys(path)      // the app's own setting: the port is started with this one
         checkKeys()
     }
 
@@ -185,13 +187,36 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         if (keysPath.isNotBlank()) checkKeys()
     }
 
-    /** Entering the keys step: a saved path or a file in the usual places is checked at once */
+    /**
+     * Where the keys picker opens: the folder of the file the player has, or the usual place. The picker
+     * knows the storage volumes by their own paths, so the usual place is given in that form (the internal
+     * storage's own path, which is what /sdcard points at).
+     */
+    val keysStartDir: File
+        get() {
+            val chosen = keysPath.trim()
+            if (chosen.isNotEmpty()) {
+                val dir = File(chosen).parentFile
+                if (dir != null) return dir
+            }
+            return File(Environment.getExternalStorageDirectory(), USUAL_KEYS_FOLDER)
+        }
+
+    /**
+     * Entering the keys step: the path the player has (or the settings page holds) is checked. The app does
+     * not pick one for them - the picker opens where the keys usually are, and what the player takes is what
+     * the step talks about.
+     */
     private fun prefillKeys() {
         if (keysSkipped || keysOk) return
-        if (keysPath.isNotBlank()) { checkKeys(); return }
-        for (p in COMMON_KEYS) {
-            if (File(p).isFile()) { chooseKeys(p); return }
-        }
+        if (keysPath.isNotBlank()) checkKeys()
+    }
+
+    /** Whether the file can be read: the port reads it, so a file that cannot be read is not good keys */
+    private fun readable(path: String): Boolean = try {
+        File(path).inputStream().use { it.read(ByteArray(16)); true }
+    } catch (e: Exception) {
+        false
     }
 
     /** The doctor's prod.keys row says whether the keys are good */
@@ -207,6 +232,12 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         val buf = StringBuilder()
         PortRunner(env, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
             keysChecking = false
+            // the port reads the file: a file that cannot be read is not good keys
+            if (!readable(p)) {
+                keysOk = false
+                keysDetail = locale.str(R.string.onb_keys_unreadable, p)
+                return@doctor
+            }
             // the runner's own lines are in the same stream: only the doctor's own rows are JSON
             val rows = DoctorOutput.rows(buf.toString())
             if (rows == null) {

@@ -211,7 +211,8 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (Picke
                 when {
                     ob.keysOk -> NxPalette.Ready
                     ob.keysChecking -> NxPalette.Building
-                    else -> NxPalette.Danger
+                    ob.keysPath.isNotBlank() -> NxPalette.Danger
+                    else -> NxPalette.Unbuilt
                 }
             )
             Column(Modifier.weight(1f)) {
@@ -227,7 +228,7 @@ private fun KeysStep(ob: OnboardingState, actions: AppActions, onRequest: (Picke
                 CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
             } else {
                 QuietButton(stringResource(R.string.onb_choose_file), onClick = {
-                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), null, locale.str(R.string.onb_choose_prod_keys),
+                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), ob.keysStartDir, locale.str(R.string.onb_choose_prod_keys),
                         onPicked = { f -> ob.chooseKeys(f.path) }))
                 })
             }

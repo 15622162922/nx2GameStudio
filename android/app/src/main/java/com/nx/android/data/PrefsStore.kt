@@ -35,7 +35,6 @@ class PrefsStore(ctx: Context) {
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"
         const val OB_COMPLETED = "ob.completed"
-        const val OB_KEYS = "ob.keys"
         const val OB_FOLDER = "ob.folder"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
@@ -44,7 +43,7 @@ class PrefsStore(ctx: Context) {
 
     val prefs: SharedPreferences = ctx.getSharedPreferences("nx2a", Context.MODE_PRIVATE)
 
-    /** prod.keys 的路径：库的发起前提、设置页、引导都读它；picker 与引导写它 */
+    /** prod.keys 的路径：库的发起前提、设置页、引导都读它；picker 与引导写它（一份，就是这一个） */
     var keys by mutableStateOf(prefs.getString(KEYS, "") ?: "")
         private set
 

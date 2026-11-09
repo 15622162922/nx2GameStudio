@@ -90,7 +90,8 @@
     <string name="onb_no_keys_file">还没有选择 keys 文件</string>
     <string name="onb_choose_file">选择文件</string>
     <string name="onb_choose_prod_keys">选择 prod.keys</string>
-    <string name="onb_keys_common_places">常见位置（/sdcard/switch/）已有的 keys 会自动填上并校验</string>
+    <string name="onb_keys_common_places">选择器会打开 keys 通常在的地方（/sdcard/switch/）——在那儿选你自己的 prod.keys</string>
+    <string name="onb_keys_unreadable">读不了这个文件：%1$s</string>
     <string name="onb_skip_keys">暂时跳过（发起移植时会再提醒）</string>
     <string name="onb_no_folder">还没有选择文件夹</string>
     <string name="onb_choose_folder">选择文件夹</string>
@@ -238,7 +239,6 @@
     <string name="lib_run_config">运行配置</string>
     <string name="lib_port_config">移植配置</string>
     <string name="lib_close_current_game">先退出当前游戏（%1$s）再运行这个</string>
-    <string name="lib_game_exited">游戏已退出</string>
     <string name="lib_empty_title">游戏库是空的</string>
     <string name="lib_empty_hint">选一个放游戏文件的文件夹（NSP / XCI / NSZ / XCZ），子目录也会被扫到。</string>
     <string name="lib_no_games">没有游戏</string>

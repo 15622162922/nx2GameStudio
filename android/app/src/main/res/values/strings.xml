@@ -91,7 +91,8 @@
     <string name="onb_no_keys_file">No keys file picked yet</string>
     <string name="onb_choose_file">Choose a file</string>
     <string name="onb_choose_prod_keys">Choose prod.keys</string>
-    <string name="onb_keys_common_places">A keys file in the usual place (/sdcard/switch/) is filled in and checked on its own</string>
+    <string name="onb_keys_common_places">The picker opens where the keys usually are (/sdcard/switch/) - pick your own prod.keys there</string>
+    <string name="onb_keys_unreadable">Cannot read this file: %1$s</string>
     <string name="onb_skip_keys">Skip for now (you will be asked again when a port starts)</string>
     <string name="onb_no_folder">No folder picked yet</string>
     <string name="onb_choose_folder">Choose a folder</string>
@@ -239,7 +240,6 @@
     <string name="lib_run_config">Run configuration</string>
     <string name="lib_port_config">Port configuration</string>
     <string name="lib_close_current_game">Close the game that is running (%1$s) before running this one</string>
-    <string name="lib_game_exited">The game is closed</string>
     <string name="lib_empty_title">The library is empty</string>
     <string name="lib_empty_hint">Pick a folder with game files (NSP / XCI / NSZ / XCZ); its subfolders are scanned too.</string>
     <string name="lib_no_games">No games</string>
