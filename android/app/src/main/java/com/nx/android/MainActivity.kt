@@ -60,6 +60,10 @@ class MainActivity : ComponentActivity() {
         if (!container.prefs.bool(PrefsStore.OB_COMPLETED)) container.onboarding.open()
         AppLog.init(this)
         container.port.attach()   // a port the system killed shows up as interrupted
+        // 游戏在跑：游戏页是这个任务里压在库页上面的那一页——先把它顶到前面，再画库页（库页画在它下面，
+        // 玩家看不见，但游戏结束后它就在那儿）。判据直接问进程，不看 PlayerState.running：那个靠 2 秒
+        // 轮询，App 的进程刚起来时还是 false。
+        if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
         setContent { AppRoot(container, actions, launchTab) }
         // the small tools come with the app: an update brings new ones, and the phone has to get them
         // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
@@ -125,6 +129,22 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         container.storageOk = storageGranted()   // the permission may have been given in the background
     }
+
+    /**
+     * 桌面图标那条 intent 会送到任务根的**已有**那个库页实例上（栈的顺序不动，游戏页还在最上面）。
+     * 有些 ROM 会把任务根拉到前台，库页就盖住了游戏——所以这里再把游戏页顶回最前。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
+    }
+
+    /**
+     * 「打开 App」的那一条：桌面图标的 intent（MAIN/LAUNCHER）。
+     * 别的入口不是——通知点进来是要去构建页的，玩家明确要去那一页，游戏不该把它抢走。
+     */
+    private fun isLauncherEntry(i: Intent?): Boolean =
+        i?.action == Intent.ACTION_MAIN && i.hasCategory(Intent.CATEGORY_LAUNCHER)
 
     /** The phone's language changed (configChanges holds it): the app's words are read again */
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {

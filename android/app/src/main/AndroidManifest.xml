@@ -23,6 +23,9 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- The shell: the library, the builds and the settings — and the root of the app's task. standard on
+             purpose: the game page sits on top of it in the same task, and a singleTask shell would finish
+             that game page whenever the launcher icon brought the task forward. -->
         <activity
             android:name=".MainActivity"
             android:screenOrientation="sensorLandscape"
@@ -43,13 +46,17 @@
             android:exported="false" />
 
         <!-- The player: one game at a time, in a process of its own — a crash (or the game's own exit, which
-             ends the process) takes the game down, not the app or a port that is running. singleTask: the
-             app's "resume the game" and "exit the game" both land here; every config change is handled here
-             (a recreation takes the running game's window over, it does not restart it). -->
+             ends the process) takes the game down, not the app or a port that is running.
+             The game page is a page of the app's own task: it sits on top of the library page, so the launcher
+             icon never lands on it and "exit the game" falls back to the library page underneath. singleTop,
+             not singleTask: singleTask is always the root of its task, which would finish the library page
+             below it. The app's "resume the game" and "exit the game" land here through onNewIntent; every
+             config change is handled here (a recreation takes the running game's window over, it does not
+             restart it). -->
         <activity
             android:name=".game.GameActivity"
             android:process=":play"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:screenOrientation="sensorLandscape"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode|fontWeightAdjustment|fontScale"
             android:exported="false"

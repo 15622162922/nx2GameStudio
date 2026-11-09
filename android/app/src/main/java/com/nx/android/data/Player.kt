@@ -1,5 +1,6 @@
 package com.nx.android.data
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -35,16 +36,20 @@ object Player {
      *
      * 先结束存活的 :play 进程：重建过的宿主永远加载不进一个还在跑着旧宿主的进程（System.load 对同路径
      * 已加载的库是空操作），所以每次运行都以全新的进程开始。
+     *
+     * [activity] 是 Activity 而不是 Context：游戏页要落进**调用者所在的任务**（库页那个任务），所以这条
+     * intent 不能带 FLAG_ACTIVITY_NEW_TASK——带了系统就另起一个任务，游戏页就不再是 App 自己的一页，
+     * 退出游戏也就不会回到库页。
      */
-    fun run(context: Context, port: Ported, name: String, onReady: (Boolean) -> Unit) {
-        if (playProcessAlive(context)) {
-            GameActivity.stop(context)
+    fun run(activity: Activity, port: Ported, name: String, onReady: (Boolean) -> Unit) {
+        if (playProcessAlive(activity)) {
+            GameActivity.stop(activity)
             val deadline = System.currentTimeMillis() + 3000
-            while (playProcessAlive(context) && System.currentTimeMillis() < deadline) Thread.sleep(100)
+            while (playProcessAlive(activity) && System.currentTimeMillis() < deadline) Thread.sleep(100)
         }
         Thread {
             val ok = try {
-                val dst = hostDir(context, port.titleId)
+                val dst = hostDir(activity, port.titleId)
                 dst.mkdirs()
                 copy(port.host, File(dst, port.host.name))
                 File(port.pack, "drivers").listFiles()?.forEach { if (it.isFile) copy(it, File(dst, it.name)) }
@@ -52,15 +57,15 @@ object Player {
             } catch (e: Exception) {
                 false
             }
-            android.os.Handler(context.mainLooper).post {
+            android.os.Handler(activity.mainLooper).post {
                 if (ok) {
-                    val i = Intent(context, GameActivity::class.java)
+                    val i = Intent(activity, GameActivity::class.java)
                         .putExtra(GameActivity.EXTRA_PACK, port.pack.absolutePath)
-                        .putExtra(GameActivity.EXTRA_HOST, File(hostDir(context, port.titleId), port.host.name).absolutePath)
+                        .putExtra(GameActivity.EXTRA_HOST, File(hostDir(activity, port.titleId), port.host.name).absolutePath)
                         .putExtra(GameActivity.EXTRA_TITLE_ID, port.titleId)
                         .putExtra(GameActivity.EXTRA_NAME, name)
-                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(i)
+                    // 不带 FLAG_ACTIVITY_NEW_TASK：游戏页压在这个任务的库页上面（见上面的说明）
+                    activity.startActivity(i)
                 }
                 onReady(ok)
             }

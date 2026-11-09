@@ -1,6 +1,6 @@
 package com.nx.android.game
 
-import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -66,15 +66,24 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         /** a start already happened in this process: a recreated activity takes the running game's window over */
         @Volatile var hostRunning = false
 
-        /** ends a running game from the app side (singleTask: the intent lands in onNewIntent) */
-        fun stop(context: Context) {
-            val i = Intent(context, GameActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(EXTRA_EXIT, true)
-            context.startActivity(i)
+        /**
+         * ends a running game from the app side (the intent lands in onNewIntent).
+         *
+         * CLEAR_TOP|SINGLE_TOP：命中任务里**已有的**那一个游戏页，把它上面的 finish 掉。**不能**用
+         * FLAG_ACTIVITY_NEW_TASK——那会让系统按 affinity 另找位置，目标不在栈顶时**新建**一个游戏页
+         * 实例；新实例在 onCreate 里撞上 hostRunning 直接早退，结果是一个不接管窗口、没有输入的黑屏。
+         */
+        fun stop(activity: Activity) {
+            val i = Intent(activity, GameActivity::class.java)
+                .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(EXTRA_EXIT, true)
+            activity.startActivity(i)
         }
 
-        /** the game again (back from the app): the running activity comes to the front */
-        fun resume(context: Context) {
-            context.startActivity(Intent(context, GameActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        /** the game again (back from the app): the running page comes to the front, no new one is made */
+        fun resume(activity: Activity) {
+            activity.startActivity(
+                Intent(activity, GameActivity::class.java).setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         }
     }
 

@@ -154,7 +154,9 @@ the app's own `:play` process (`com.nx.android.game.GameActivity`): the pack's h
 statically linked with its JNI entry, `dm/android/jni_android.c`) and its driver libraries are copied into the
 app's private folder (sdcard is noexec) and loaded there; the surface, input and lifecycle reach the same shared
 core the NativeActivity APK serves (`dm/android/jni_android.h`). One game plays at a time; the process ends with
-the game, so a crash takes the game down, not the app or a port that is running. Saves, logs and temp go under
+the game, so a crash takes the game down, not the app or a port that is running. The game page is a page of the
+app's own task - it sits on top of the library page - so the launcher icon never lands on it, and ending the
+game falls back to the library page instead of the home screen. Saves, logs and temp go under
 the app's files folder per title id (`DM_GAME_ID`); the game's language and Vulkan driver are picked in the
 library's drawer and written into the pack's `env.txt`. The assets are built by `packaging/android-apk/` and are
 not committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).

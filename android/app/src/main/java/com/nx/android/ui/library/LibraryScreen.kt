@@ -365,10 +365,6 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                 QuietButton(stringResource(R.string.drawer_exit), onClick = { actions.onStopGame() })
             }
         }
-        if (status == GameStatus.DONE && player.exited) {
-            Spacer(Modifier.height(6.dp))
-            Text(stringResource(R.string.lib_game_exited), style = MaterialTheme.typography.bodySmall, color = NxPalette.Building)
-        }
     }
 }
 
