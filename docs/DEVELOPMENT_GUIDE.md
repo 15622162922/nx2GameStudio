@@ -57,7 +57,11 @@ Each game is a profile in `nxnative/dm/games/<title ID>/` with an `android.tsv`:
 
 ## Releases and version numbers
 
-The version is `0.MINOR.PATCH`. A release that only adds games and fixes bugs raises the patch version; a release with any other core change (a new feature or a change in behaviour) raises the minor version. The major version stays 0 while the project is early. A release checks only the games it adds or fixes, not the older ones; a break in an older game is fixed by a later patch release. The version is in `porter/__init__.py`, raised by a commit `chore(release): version <x.y.z>`.
+This line's versions are the upstream base it carries. `porter/__init__.py` holds that base (`0.MINOR.PATCH` of the upstream nxnative the line is forked from), and the release tag is the base with the line's name on it: `v<major>.<minor>-android` — `v0.3-android` for the base `0.3.0`. The line's own revisions take a number after it (`v0.3-android.1`) and do not change the version in `porter/__init__.py`; picking up a new upstream base bumps that version (`0.4.0` → `v0.4-android`).
+
+The phone app says the same version: its `versionName` in `android/app/build.gradle.kts` is `0.3-android`, the tag without the `v`, so the update check can tell which release is newer than the app that is running.
+
+A release checks only the games it adds or fixes, not the older ones; a break in an older game is fixed by a later patch release. The version is raised by a commit `chore(release): version <x.y.z>`.
 
 ## Building the bundle
 

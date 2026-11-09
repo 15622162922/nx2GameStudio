@@ -1,7 +1,9 @@
 # PreToolUse hook (.claude/settings.json): checks release commands against CLAUDE.md's release rules before they run.
 #   gh release create|upload|edit  needs --repo zFitness/nx2androidX (gh here defaults to seedds/nxnative) and attaches no zip (the
 #                                  release-windows.yml and release-macos.yml workflows build and attach them on publish, --clobber)
-#   gh release create <tag>        and git tag <tag>: the tag is v + porter/__init__.py's __version__ (bump it first)
+#   gh release create <tag>        and git tag <tag>: the tag is the upstream base this line carries with the line's
+#                                  name on it: v<major>.<minor>-android (or that with a revision number), the base
+#                                  being porter/__init__.py's __version__ (bump it first)
 # A refused command gets the reason back; an allowed gh release create gets the steps that follow publishing.
 import json, re, shlex, sys
 from pathlib import Path
@@ -13,6 +15,20 @@ REPO = 'zFitness/nx2androidX'
 def version():
     m = re.search(r"^__version__ = '([^']+)'", (ROOT / 'porter/__init__.py').read_text(encoding='utf-8'), re.M)
     return m and m.group(1)
+
+
+def tag_base(v):
+    """The upstream base this line carries: the major and the minor of the version in porter/__init__.py"""
+    parts = v.split('.')
+    return f'v{parts[0]}.{parts[1]}-android' if len(parts) >= 2 else None
+
+
+def tag_ok(tag, v):
+    """Whether the tag is this line's: the base with the line's name on it, or that with a revision number"""
+    base = tag_base(v)
+    if not base: return False
+    if tag == base: return True
+    return tag.startswith(base + '.') and tag[len(base) + 1:].isdigit()
 
 
 def words(cmd):
@@ -37,17 +53,22 @@ def check_gh(w):
     if sub == 'create':
         tag = next((a for a in w[3:] if not a.startswith('-')), None)
         v = version()
-        if tag and v and tag != f'v{v}':
-            return f'The tag {tag} is not v{v}, the version in porter/__init__.py. Bump it first in a commit "chore(release): version <x.y.z>".'
+        if tag and v and not tag_ok(tag, v):
+            base = tag_base(v)
+            return (f'The tag {tag} is not this line\'s: {base} (the upstream base in porter/__init__.py with the line\'s '
+                    f'name on it), or {base}.N for the line\'s own revision. Bump the version first in a commit '
+                    '"chore(release): version <x.y.z>".')
     return None
 
 
 def check_git_tag(w):
-    tags = [a for a in w[2:] if re.fullmatch(r'v\d+\.\d+\.\d+', a)]
+    tags = [a for a in w[2:] if re.fullmatch(r'v\d+\.\d+-android(\.\d+)?', a)]
     if not tags or any(a in ('-d', '--delete', '-l', '--list', '-v', '--verify') for a in w): return None
     v = version()
-    if v and tags[0] != f'v{v}':
-        return f'The tag {tags[0]} is not v{v}, the version in porter/__init__.py. Bump it first in a commit "chore(release): version <x.y.z>".'
+    if v and not tag_ok(tags[0], v):
+        base = tag_base(v)
+        return (f'The tag {tags[0]} is not this line\'s: {base} (the upstream base in porter/__init__.py with the line\'s '
+                f'name on it), or {base}.N for the line\'s own revision.')
     return None
 
 
