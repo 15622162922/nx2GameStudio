@@ -33,4 +33,7 @@ object Native {
     /** 虚拟手柄（App 绘制层）：布局与实时状态（JSON，见 front_android.c 的 dm_pad_*） */
     @JvmStatic external fun padLayout(): String
     @JvmStatic external fun padState(): String
+
+    /** 虚拟手柄层（虚拟手柄与 ☰ 菜单按钮是一层）：App 画不画它——不画时那一块不回答触摸，触摸还给游戏 */
+    @JvmStatic external fun padLayer(drawn: Boolean)
 }

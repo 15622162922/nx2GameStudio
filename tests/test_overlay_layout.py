@@ -1,4 +1,4 @@
-"""Check the Android layout editor's geometry without a device."""
+"""Check the Android overlay's geometry and touch rules without a device."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -49,6 +49,40 @@ int main(void) {
             assert(ov_ed_button_at(b[0] + b[2] / 2, b[1] + b[3] / 2, p, first, n) == i);
         }
     }
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory(prefix='nx2a_overlay_') as tmp:
+            tmp = Path(tmp)
+            (tmp / 'android_profile.h').write_text(android_profile.header(None), encoding='utf-8')
+            c, exe = tmp / 'check.c', tmp / 'check'
+            c.write_text(harness, encoding='utf-8')
+            result = subprocess.run([cc, '-std=gnu11', '-Wall', '-Wextra', '-Werror', f'-I{tmp}',
+                                     f'-I{DM / "android"}', f'-I{DM / "host"}', str(c), '-lm', '-o', str(exe)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            result = subprocess.run([str(exe)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_who_answers_a_touch(self):
+        cc = shutil.which('cc') or shutil.which('clang')
+        if not cc:
+            self.skipTest('a C compiler is needed for the answer rule check')
+        harness = r'''
+#include <assert.h>
+#include "overlay_layout.h"
+float dm_overlay_scale(void) { return 1; }
+int main(void) {
+    // the app draws the gamepad and the menu button as one layer, so the app's answer decides: drawn → every control, hidden → nothing
+    assert(ov_answer(0, 1, 1, 1) == OV_ANSWER_ALL);
+    assert(ov_answer(0, 1, 1, 0) == OV_ANSWER_ALL);
+    assert(ov_answer(0, 1, 0, 1) == OV_ANSWER_NONE);
+    assert(ov_answer(0, 1, 0, 0) == OV_ANSWER_NONE);
+    // the desktop host draws the pad itself: the gamepad hidden → the menu button alone (it is still drawn)
+    assert(ov_answer(0, 0, 1, 1) == OV_ANSWER_ALL);
+    assert(ov_answer(0, 0, 1, 0) == OV_ANSWER_MENU);
+    // the editor is open: every control answers, shown or not (the editor chooses among them)
+    assert(ov_answer(1, 1, 0, 0) == OV_ANSWER_ALL);
+    assert(ov_answer(1, 0, 0, 0) == OV_ANSWER_ALL);
     return 0;
 }
 '''

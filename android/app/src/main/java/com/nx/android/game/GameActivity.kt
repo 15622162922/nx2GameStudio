@@ -135,6 +135,21 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
+    /**
+     * 宿主的上行通知（front_android.c 的 dm_app_notice）：宿主不知道抽屉，它只说发生了什么。
+     * 1 = 玩家点了 ☰（轻点不是拖动）→ 抽屉开关；2 = 宿主打开了自己的面板（文本输入/布局编辑器/存档选择）
+     * → 抽屉收起，面板画在游戏画面上，不被抽屉盖住。
+     * 通知可能来自宿主的任何线程（触摸那条在主线程，文本输入那条在游戏的线程上），状态只在主线程上改。
+     */
+    fun onHostNotice(what: Int) {
+        runOnUiThread {
+            when (what) {
+                1 -> drawerOpen = !drawerOpen
+                2 -> drawerOpen = false
+            }
+        }
+    }
+
     /** the drawer's tree: handle, panel, and the paused overlay (the surface keeps presenting through it) */
     @androidx.compose.runtime.Composable
     private fun DrawerRoot() {
@@ -194,22 +209,30 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         e.getAxisValue(MotionEvent.AXIS_BRAKE), e.getAxisValue(MotionEvent.AXIS_GAS))
 
     /**
-     * everything is consumed here (as the NativeActivity's queue did). Back is the drawer's: it opens the
-     * drawer — unless one of the game's own panels (text entry, layout editor, save picker) is open, in which
-     * case Back goes to the game to step back in it (dm_menu_state: -1 closed, else a panel is up).
+     * everything is consumed here (as the NativeActivity's queue did). Back goes to the frontmost thing:
+     * the drawer closes it, the host's own panel (text entry, layout editor, save picker) steps back in it
+     * (dm_menu_state: -1 closed, else a panel is up), and with nothing up Back opens the drawer.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (e.keyCode == KeyEvent.KEYCODE_BACK && !paused) {
             if (e.action == KeyEvent.ACTION_DOWN) {
-                val hostPanel = runCatching { Native.menuState().substringBefore(' ').toIntOrNull() ?: -1 }.getOrDefault(-1) != -1
-                if (!hostPanel) drawerOpen = !drawerOpen
+                val hostPanel = !drawerOpen && hostPanelUp()   // 抽屉在前面时，Back 归抽屉
+                when {
+                    drawerOpen -> drawerOpen = false
+                    hostPanel -> Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)   // 宿主的面板在后退一步
+                    else -> drawerOpen = true
+                }
             }
-            return true
+            return true   // Back 只在宿主的面板开着时交给宿主
         }
         if (e.action == KeyEvent.ACTION_DOWN || e.action == KeyEvent.ACTION_UP)
             Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)
         return true
     }
+
+    /** 宿主自己的面板开着吗（文本输入、布局编辑器、存档选择；dm_menu_state: -1 是关着的） */
+    private fun hostPanelUp(): Boolean =
+        runCatching { Native.menuState().substringBefore(' ').toIntOrNull() ?: -1 }.getOrDefault(-1) != -1
 
     // ---- lifecycle: the same dance as the NativeActivity's callbacks ----
     override fun onResume() { super.onResume(); Native.lifecycle(1) }

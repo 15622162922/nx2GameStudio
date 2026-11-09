@@ -35,4 +35,11 @@ int dm_java_start(const char *pack, const char *internal, const char *title_id, 
                                                 // JNIEnv and a Context (the Activity) for the haptics. 1 started, 0 the
                                                 // save import asked to end: the game is not started
 
+// the host's notices to the app (the player): the menu button was tapped (the app opens its drawer), the host opened one of its panels (the app
+// closes its drawer, so a panel is never hidden under it). The Activity's method takes the code (GameActivity.onHostNotice).
+#define DM_NOTICE_MENU 1
+#define DM_NOTICE_PANEL 2
+void dm_app_notice(int what);
+void dm_pad_layer_set(int drawn);   // the app's answer: it draws the pad layer (the gamepad and the menu button) or it does not
+
 #endif

@@ -65,12 +65,25 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
 
     var shown: Boolean
         get() = prefs.bool(KEY_SHOWN, true)
-        set(v) { prefs.put(KEY_SHOWN, v); invalidate() }
+        set(v) { prefs.put(KEY_SHOWN, v); pushLayer(); invalidate() }
     var opacity: Int
         get() = prefs.str(KEY_OPACITY).toIntOrNull() ?: 60
         set(v) { prefs.put(KEY_OPACITY, v.coerceIn(10, 100).toString()); invalidate() }
 
     private fun visible(): Boolean = shown && !hostUi && pads == 0
+
+    /**
+     * 宿主那边的手柄层（虚拟手柄与 ☰ 菜单按钮是一层）：画出来才回答触摸，这一层藏起来时那一块的触摸还给游戏。
+     * 宿主开着的时候（它自己的面板要用这一层）不回答：宿主的面板自己收触摸。
+     * 推给宿主的是「画不画」，宿主那边据此决定那片区域答不答触摸（front_android.c 的 ov_answer）。
+     */
+    private var layerDrawn = true   // 上次告诉宿主的状态
+    private fun pushLayer() {
+        val v = visible()
+        if (v == layerDrawn) return
+        layerDrawn = v
+        runCatching { Native.padLayer(v) }   // 宿主还没载入（这里在 System.load 之前）或旧宿主没有这个入口：跳过
+    }
 
     private val loop = object : Runnable {
         override fun run() {
@@ -83,7 +96,7 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
         super.onAttachedToWindow()
         fetchLayout()
         loadTheme()
-        postOnAnimationDelayed(loop, 100)
+        postOnAnimationDelayed(loop, 100)   // 第一次 tick 在宿主载入之后，手柄层的事那时才推给宿主
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -103,6 +116,7 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
             val v = st.optLong("v", -1)
             hostUi = st.optBoolean("e", false) || st.optBoolean("m", false)   // e: 编辑器 m: 宿主菜单
             pads = st.optInt("pads", 0)
+            pushLayer()   // 宿主的面板开着、手柄接上了：那一层不画了，宿主也不该再回答那里的触摸
             // 窗口尺寸也要比：旋转/满屏切换时 fetchLayout 可能跑在宿主拿到新 Surface 之前，fractions 是
             // 旧宽高比的，而 ver 不因尺寸变化而走——按 w/h 不匹配每帧重拉，宿主窗口一更新就自愈
             if (v != layoutVer || layoutW != width.toFloat() || layoutH != height.toFloat()) fetchLayout()

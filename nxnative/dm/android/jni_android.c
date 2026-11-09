@@ -163,6 +163,11 @@ Java_com_nx_android_game_Native_padState(JNIEnv *E, jclass c) {
     free(j);
     return out;
 }
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_padLayer(JNIEnv *E, jclass c, jboolean drawn) {
+    (void)E; (void)c;
+    dm_pad_layer_set(drawn ? 1 : 0);   // the app's answer: it draws that layer (the gamepad and the menu button), or it does not
+}
 
 // the drawer's frame generation: the live switch and the status line ("<state> <reason>", Banana's format)
 JNIEXPORT void JNICALL

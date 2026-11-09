@@ -406,10 +406,12 @@ static _Atomic int g_pad_in = -1;   // the device that last sent a controller's 
 static _Atomic int g_knob[2][2];    // the sticks' knob offsets, in 1/10000 of the stick radius
 static _Atomic int64_t g_press_t[16], g_menu_t, g_stick_t[2];   // when each overlay button (by DM_BTN_* bit), the menu button and each stick went down, 0 = not held
 static uint64_t g_touch_btn;        // the overlay buttons held, as of the last touch event
-static _Atomic int g_pad_app;   // the player's app-side pad (android-virtual-pad): the host stops DRAWING the overlay (present_one), the hit test below keeps working
+static _Atomic int g_pad_app;   // the player's app-side pad (android-virtual-pad): the host stops DRAWING the overlay (present_one), the hit test below asks the app (g_pad_layer)
+static _Atomic int g_pad_layer = 1;   // the app draws that layer now (the gamepad and the menu button are one layer): 0 → nothing answers a touch
 static int64_t mono_ns(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec; }
-static int pad_input_visible(void) { return atomic_load(&g_set_overlay) && atomic_load(&g_overlay) ? 1 : 2; }   // the hit test's side (ctl_at): the physical-controller hide is the app's drawing choice now — a control the player touches always answers
+static int pad_input_visible(void) { return atomic_load(&g_set_overlay) && atomic_load(&g_overlay) ? 1 : 2; }   // the desktop host's own switches: the gamepad is on, or only the menu button is
 int dm_overlay_visible(void) { return atomic_load(&g_pad_app) ? 0 : pad_input_visible(); }   // the render side: the app draws the pad in the player
+void dm_pad_layer_set(int drawn) { atomic_store(&g_pad_layer, drawn != 0); }   // the app's answer (jni_android.h): the layer is drawn, or it is not
 static int g_dpi;   // the display's density (AConfiguration), 0 = unknown
 int dm_overlay_layout(void) {   // the phone's layout in a window at least OV_PHONE_ASPECT wide for its height (overlay_layout.h)
     static int last_w = -1, last_h = -1, phone;
@@ -446,11 +448,13 @@ float dm_overlay_scale(void) {
 }
 void dm_overlay_knob(int stick, float *dx, float *dy) { *dx = atomic_load(&g_knob[stick][0]) / 10000.0f; *dy = atomic_load(&g_knob[stick][1]) / 10000.0f; }
 static int g_ptr_ctl[32];   // pointer id → control index + 1 (0 = the touch screen)
+// who answers a touch (overlay_layout.h's rule): the editor picks among every control; in the player the app's layer decides; the desktop host's own switches
+static int answer_mode(void) { return ov_answer(atomic_load(&g_edit), g_pad_app, atomic_load(&g_pad_layer), pad_input_visible() == 1); }
 static int ctl_at(float x, float y, float W, float H) {   // the control under (x, y) in pixels, -1 if none (in the layout editor: every control, shown or not)
-    int best = -1, vis = atomic_load(&g_edit) ? 1 : pad_input_visible(), shown = vis == 1; float bd = 1e9f;
-    if (!vis) return -1;   // a controller is attached: every touch is the game's
+    int best = -1, mode = answer_mode(); float bd = 1e9f;
+    if (mode == OV_ANSWER_NONE) return -1;   // the layer is hidden: every touch is the game's
     for (int i = 0; i < OV_N; i++) {
-        const ov_ctl *c = &OV_CTLS[i]; if (!shown && c->kind != OV_MENU) continue;   // hidden: only the menu button answers
+        const ov_ctl *c = &OV_CTLS[i]; if (mode == OV_ANSWER_MENU && c->kind != OV_MENU) continue;   // the gamepad is hidden: only the menu button answers
         float b[4]; ov_box(c, W, H, b);
         float d = ov_sdf(c, b, x - b[0], y - b[1]), reach = ov_reach(c, b, H), m = fminf(b[2], b[3]);
         if (d < reach && (d + m) / (m + reach) < bd) { bd = (d + m) / (m + reach); best = i; }   // between two, the one the touch is deeper into, for its size
@@ -544,6 +548,7 @@ int dm_overlay_fps(void) { return atomic_load(&g_set_fps) && !atomic_load(&g_men
 static void menu_open(int hi) {
     if (!atomic_load(&g_running) || atomic_exchange(&g_menu, 1)) return;
     atomic_store(&g_menu_hi, hi); g_menu_ptr = -1;
+    dm_app_notice(DM_NOTICE_PANEL);   // the app: its drawer steps aside (the panel is drawn under it otherwise)
     if (atomic_load(&g_sv_st) != OVX_BUSY) atomic_store(&g_sv_st, OVX_IDLE);   // the last export's note goes (one still copying stays)
     dm_input_set(0, 0, 0, 0, 0); dm_touch_set(NULL, 0); g_touch_btn = 0;   // nothing stays pressed in the game
     for (int i = 0; i < 16; i++) atomic_store(&g_press_t[i], 0);
@@ -660,6 +665,7 @@ static void sp_open(void) {
     int n = g_sp.n = dm_saves_list(g_sp.e, SP_MAX); g_sp.page = g_sp.confirm = g_sp.closing = 0; g_sp.ptr = -1;
     pthread_mutex_unlock(&g_sp_mu);
     atomic_store(&g_sp_hi, n ? 1 : OVM_ROWS - 1); atomic_store(&g_sp_on, 1); sp_changed();
+    dm_app_notice(DM_NOTICE_PANEL);   // the app: its drawer steps aside (the picker is drawn under it otherwise)
     LOG("[saves] picker opened: %d saves in %s", n, dm_saves_dir());
 }
 static void sp_back(void) {   // the confirmation → the list → the menu (nothing once the import is under way)
@@ -832,6 +838,7 @@ static void ed_open(void) {
     for (int l = 0; l < 2; l++) for (int i = 0; i < OV_N; i++) for (int k = 0; k < 3; k++) atomic_store(&g_cust[1][l][i][k], atomic_load(&g_cust[0][l][i][k]));
     g_ed.ptr = g_ed.ptr2 = g_ed.sel = g_ed.held = g_ed.bdown = -1; g_ed.prompt = g_ed.dirty = g_ed.bar = 0; g_menu_ptr = -1;
     atomic_store(&g_edit, 1); atomic_fetch_add(&g_cust_ver, 1); ed_publish();
+    dm_app_notice(DM_NOTICE_PANEL);   // the app: its drawer steps aside (the editor is drawn under it otherwise)
     LOG("[overlay] layout editor opened (%s layout)", LAYOUT_NAMES[dm_overlay_layout()]);
 }
 static void ed_close(int save) {
@@ -1004,6 +1011,7 @@ int front_text_input(const char *title, const char *sub, const char *guide, cons
     pthread_mutex_unlock(&g_tx_mu);
     dm_input_set(0, 0, 0, 0, 0); dm_touch_set(NULL, 0); g_touch_btn = 0;   // nothing stays pressed in the game
     atomic_store(&g_tx_on, 1); hold_sync(); tx_changed();
+    dm_app_notice(DM_NOTICE_PANEL);   // the app: its drawer steps aside (the text entry is drawn under it otherwise)
     LOG("[text] entry open: \"%s\" (at most %d characters)", g_tx.title, g_tx.max);
     pthread_mutex_lock(&g_tx_mu);
     while (!g_tx.done) pthread_cond_wait(&g_tx_cv, &g_tx_mu);
@@ -1040,7 +1048,10 @@ static void touch_event(const dm_java_event *e) {
             if (c >= 0 && OV_CTLS[c].kind == OV_MENU) {   // a tap opens the menu; a drag leaves the button where it is
                 atomic_store(&g_menu_t, 0);
                 if (id == g_drag.id && g_drag.moved) { settings_save(); float mx = 0, my = 0, ms; dm_overlay_custom(dm_overlay_layout(), c, &mx, &my, &ms); LOG("[overlay] menu button moved to %.3f, %.3f", mx, my); }
-                else open = act != AMOTION_EVENT_ACTION_CANCEL && !g_play;   // the player: the menu button does not open the host menu
+                else if (act != AMOTION_EVENT_ACTION_CANCEL) {
+                    if (g_play) dm_app_notice(DM_NOTICE_MENU);   // the app: the drawer opens
+                    else open = 1;                              // the desktop host: its own menu
+                }
                 if (id == g_drag.id) g_drag.id = -1;
             }
             g_ptr_ctl[id] = 0; continue;
@@ -1226,6 +1237,32 @@ __attribute__((visibility("default"))) void ANativeActivity_onCreate(ANativeActi
     host_start(act);
 }
 
+// ---- the host's notices to the app (the player): the menu button was tapped, or one of the host's panels is up ----
+// The drawer's state is the app's own (GameActivity), so the host tells it what happened: the player tapped the menu button (the drawer opens), or the
+// host opened one of its panels (the app closes the drawer, so a panel is never hidden under it). The Activity goes into a global reference (the
+// haptics' pattern) and the call runs on whichever thread the host is on, so that thread attaches to the Java VM first.
+static JavaVM *g_app_vm; static jobject g_app_act; static jmethodID g_app_notice;
+void dm_app_notice(int what) {
+    if (!g_app_vm || !g_app_act || !g_app_notice) return;
+    JNIEnv *E = NULL;
+    if ((*g_app_vm)->GetEnv(g_app_vm, (void **)&E, JNI_VERSION_1_6) != JNI_OK &&
+        (*g_app_vm)->AttachCurrentThread(g_app_vm, &E, NULL) != JNI_OK) return;
+    (*E)->CallVoidMethod(E, g_app_act, g_app_notice, (jint)what);
+    if ((*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [app] the notice (%d) failed", what); }
+}
+static void app_notice_keep(JNIEnv *E, JavaVM *vm, jobject act) {   // the start call runs on Java's thread: the Activity and its method are looked up here
+    g_app_vm = vm;
+    g_app_act = (*E)->NewGlobalRef(E, act);
+    jclass c = (*E)->GetObjectClass(E, act);
+    g_app_notice = c ? (*E)->GetMethodID(E, c, "onHostNotice", "(I)V") : NULL;
+    if ((*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); g_app_notice = NULL; }   // an older app has no such method
+    if (!g_app_act || !g_app_notice) {
+        LOG("[RED] [app] cannot reach the Activity: the host's notices are lost");
+        if (g_app_act) { (*E)->DeleteGlobalRef(E, g_app_act); g_app_act = NULL; }
+        g_app_notice = NULL;
+    }
+}
+
 static void host_start_common(JNIEnv *E, JavaVM *vm, jobject actctx, const char *internal) {
     if (g_host_up) return;   // the dialog's thread and the resume can both get here
     char p[700], q[720];
@@ -1283,6 +1320,7 @@ int dm_java_start(const char *pack, const char *internal, const char *title_id, 
     // the player's control file lives in the app's private folder: only the app can write it, so the drawer's
     // live switches (DM_LSFG* and friends) work in release builds too, with no adb key presses reachable
     { char ctl[700]; snprintf(ctl, sizeof ctl, "%s/ctl-%s.txt", internal, title_id && title_id[0] ? title_id : "game"); setenv("DM_CTL", ctl, 1); }
+    if (E && vm && ctx) app_notice_keep(E, vm, ctx);   // the host's notices to the app (the Activity keeps the drawer's state)
     host_start_common(E, vm, ctx, internal);
     return g_quit ? 0 : 1;
 }

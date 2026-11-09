@@ -4,7 +4,7 @@
 #pragma once
 #include <math.h>
 #include "dm_input.h"
-enum { OV_STICK_L, OV_STICK_R, OV_BUTTON, OV_DPAD, OV_MENU };   // OV_MENU: the menu button (always shown, 70%): pauses the game and opens the settings
+enum { OV_STICK_L, OV_STICK_R, OV_BUTTON, OV_DPAD, OV_MENU };   // OV_MENU: the menu button (70%): the settings (the host's own menu on the desktop host, the app's drawer in the player)
 typedef struct { int kind; float ax, x, y, w, h; uint64_t btn; const char *label, *name; } ov_ctl;   // ax: the anchor, as a fraction of the window's width; name: the table's
 // The layouts: dm/android/overlay_default.tsv with the game profile's moves (android.tsv overlay rows), compiled by build.py into android_profile.h. Both list the
 // same controls in the same order, so a control's index means the same in either (a press keeps it across a change of layout)
@@ -30,6 +30,16 @@ int64_t dm_overlay_pressed(int ctl, uint64_t bit);   // CLOCK_MONOTONIC ns of th
 int dm_overlay_custom(int layout, int ctl, float *x, float *y, float *s);
 int dm_overlay_custom_ver(void);   // counts the changes (the theme-less drawing is rasterized again)
 float dm_overlay_opacity(void);    // the gamepad's opacity, 0.2..0.8 (the menu's Opacity slider)
+// who answers a touch: OV_ANSWER_ALL (every control), OV_ANSWER_MENU (only the menu button), OV_ANSWER_NONE (nothing answers)
+// The editor is open: every control answers, shown or not (the editor chooses among them). The player: the app draws the gamepad and the menu button
+// as one layer, so the app's answer decides (drawn → every control, hidden → nothing: an empty place answers nothing). The desktop host draws the pad
+// itself, and its own switches then say what is on the screen (the gamepad hidden → the menu button alone, it is still drawn).
+enum { OV_ANSWER_NONE, OV_ANSWER_MENU, OV_ANSWER_ALL };
+static inline int ov_answer(int editor, int app, int app_drawn, int host_shown) {
+    if (editor) return OV_ANSWER_ALL;
+    if (app) return app_drawn ? OV_ANSWER_ALL : OV_ANSWER_NONE;
+    return host_shown ? OV_ANSWER_ALL : OV_ANSWER_MENU;
+}
 static inline int ov_index(const ov_ctl *c, int *layout) { int k = (int)(c - &OV_LAYOUTS[0][0]); *layout = k / OV_N; return k % OV_N; }   // c: in OV_LAYOUTS
 static inline float ov_cscale(const ov_ctl *c) { int l, i = ov_index(c, &l); float x, y, s = 1; dm_overlay_custom(l, i, &x, &y, &s); return s; }
 #define OV_DRAG_SLOP 0.02f   // a press on the menu button that moves this far (of the window's height) drags it instead of opening the menu

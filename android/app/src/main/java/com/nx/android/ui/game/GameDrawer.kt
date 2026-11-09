@@ -61,7 +61,8 @@ enum class DrawerTab(val label: String) {
  * 游戏内抽屉（:play 进程自己的 UI）：右缘把手或返回唤出，玻璃卡样式与应用一致，两个标签页 + 底部动作行。
  * 帧生成即改即生效（JNI）；画面与操作直控宿主的菜单状态（手柄、不透明度、震动、FPS 计数、掌机/底座、
  * 布局编辑器）。存档不在这里——导出与导入都在库页选中游戏后的抽屉里（下次启动游戏时生效）；
- * 游戏运行中要立刻导出，宿主自己的菜单（☰）里还有导出。Back 不经过这里（GameActivity 分流）。
+ * 宿主自己的面板（文本输入、布局编辑器、存档选择）画在游戏画面上，所以打开它们之前抽屉先收起。
+ * Back 不经过这里（GameActivity 分流）。
  */
 @Composable
 fun GameDrawer(
@@ -126,7 +127,7 @@ fun GameDrawer(
                                 when (DrawerTab.entries[tab]) {
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow("这个游戏不支持帧生成")
                                         else FrameGenRows(settings, status)
-                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity)
+                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity) { onOpenChange(false) }
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -205,6 +206,7 @@ private fun FrameGenRows(settings: FrameGenSettings, status: String) {
 private fun DisplayRows(
     padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+    onCloseDrawer: () -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -224,7 +226,8 @@ private fun DisplayRows(
     SwitchRow("震动", rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
     SwitchRow("帧率计数", fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
     SwitchRow("底座模式", docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
-    QuietButton("布局编辑器（拖动按键位置）", onClick = { Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
+    // 布局编辑器是宿主画的，画在游戏画面上：抽屉先收起，否则它盖着编辑器
+    QuietButton("布局编辑器（拖动按键位置）", onClick = { onCloseDrawer(); Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
