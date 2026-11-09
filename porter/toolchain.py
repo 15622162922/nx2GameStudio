@@ -1,12 +1,13 @@
 # The tools a port needs on the player's machine, found and checked (`porter doctor`, the GUI's setup screen). Nothing here is shipped with the tool:
 # the player installs the Android NDK (r27c), the .NET SDK (10) and, to install from the tool, platform-tools (adb), or has `porter tools --download` (porter.fetch)
-# fetch them from Google and Microsoft into their nx2android folder (paths.player_tools()), which the finders here also search.
+# fetch them from Google and Microsoft into their nx2android folder (paths.player_tools()), which the finders here also search. The phone ships the .NET runtime
+# instead of the SDK (it runs the two C# tools but never builds them), so a runtime is enough there.
 import glob, importlib.util, os, re, shutil, subprocess, sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from porter import config
-from porter.paths import LOCAL_TOOLS, player_tools
+from porter.paths import LOCAL_TOOLS, NXNATIVE, player_tools
 
 NDK_REVISION = '27.2.12479018'   # r27c: the NDK the Android host is built and tested with
 NDK_RELEASE = 'r27c'
@@ -61,15 +62,16 @@ def find_ndk(cfg=None):
 
 
 def find_dotnet(cfg=None):
-    """The dotnet to use: the configured one as it is; otherwise the first of DOTNET_ROOT, PATH and the usual places that has SDK 10 (a runtime-only dotnet, as Windows
-    installs for apps, cannot build nx_extract), else the first found"""
+    """The dotnet to use: the configured one as it is; otherwise the first of DOTNET_ROOT, PATH and the usual places that has SDK 10, else the first that has a
+    runtime 10 (a runtime-only dotnet, as the phone ships it, runs the C# tools but cannot build them), else the first found"""
     cfg = cfg if cfg is not None else config.load()
     if cfg.get('dotnet') and Path(cfg['dotnet']).is_file(): return Path(cfg['dotnet'])
     progs = [os.environ.get(k) for k in ('ProgramFiles', 'ProgramW6432')] if os.name == 'nt' else []
     cands = [os.environ.get('DOTNET_ROOT') and str(Path(os.environ['DOTNET_ROOT']) / f'dotnet{EXE}'), shutil.which('dotnet'), str(LOCAL_TOOLS / 'dotnet' / f'dotnet{EXE}'), str(player_tools() / 'dotnet' / f'dotnet{EXE}'),
              str(Path.home() / '.dotnet' / f'dotnet{EXE}'), *[str(Path(p) / 'dotnet' / f'dotnet{EXE}') for p in progs if p], '/usr/local/share/dotnet/dotnet']
     found = list(dict.fromkeys(Path(c) for c in cands if c and Path(c).is_file()))
-    return next((d for d in found if any(int(s.split('.')[0]) >= DOTNET_MAJOR for s in dotnet_sdks(d))), found[0] if found else None)
+    major = lambda v: int(v.split('.')[0]) >= DOTNET_MAJOR
+    return next((d for d in found if any(major(s) for s in dotnet_sdks(d))), next((d for d in found if any(major(v) for v in dotnet_runtimes(d))), found[0] if found else None))
 
 
 def dotnet_sdks(dotnet):   # {'10.0.402': '/usr/local/share/dotnet/sdk', ...}
@@ -78,11 +80,32 @@ def dotnet_sdks(dotnet):   # {'10.0.402': '/usr/local/share/dotnet/sdk', ...}
     return dict(re.findall(r'^(\d+\.\d+\.\d+)\S* \[(.+)\]', r.stdout, re.M))
 
 
+def dotnet_runtimes(dotnet):   # {'10.0.14': '/usr/local/share/dotnet/shared/Microsoft.NETCore.App', ...}
+    """The installed Microsoft.NETCore.App runtimes: 'dotnet --list-runtimes' prints the framework, its version and the folder it is in. A runtime is all
+    the phone's dotnet needs (it runs the two C# tools and never builds them)"""
+    try: r = subprocess.run([str(dotnet), '--list-runtimes'], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired): return {}
+    return dict(re.findall(r'^Microsoft\.NETCore\.App\s+(\d+\.\d+\.\d+)\S* \[(.+)\]', r.stdout, re.M))
+
+
 def dotnet_root(dotnet):
     """The folder with dotnet's runtime, where an apphost (nx_extract) looks in DOTNET_ROOT: the SDK folder's parent, not the executable's, which on a Mac is
-    a link or wrapper elsewhere (/usr/local/bin from Microsoft's installer, /opt/homebrew/bin)"""
+    a link or wrapper elsewhere (/usr/local/bin from Microsoft's installer, /opt/homebrew/bin). A runtime-only dotnet (the phone's) has no SDK folder: its root
+    holds the runtime itself (<root>/shared/Microsoft.NETCore.App)"""
     sdks = dotnet_sdks(dotnet)
-    return Path(next(iter(sdks.values()))).parent if sdks else Path(dotnet).resolve().parent
+    if sdks: return Path(next(iter(sdks.values()))).parent
+    runts = dotnet_runtimes(dotnet)
+    if runts: return Path(next(iter(runts.values()))).parent.parent   # shared/Microsoft.NETCore.App → the root
+    return Path(dotnet).resolve().parent
+
+
+def prebuilt_cs_tools():
+    """The two C# tools (the extractor and the shader translator) are built on the computer and shipped: the phone runs them and never builds them, so a
+    .NET runtime is enough there. A computer that has to build them needs the SDK"""
+    nx = os.environ.get('NX2A_NX_EXTRACT')
+    xl = os.environ.get('NX2A_DMSH_XLATE') or str(NXNATIVE.parent / 'tools' / 'dmsh_xlate')
+    exe = 'nx_extract.exe' if os.name == 'nt' else 'nx_extract'
+    return bool(nx and (Path(nx) / exe).is_file() and (Path(xl) / 'dmsh_xlate.dll').is_file())
 
 
 def find_adb(cfg=None):
@@ -121,9 +144,20 @@ def checks(cfg=None, keys=None):
     else: out.append(Check('Android NDK', rev == NDK_REVISION, f'{rev} at {ndk}' + ('' if rev == NDK_REVISION else f': the host is built with {NDK_RELEASE} ({NDK_REVISION}); others are untested'),
                            required=rev.split('.')[0] == NDK_REVISION.split('.')[0], path=str(ndk), fix='' if rev == NDK_REVISION else f'install NDK {NDK_RELEASE}'))
     dn = find_dotnet(cfg)
-    sdks = dotnet_sdks(dn) if dn else []
+    sdks = dotnet_sdks(dn) if dn else {}
+    rt = dotnet_runtimes(dn) if dn else {}
     good = [s for s in sdks if int(s.split('.')[0]) >= DOTNET_MAJOR]
-    out.append(Check('.NET SDK', bool(good), (f'{", ".join(sdks) or "no SDK"} ({dn})' if dn else 'dotnet not found'), path=str(dn or ''), fix='' if good else f'Download missing tools, or install the .NET SDK {DOTNET_MAJOR} (dotnet.microsoft.com)'))
+    rtgood = [v for v in rt if int(v.split('.')[0]) >= DOTNET_MAJOR]
+    pre = prebuilt_cs_tools()   # the phone ships the C# tools: a runtime is enough there; a computer that builds them needs the SDK
+    if good: detail = f'{", ".join(sdks)} ({dn})'
+    elif rtgood: detail = f'runtime {", ".join(rtgood)} ({dn})'
+    elif dn: detail = f'no .NET {DOTNET_MAJOR} ({dn})'
+    else: detail = 'dotnet not found'
+    ok = bool(good) or (bool(rtgood) and pre)
+    if ok: fix = ''
+    elif rtgood: fix = f'the C# tools are built from source here: install the .NET SDK {DOTNET_MAJOR} (dotnet.microsoft.com)'
+    else: fix = f'Download missing tools, or install the .NET SDK {DOTNET_MAJOR} (dotnet.microsoft.com)'
+    out.append(Check('.NET', ok, detail, path=str(dn or ''), fix=fix))
     adb = find_adb(cfg)
     if adb: out.append(Check('adb', True, str(adb), required=False, path=str(adb)))
     elif _adb_host_unsupported(): out.append(Check('adb', False, 'not available on this ARM64 Linux host: Google ships platform-tools for Linux as x86-64 only', required=False,
@@ -147,4 +181,4 @@ def require(cfg=None, keys=None, adb=False):
     bad = [r for r in rows if not r.ok and (r.required or (adb and r.name == 'adb'))]
     if bad: raise ToolError('missing requirements: ' + '; '.join(f'{r.name}: {r.detail}' + (f' ({r.fix})' if r.fix else '') for r in bad))
     by = {r.name: r for r in rows}
-    return {'ndk': Path(by['Android NDK'].path), 'dotnet': Path(by['.NET SDK'].path), 'adb': Path(by['adb'].path) if by['adb'].ok else None}
+    return {'ndk': Path(by['Android NDK'].path), 'dotnet': Path(by['.NET'].path), 'adb': Path(by['adb'].path) if by['adb'].ok else None}

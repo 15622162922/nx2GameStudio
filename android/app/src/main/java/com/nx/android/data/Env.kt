@@ -9,10 +9,10 @@ import java.util.zip.GZIPInputStream
 /**
  * The environment the porter runs in.
  *
- * The app is a shell: it unpacks the rootfs (from the nixport payload), the build tools, the .NET SDK and the tool's
+ * The app is a shell: it unpacks the rootfs (from the nixport payload), the build tools, the .NET runtime and the tool's
  * own tree into its files folder, and runs the porter inside it. The guest programs are Linux binaries: Android has
  * no /lib and the guest is not a chroot, so they are started through the rootfs's dynamic loader, and the programs
- * the porter starts itself (the compiler, the .NET SDK) get their interpreter path rewritten to the app's own rootfs.
+ * the porter starts itself (the compiler, the .NET runtime) get their interpreter path rewritten to the app's own rootfs.
  */
 class Env(private val ctx: Context) {
 
@@ -33,7 +33,7 @@ class Env(private val ctx: Context) {
     val ready: Boolean
         get() = python.exists() && File(tool, "porter").isDirectory && File(tool, "toolchain/clang/bin/clang").exists()
 
-    /** The .NET SDK (the extractor and the shader translator are C#): where the porter looks for it */
+    /** The .NET runtime (the extractor and the shader translator are C# and run on it): where the porter looks for it */
     val dotnet: File get() = File(nxHome, "toolchains/dotnet/dotnet")
 
     /** The environment every guest program gets */
@@ -49,8 +49,8 @@ class Env(private val ctx: Context) {
             "NX2A_HOME" to nxHome.absolutePath,
             "NX2A_NDK" to "${tool}/toolchain/ndk",
             "NX2A_REPO" to tool.absolutePath,
-            // nx_extract is built on the computer and shipped: the phone's .NET SDK cannot restore packages
-            // (no network) and its globalization mode makes the SDK itself crash
+            // nx_extract is built on the computer and shipped: the phone has no SDK to restore packages with
+            // (no network), and its globalization mode makes the SDK itself crash
             "NX2A_NX_EXTRACT" to "${tool}/tools/nx_extract",
             // the build folder: Android does not let the app run a program on the shared storage, so the
             // port's own tools and the unpacked game live in the app's own folder
@@ -80,7 +80,7 @@ class Env(private val ctx: Context) {
     // ---- the first start: the environment out of the assets -----------------------------------------------
 
     /**
-     * Unpacks the environment. The rootfs and the .NET SDK are tarballs in the assets; the rest is a folder tree.
+     * Unpacks the environment. The rootfs and the .NET runtime are tarballs in the assets; the rest is a folder tree.
      *
      * @param onStep what is being unpacked, for the screen
      */
@@ -126,9 +126,9 @@ class Env(private val ctx: Context) {
             File(files, ".nx2a-toolchain").writeText("1")
         }
         if (!dotnet.exists()) {
-            step("the .NET SDK")
+            step("the .NET runtime")
             try {
-                // the SDK's own folder: the porter looks for toolchains/dotnet/dotnet
+                // the runtime's own folder: the porter looks for toolchains/dotnet/dotnet
                 ctx.assets.open("dotnet.pkg").use { raw ->
                     GZIPInputStream(raw).use { gz -> Tar.unpack(gz, File(nxHome, "toolchains/dotnet")) }
                 }
@@ -270,7 +270,7 @@ class Env(private val ctx: Context) {
     }
 
     /**
-     * Rewrites the interpreter of the programs that are started directly (the compiler, the .NET SDK): Android
+     * Rewrites the interpreter of the programs that are started directly (the compiler, the .NET runtime): Android
      * has no /lib, and the rootfs the payload carries was built for another app's path.
      */
     fun patchInterpreters() {
@@ -308,8 +308,8 @@ class Env(private val ctx: Context) {
      * bit away, and a program that cannot be started cannot be patched either.
      */
     /**
-     * The .NET SDK on the phone stops itself without ICU (the rootfs has none): the runtime config has to
-     * declare the invariant mode, and the SDK's own files have to be told.
+     * The .NET runtime on the phone stops itself without ICU (the rootfs has none): the runtime config has to
+     * declare the invariant mode, and the files below the folder have to be told.
      */
     private fun fixGlobalization() {
         val script = File(tool, "tools/fix_globalization.py")

@@ -115,7 +115,7 @@ private fun EnvSection(ob: OnboardingState, actions: AppActions) {
                 when {
                     ob.unpacking -> "正在解压：${ob.unpackStep}"
                     ob.envReady -> "环境就绪${if (ob.lastCheck.isEmpty()) "" else "（${ob.lastCheck}）"}"
-                    else -> "环境还没准备好（第一次要解压约 1.6 GB）"
+                    else -> "环境还没准备好（第一次要解压约 700 MB）"
                 },
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
             )
@@ -129,7 +129,7 @@ private fun EnvSection(ob: OnboardingState, actions: AppActions) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             title = { Text("重置环境？") },
-            text = { Text("解压好的 rootfs、编译工具和 .NET SDK 会被删掉（约 1.6 GB），下次移植前要重新解压。") },
+            text = { Text("解压好的 rootfs、编译工具和 .NET 运行时会被删掉（约 700 MB），下次移植前要重新解压。") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmReset = false
@@ -149,7 +149,7 @@ private fun DoctorSection(env: Env, actions: AppActions, onRequest: (PickerReque
     Section("自检") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                "检查移植需要的工具：rootfs、编译器、.NET SDK、prod.keys",
+                "检查移植需要的工具：rootfs、编译器、.NET 运行时、prod.keys",
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
             )
             if (running) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)

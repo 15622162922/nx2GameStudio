@@ -153,7 +153,7 @@ private fun WelcomeStep(ob: OnboardingState, actions: AppActions) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (facts.freeGB >= facts.neededGB) NxPalette.Ready else NxPalette.Danger)
             Text(
-                "剩余 ${facts.freeGB} GB　·　解压环境需要约 1.6 GB",
+                "剩余 ${facts.freeGB} GB　·　解压环境需要约 700 MB",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -175,7 +175,7 @@ private fun EnvStep(ob: OnboardingState) {
                 when {
                     ready -> "环境就绪"
                     ob.unpacking -> "正在解压：${ob.unpackStep}"
-                    else -> "还没有环境（rootfs、编译工具和 .NET SDK，约 1.6 GB）"
+                    else -> "还没有环境（rootfs、编译工具和 .NET 运行时，约 700 MB）"
                 },
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
             )

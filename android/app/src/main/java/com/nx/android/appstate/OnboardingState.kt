@@ -29,8 +29,8 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env,
                       private val storageOk: () -> Boolean) {
 
     companion object {
-        /** The unpack writes about 1.6 GB; a little headroom for the check */
-        const val NEEDED_GB = 2L
+        /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
+        const val NEEDED_GB = 1L
         /** Where prod.keys usually lies on a phone (the common folders of the file managers) */
         val COMMON_KEYS = listOf("/sdcard/switch/prod.keys", "/sdcard/Switch/prod.keys", "/sdcard/switch/keys/prod.keys")
     }

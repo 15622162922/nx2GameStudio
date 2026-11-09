@@ -614,7 +614,7 @@ class Port:
         """The shader translator (dm/gfx/tools/dmsh_xlate over dm/third_party/ryujinx) built from the repository's source with the player's .NET SDK, once for every game,
         in <user dir>/tools/dmsh_xlate: (dmsh_xlate.dll, the source's key). Not the iOS chain's prebuilt dm/gfx/tools/dmsh_xlate_bin, which only a Mac can rebuild
         (its lock fingerprints Apple's Metal compiler): Android takes a translator fix as soon as it is in the source.
-        A build made for the phone (NX2A_DMSH_XLATE) is used as it is: the phone's .NET SDK cannot restore the packages (no network) and its NuGet settings
+        A build made for the phone (NX2A_DMSH_XLATE) is used as it is: the phone has no SDK to restore the packages with (no network) and its NuGet settings
         read never ends, so the phone does not build the translator but runs one that was built for it"""
         pre = os.environ.get('NX2A_DMSH_XLATE') or (NXNATIVE.parent / 'tools' / 'dmsh_xlate')   # the build shipped with the phone
         if not Path(pre).is_dir() and not _has_network() and not _packages_cached():

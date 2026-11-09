@@ -17,6 +17,7 @@ LICENSES = {'Android NDK': 'https://developer.android.com/studio/terms', 'adb': 
             '.NET SDK': 'https://github.com/dotnet/core/blob/main/license-information.md'}
 NDK_PACKAGE = f'ndk;{toolchain.NDK_REVISION}'
 UNPACKED = {'Android NDK': 2.6 * 2**30, '.NET SDK': 0.9 * 2**30, 'adb': 0.05 * 2**30}   # disk space unpacked (r27c on Windows: 2.5 GB), for the free-space check
+ROW = {'Android NDK': 'Android NDK', '.NET SDK': '.NET', 'adb': 'adb'}   # what a download is called here, and the doctor's row it answers
 
 
 @dataclass
@@ -75,11 +76,11 @@ def _dotnet():
 
 
 def missing(cfg=None):
-    """The doctor's rows a download can fix: NDK r27c, .NET SDK 10, adb"""
+    """The doctor's rows a download can fix: NDK r27c, .NET 10, adb"""
     rows = {r.name: r for r in toolchain.checks(cfg)}
     names = ['Android NDK', '.NET SDK', 'adb']
     if not _adb_available(): names.remove('adb')
-    return [n for n in names if not rows[n].ok]
+    return [n for n in names if not rows[ROW[n]].ok]
 
 
 def plan(names=None):

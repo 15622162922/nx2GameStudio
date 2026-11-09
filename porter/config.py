@@ -7,7 +7,7 @@ from porter.paths import user_dir
 KEYS = {
     'keys': 'path of prod.keys',
     'ndk': 'Android NDK folder (r27c)',
-    'dotnet': 'dotnet executable (.NET SDK 10)',
+    'dotnet': 'dotnet executable (.NET 10: the SDK to build with, the runtime to run with)',
     'adb': 'adb executable (platform-tools)',
     'out': 'folder for the APK and data pack (empty = the game folder)',
     'device': 'adb serial of the device to install on (empty = the only one connected)',

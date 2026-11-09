@@ -139,24 +139,26 @@ DOTNET_MAJOR = 10
 DOTNET_INDEX = f'https://builds.dotnet.microsoft.com/dotnet/release-metadata/{DOTNET_MAJOR}.0/releases.json'
 
 
-def dotnet_sdk(cache):
-    """The .NET SDK for an ARM64 Linux host: the newest one of the major the port builds with, checked against the
-    SHA-512 in Microsoft's release list (the porter downloads the same file when the app does not ship it)"""
+def dotnet_runtime(cache):
+    """The .NET runtime for an ARM64 Linux host: the newest one of the major the port builds with, checked against the
+    SHA-512 in Microsoft's release list. The runtime, not the SDK: the phone only runs the two C# tools (nx_extract and
+    the shader translator), which are built on the computer and shipped with the app — the phone cannot build them (its
+    SDK crashes without ICU and a restore needs the network), so the SDK's compilers and MSBuild would be dead weight
+    there (221 MB against the runtime's 50)"""
     req = urllib.request.Request(DOTNET_INDEX, headers={'User-Agent': 'nx2android-android-apk'})
     with urllib.request.urlopen(req, timeout=120) as r: rel = json.loads(r.read())
     item = None
     for release in rel['releases']:   # newest first
-        for sdk in [release.get('sdk')] + release.get('sdks', []):
-            for f in (sdk or {}).get('files', []):
-                if f.get('rid') == 'linux-arm64' and f['name'] == 'dotnet-sdk-linux-arm64.tar.gz':
-                    item = {'url': f['url'], 'hash': f['hash'], 'version': sdk['version']}
-                    break
-            if item: break
+        runtime = release.get('runtime')   # the runtime's own files (the SDK's list holds the SDK's tarball)
+        for f in (runtime or {}).get('files', []):
+            if f.get('rid') == 'linux-arm64' and f['name'] == 'dotnet-runtime-linux-arm64.tar.gz':
+                item = {'url': f['url'], 'hash': f['hash'], 'version': runtime['version']}
+                break
         if item: break
-    if not item: raise SystemExit(f'no .NET SDK {DOTNET_MAJOR} for linux-arm64 in {DOTNET_INDEX}')
+    if not item: raise SystemExit(f'no .NET runtime {DOTNET_MAJOR} for linux-arm64 in {DOTNET_INDEX}')
     target = cache / Path(item['url']).name
     if not target.exists():
-        print(f'>> the .NET SDK ({item["version"]})')
+        print(f'>> the .NET runtime ({item["version"]})')
         req = urllib.request.Request(item['url'], headers={'User-Agent': 'nx2android-android-apk'})
         with urllib.request.urlopen(req, timeout=120) as r, open(target.with_suffix('.part'), 'wb') as f:
             shutil.copyfileobj(r, f, 1 << 20)
@@ -164,7 +166,7 @@ def dotnet_sdk(cache):
         got = hashlib.sha512(part.read_bytes()).hexdigest()
         if got.lower() != item['hash'].lower():
             part.unlink(missing_ok=True)
-            raise SystemExit("the .NET SDK's SHA-512 is not the one Microsoft's list gives")
+            raise SystemExit("the .NET runtime's SHA-512 is not the one Microsoft's list gives")
         part.replace(target)
     item['file'] = target
     return item
@@ -216,11 +218,12 @@ def main():
     # the rootfs is trimmed against the tool tree and the build tools: they have to be there first
     payload_rootfs(payload, out, out)
 
-    # The .NET SDK: the extractor and the shader translator are C# and are built with it. Shipping it makes the
-    # first run work offline; downloading it (the porter's own path) keeps the APK small.
+    # The .NET runtime: the extractor and the shader translator are C# and run on it. They are built on the computer
+    # and shipped with the app (the phone cannot build them), so the phone only needs a runtime. Shipping it makes
+    # the first run work offline; downloading it (the porter's own path) keeps the APK small.
     dotnet = None
     if not a.no_dotnet:
-        dotnet = dotnet_sdk(cache)
+        dotnet = dotnet_runtime(cache)
         shutil.copy2(dotnet['file'], out / 'dotnet.pkg')
 
     # The APK's assets have no permissions, so the modes of the tool's tree travel in a file of their own: the
