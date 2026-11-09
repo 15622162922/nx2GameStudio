@@ -9,7 +9,7 @@
 # NX2A_KEYSTORE_B64), so it installs over an earlier one instead of beside it.
 #
 # The APK is the run's artifact (nx2android-android-apk), and a published release gets it as an asset named
-# after the version (nx2android-v0.3-android.apk).
+# after the version (nx2android-v0.3.0-alpha02.apk).
 name: Android app
 
 on:

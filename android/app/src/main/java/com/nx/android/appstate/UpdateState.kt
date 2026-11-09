@@ -27,7 +27,7 @@ class UpdateState(private val prefs: PrefsStore, private val context: Context) {
     /** 上一次检查的结果 */
     var phase by mutableStateOf(Phase.IDLE); private set
 
-    /** 新版本的版本号（canonical 的写法：0.4-android）；没有新版本时是空的 */
+    /** 新版本的版本号（canonical 的写法：0.3.0-alpha02）；没有新版本时是空的 */
     var latest by mutableStateOf(""); private set
 
     /** 玩家关掉了这条提示：主页不再弹，但设置页照实说 */

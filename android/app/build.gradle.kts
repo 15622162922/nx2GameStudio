@@ -54,8 +54,10 @@ android {
         // SDK 29 from the platform enforces W^X for app data: the guest programs under files/rootfs could not
         // be exec'd at all. The app is not on Google Play (it ships as an APK from the project's releases).
         targetSdk = 28
-        versionCode = 1
-        versionName = "0.3-android"
+        // The version the release's tag carries, without the "v": v0.3.0-alpha02 -> 0.3.0-alpha02. The update
+        // check compares the two, so the app can tell which release is newer than the one running.
+        versionCode = 2
+        versionName = "0.3.0-alpha02"
         ndk { abiFilters += listOf("arm64-v8a") }
         // -PnxLsfg=false: the host the app builds is built without the frame generation's GPL code (the lsfg/ folder),
         // so it is under the repository's MIT license. The default is the current behaviour: the code is linked, and
