@@ -7,6 +7,8 @@ description: How to add a new game profile to nx2android (port another Switch ga
 
 nx2android turns a player's own Switch game files into an Android app: `porter` runs the port stages, `gui` draws them, `nxnative/` (our own fork of seedds/nxnative since 2026-10-29; no `upstream` remote, never pulled from) holds the engine. Every supported game is a **profile**; everything shared is the **core**. The contract is [docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md): read it before changing anything, and keep it true.
 
+**Scope: Android only.** The product is the phone app (APK) — the port, the data pack and the game itself all run on the device. `porter` and `gui` are the player's desktop path into the same pipeline: keep them working, but a change is not "the port" until it ships in the app. The repository root's `AGENTS.md` holds the scope, the build and release rules and the dev machine's platform: read it first.
+
 ## First decide: profile or core?
 
 | The problem | Where the change goes |
@@ -26,7 +28,7 @@ A fix that only one game needs today is still a core fix when it follows the sem
 
 - **Ask before installing on the user's device.** Name the package and size; install test builds under another package (`--package org.nx2a.<name>.test`) beside the user's own app, and uninstall them afterwards. Someone at the tablet once removed an unannounced test app by hand. Never uninstall or overwrite the user's own install (`org.nx2a.neo` etc.) without being told to.
 - **Keys and game files never enter the repository or the chat.** Print key names, never values.
-- **Game files go only in `.gamedump/<App>/`** (the main checkout's, git-ignored), as hard links to the downloads, for every port, test or check: never a folder elsewhere on the PC (`C:\nx2a-test` once kept 263 GB that nobody deleted). Delete the folder when the work is done: references/new-game-profile.md §0 and §5.
+- **Game files go only in `.gamedump/<App>/`** (the main checkout's, git-ignored), as hard links to the downloads, for every port, test or check: never a folder elsewhere on the machine (`C:\nx2a-test` on the upstream author's Windows box once kept 263 GB that nobody deleted). Delete the folder when the work is done: references/new-game-profile.md §0 and §5.
 - **Measure, then change.** Every fix starts from evidence (a log line, a crash address, a census, a screen recording), and the evidence goes in the comment beside the fix, as the existing code does.
 - **English everywhere; log lines for something unimplemented or wrong start with `[RED] `.**
 - **Keep the shared core shared.** Changes in `nxnative/dm/{host,gfx,tools,third_party}` keep the iOS paths working and platform differences go behind `__APPLE__` / `__ANDROID__` / `DM_TARGET`. Android-only code belongs in `nxnative/dm/android/`.
@@ -36,10 +38,11 @@ A fix that only one game needs today is still a core fix when it follows the sem
 - **Every finished port updates the game list, in the same commit as the profile**: docs/PORT_CHECKLIST.md (tick the game, adding its line in alphabetical order if it is missing, drop "profile here" / "upstream profile", recount the `N / M ported` line). The README keeps no table of the games and no screenshot of them: the list of the games that play on Android lives upstream, in the games table (https://github.com/shirai91/nx2android#games), and the game's artwork belongs to its publisher. SMO and Metroid Dread once shipped in the games table only.
 - **Releases do not re-test older games** (since 2026-10-31): a release checks only the games it adds or fixes; a break in an older game is fixed by a later patch release. Version `0.MINOR.PATCH`: patch for new games and bug fixes only, minor for any other core change, major stays 0 (docs/DEVELOPMENT_GUIDE.md, Releases and version numbers).
 
-## Windows environment gotchas (this PC)
+## Dev machine gotchas (macOS)
 
-- Git Bash mangles `/sdcard/...` arguments: `export MSYS_NO_PATHCONV=1` before adb or scripts that take device paths.
-- Heredocs strip backslashes in Python one-offs: write a scratch `.py` file or use the Edit tool instead.
-- The engine's tools need `PYTHONUTF8=1` (porter sets it); `python` with `PYTHONUTF8=1` also avoids cp1252 errors when printing.
-- Toolchains for development are in the repo's untracked `tools/` (NDK r27c, .NET SDK 10, platform-tools, the Vulkan validation layer in `tools/vvl`); the player's settings are in `%APPDATA%\nx2android\config.json` (`NX2A_HOME` overrides the folder, which also holds the APK signing key and the built shader translator).
-- adb: `tools/platform-tools/adb.exe`; the device is in `devtools/device.json` (serial and package). Big pushes go through `devtools/push_chunked.py` / porter (adb compression off, `-Z`), or adbd wedges.
+- The engine's tools need `PYTHONUTF8=1` (porter sets it); `python3` with `PYTHONUTF8=1` also avoids UnicodeEncodeError when printing.
+- Heredocs expand variables and backslashes: quote the delimiter (`<<'EOF'`) for literal text, or write a scratch `.py` file instead of a one-off heredoc.
+- Toolchains for development are in the repo's untracked `tools/` (NDK r27c, .NET SDK 10, platform-tools, the Vulkan validation layer in `tools/vvl`); the player's settings are in `~/Library/Application Support/nx2android/config.json` (`NX2A_HOME` overrides the folder, which also holds the APK signing key and the built shader translator).
+- adb: `tools/platform-tools/adb` (no `.exe`); the device is in `devtools/device.json` (serial and package). Big pushes go through `devtools/push_chunked.py` / porter (adb compression off, `-Z`), or adbd wedges.
+- Hard links for the game files: `ln <src> <dst>` (same volume); check the link count with `ls -l <file>` (second column) before deleting a dump.
+- Windows notes that do not apply here: Git Bash's `MSYS_NO_PATHCONV` (macOS paths are not mangled), `adb.exe`, `%APPDATA%`, and junctions — macOS has symlinks, and a recursive delete goes through a symlink just the same, so never link `tools/` into a worktree.

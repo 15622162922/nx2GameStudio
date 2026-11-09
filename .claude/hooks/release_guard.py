@@ -1,4 +1,4 @@
-# PreToolUse hook (.claude/settings.json): checks release commands against CLAUDE.md's release rules before they run.
+# PreToolUse hook (.claude/settings.json): checks release commands against the root AGENTS.md's release rules before they run.
 #   gh release create|upload|edit  needs --repo zFitness/nx2androidX (gh here defaults to seedds/nxnative) and attaches no zip (this
 #                                  line's release carries the phone app's APK only; the desktop bundles are built by hand when
 #                                  they are wanted, and never attached to a release)
@@ -70,7 +70,7 @@ def check_gh(w):
         return f'gh release {sub} needs --repo {REPO}: gh in this checkout defaults to seedds/nxnative, which is not this project.'
     if sub in ('create', 'upload') and any(a.lower().endswith('.zip') or '.zip#' in a.lower() for a in w):
         return ('Do not attach the bundle zips by hand: this line\'s release carries the phone app\'s APK only, and the desktop '
-                'bundles are built by hand when they are wanted (CLAUDE.md, Releases). Create the release without a zip.')
+                'bundles are built by hand when they are wanted (AGENTS.md, §3 发布). Create the release without a zip.')
     if sub == 'create':
         tag = next((a for a in w[3:] if not a.startswith('-')), None)
         v = version()
@@ -82,10 +82,10 @@ def check_gh(w):
                     "the app's versionName (android/app/build.gradle.kts) to the tag without the v.")
         if tag and is_prerelease(tag) and not has_prerelease(w):
             return (f'{tag} is a pre-release: publish it with --prerelease, so the players on the released version are '
-                    'not pushed onto an alpha (CLAUDE.md, Releases).')
+                    'not pushed onto an alpha (AGENTS.md, §3 发布).')
         if tag and not is_prerelease(tag) and has_prerelease(w):
             return (f'{tag} is the released version of the base, not a pre-release: it must not carry --prerelease '
-                    '(CLAUDE.md, Releases).')
+                    '(AGENTS.md, §3 发布).')
     return None
 
 
@@ -101,7 +101,7 @@ def check_git_tag(w):
     return None
 
 
-AFTER = ('Release rules (CLAUDE.md, Releases): the release carries the phone app\'s APK, which .github/workflows/android-apk.yml '
+AFTER = ('Release rules (AGENTS.md, §3 发布): the release carries the phone app\'s APK, which .github/workflows/android-apk.yml '
          'builds and attaches when the release is published; watch that run (gh run list --repo ' + REPO + ' --limit 4) and check '
          'that the APK is on the release - a failed run means the release has no app in it. A pre-release does not become the '
          'repository\'s "Latest" release, so the app\'s update check stays on the released version.')

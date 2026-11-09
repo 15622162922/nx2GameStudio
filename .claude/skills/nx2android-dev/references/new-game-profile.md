@@ -74,4 +74,4 @@ When the game boots on the device:
 
 ## 5. Clean up
 
-The PC has little disk space. Once the port is committed and the test app uninstalled, delete `.gamedump/<App>/`: first check that each dump file in it has a link count of 2 or more (`fsutil hardlink list <file>`), so the downloaded copy remains; a file with one link is the only copy, so stop and ask. Keep a folder that other work still uses, and say so. A test or check that is not a port ends the same way.
+The machine has little disk space. Once the port is committed and the test app uninstalled, delete `.gamedump/<App>/`: first check that each dump file in it has a link count of 2 or more (`ls -l <file>` on macOS — the second column), so the downloaded copy remains; a file with one link is the only copy, so stop and ask. Keep a folder that other work still uses, and say so. A test or check that is not a port ends the same way.

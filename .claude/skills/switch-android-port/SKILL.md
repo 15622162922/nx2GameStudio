@@ -12,7 +12,7 @@ This skill is about the device side of a port: making a problem on the tablet co
 - adding a game profile and the port pipeline;
 - installing and launching (`references/device-loop.md`);
 - repository rules, tests and docs;
-- the Windows environment.
+- the dev machine (macOS).
 
 Read it alongside this one. Fixes found with this skill go where `nx2android-dev` says: general rules in the core, per-game facts in the profile.
 
