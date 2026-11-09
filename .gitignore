@@ -11,6 +11,9 @@
 *.dmsv
 __pycache__/
 
+# Debug symbols: they embed the build machine's local paths and nothing else
+*.pdb
+
 # Keys: never committed
 *-signing-key.json
 *.keystore

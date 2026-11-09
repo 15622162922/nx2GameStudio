@@ -25,7 +25,10 @@ def main():
     files = tracked('nxnative')   # the committed engine and profiles only: no local builds, keys or game files
     for f in files:
         d = APP / f; d.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(ROOT / f, d)
-    for src, dst in (('packaging/INSTALL.md', 'INSTALL.md'), ('README.md', 'README.md'), ('docs/ARCHITECTURE.md', 'docs/ARCHITECTURE.md'), ('docs/DEVELOPMENT_GUIDE.md', 'docs/DEVELOPMENT_GUIDE.md'), ('nxnative/LICENSE', 'LICENSE')):
+    # The bundle's own license texts: the repo's LICENSE (its own code), the third-party index and the app's notice.
+    # nxnative/LICENSE travels with the nxnative/ tree above (it is one of its tracked files).
+    for src, dst in (('packaging/INSTALL.md', 'INSTALL.md'), ('README.md', 'README.md'), ('docs/ARCHITECTURE.md', 'docs/ARCHITECTURE.md'), ('docs/DEVELOPMENT_GUIDE.md', 'docs/DEVELOPMENT_GUIDE.md'),
+                     ('LICENSE', 'LICENSE'), ('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'), ('android/NOTICE.md', 'android/NOTICE.md')):
         (APP / dst).parent.mkdir(parents=True, exist_ok=True); shutil.copy2(ROOT / src, APP / dst)
     shutil.copytree(ROOT / 'docs/images', APP / 'docs/images', dirs_exist_ok=True)   # the README's games table
     ver = subprocess.run(['git', '-C', str(ROOT), 'describe', '--always', '--dirty'], capture_output=True, text=True).stdout.strip() or 'dev'

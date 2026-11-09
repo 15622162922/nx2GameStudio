@@ -52,6 +52,9 @@ def _parser():
                          '"AllocateAddressRegion refused (0x1803)" before it crashes; it uses no memory (default: 8 for a game version the profile was not '
                          'brought up on, none for one it was)')
     po.add_argument('--jobs', type=int, default=os.cpu_count() or 8)
+    po.add_argument('--no-lsfg', action='store_true',
+                    help='build the host without the frame generation (the GPL lsfg/ code): the host is then under the repository\'s MIT license '
+                         '(dm/android/build.py --no-lsfg); the frame generation reports "not in this build"')
     po.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'), help='json: one JSON event per line, for the GUI')
     ins = sub.add_parser('install', help='install a port made earlier'); ins.add_argument('data', help='the data pack folder (<App>-data)'); ins.add_argument('--apk', help='the APK (default: <App>.apk beside the pack)')
     ins.add_argument('--device', default=''); ins.add_argument('--replace-signer', action='store_true'); ins.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'))
@@ -145,7 +148,7 @@ def cmd_port(a):
     opts = pipeline.Options(folder=Path(a.folder), keys=Path(a.keys) if a.keys else None, out=Path(a.out) if a.out else None, version=a.version, language=a.language,
                             app_name=a.app_name, app=a.app, install=a.install, device=a.device, replace_signer=a.replace_signer, debug=a.debug, experimental=a.experimental, package=a.package, fps60=a.fps60, touch=a.touch, mt_replay=a.mt_replay, vulkan_driver=a.vulkan_driver,
                             vulkan_driver_dir=a.vulkan_driver_dir,
-                            vercode_offset=offset, alias_headroom=a.alias_headroom, jobs=a.jobs)
+                            vercode_offset=offset, alias_headroom=a.alias_headroom, jobs=a.jobs, no_lsfg=a.no_lsfg)
     return _with_progress(a.progress, lambda: pipeline.emit_result(pipeline.Port(opts).run()))
 
 

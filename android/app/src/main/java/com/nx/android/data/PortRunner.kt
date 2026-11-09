@@ -1,5 +1,6 @@
 package com.nx.android.data
 
+import com.nx.android.BuildConfig
 import java.io.File
 
 /**
@@ -20,6 +21,9 @@ class PortRunner(private val env: Env, private val onLine: (String) -> Unit) {
         if (touch) args += "--touch"
         if (fps60) args += "--fps60"
         if (experimental) args += "--experimental"
+        // A build without the frame generation's GPL code (the Gradle property nxLsfg=false): the host the app
+        // builds on the device is then under the repository's MIT license (android/NOTICE.md).
+        if (!BuildConfig.NX_LSFG) args += "--no-lsfg"
         return start(args, onEnd)
     }
 

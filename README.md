@@ -71,10 +71,16 @@ Running from the repository, the command line, the repository layout, building t
 
 ## Keys and game files
 
-nx2android decrypts your game files with your `prod.keys` while it ports them, as Switch emulators do. This repository and its releases contain no keys, no game files and nothing extracted from them, and the tool never downloads either. Dump both from your own Switch, and don't share them or the data packs built from them.
+nx2android decrypts your game files with your `prod.keys` while it ports them, as Switch emulators do. This repository and its releases contain no keys, no game files, no firmware and nothing extracted from them, and the tool never downloads either. Dump both from your own Switch, and don't share them or the data packs built from them.
+
+The game profiles under `nxnative/dm/games/` hold interoperation metadata only: the hashes that identify a game's shaders, the offsets inside a module, and patch stubs of a few bytes of machine code that make a particular game build run. They are the information the host needs to work with a game, not the game itself.
 
 Nintendo's takedown notices so far have gone to whoever hosts a project (13 Switch emulator repositories on GitHub in February 2026), not to players. Whether decrypting your own games for your own use is allowed depends on where you live.
 
 ## License
 
-MIT, as nxnative (see `nxnative/LICENSE`). Third-party code keeps its own license.
+The code this repository owns — the porter, the desktop app, the phone app and the packaging — is MIT: [LICENSE](LICENSE). nxnative, the engine it is built on, is MIT as well ([nxnative/LICENSE](nxnative/LICENSE)), and the third-party code in the tree keeps its own license; every component is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+One exception: the phone app's frame generation ([nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)) is GPL-3.0-or-later, so the host the app builds is a combined work under that license unless it is built without it. What that means for the app, and how to get an MIT build, is in [android/NOTICE.md](android/NOTICE.md).
+
+The game names, the trademarks and the screenshots in this README identify the games this tool is compatible with. They belong to Nintendo and to the respective publishers and developers. The screenshots were captured by this tool running the games. This project is not affiliated with or endorsed by them.

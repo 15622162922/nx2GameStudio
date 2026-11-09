@@ -135,3 +135,22 @@ Two changes in the tool itself make it run on an ARM64 Linux host:
   Android sysroot and the compiler-rt.
 - `porter/toolchain.py` finds an NDK that ships with the program (`NX2A_NDK`), and `porter/fetch.py` does not
   fetch adb on an ARM64 Linux host (Google ships platform-tools for Linux as x86-64 only).
+
+The frame generation's license switch: the host the app builds links the GPL code of `nxnative/dm/android/lsfg/` by
+default, so that host is a combined work under GPL-3.0-or-later. Build the app with `-PnxLsfg=false` and the host is
+built without it, under the repository's MIT license; the same host built by the command line is `porter port --no-lsfg`.
+[android/NOTICE.md](../android/NOTICE.md) says what that means for the app.
+
+## Licenses
+
+The repository's own code is MIT ([LICENSE](../LICENSE)); nxnative and the vendored third-party code keep their own
+licenses. Three rules when the tree changes:
+
+- A vendored component keeps its license file in its own directory, and its row in
+  [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) says its license, version and origin. A new component, a new
+  version or a new path under `nxnative/dm/third_party/` means that file changes with it.
+- A component shipped as a **binary** carries its license text next to the binary, where it is shipped:
+  `nxnative/dm/gfx/tools/dmsh_xlate_bin/LICENSES/` holds the licenses of the .NET libraries that the prebuilt shader
+  translator runs on, and `nxnative/dm/tools/nx_extract/LICENSES/` the one of LibHac.
+- Do not commit a build artifact that carries a build machine's paths: the debug symbols (`*.pdb`) are ignored for that
+  reason, and the .gitignore rule keeps them out.

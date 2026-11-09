@@ -43,6 +43,7 @@ class Options:
     vercode_offset: int = 0            # added to the APK's versionCode: a rebuild of the same game version installs over a build with a higher one (version_code)
     alias_headroom: int = None         # GB more alias region (alias_headroom); None: ALIAS_HEADROOM for a version the profile was not brought up on, none for one it was
     jobs: int = field(default_factory=lambda: os.cpu_count() or 8)
+    no_lsfg: bool = False              # build the host without the frame generation's GPL code (dm/android/build.py --no-lsfg): the host is then under the repository's MIT license
 
 
 # The Vulkan driver loader and its four hooks: the host loads a driver through libadrenotools (dm/android/gfx_vk_core.c,
@@ -478,7 +479,8 @@ class Port:
         adb = self.oodle_adb = Adb(self.tools['adb'], self.o.device or self.cfg.get('device'), log=say); adb.pick()
         out = self.aw / ('host-debug' if self.o.debug else 'host')   # the host stage's own folder: its objects serve both
         PROG.set(step="building the host as a tool for the game's Oodle decoder")
-        nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out, '--exe', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release']),
+        nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out, '--exe', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
+                + (['--no-lsfg'] if self.o.no_lsfg else []),
                 self.logs / 'android_oodle_host.log', env=self.env)
         PROG.set(step="the game's Oodle entries in a job file")
         tmp = self.work / 'tmp/oodle'; nsp.rmtree(tmp); tmp.mkdir(parents=True)
@@ -653,6 +655,7 @@ class Port:
         # the app's mode runs the game itself: libdmplay.so (the host with the player's JNI entry) instead of the APK's libdmhost.so
         nsp.run([PY, DM / 'android/build.py', '--game', self.g.id, '--ndk', self.tools['ndk'], '--out', out,
                  '--play' if self.o.app else '--lib', '--jobs', str(self.o.jobs)] + ([] if self.o.debug else ['--release'])
+                + (['--no-lsfg'] if self.o.no_lsfg else [])
                 + (['--adrenotools'] if not prebuilt_loader() else []), self.logs / 'android_host.log', env=self.env)
         self.so = out / ('libdmplay.so' if self.o.app else 'libdmhost.so')
         if not self.so.is_file(): raise BuildError(f'build.py made no {self.so}')

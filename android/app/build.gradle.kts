@@ -28,6 +28,11 @@ val jniLibsDir = rootProject.layout.projectDirectory.dir("../packaging/android-a
 fun envOf(name: String) = System.getenv(name)?.takeIf { it.isNotBlank() }
 val nx2aKeystore = File(envOf("NX2A_KEYSTORE") ?: "${System.getProperty("user.home")}/.android/nx2android.keystore")
 
+// -PnxLsfg=false: the host the app builds on the device is built without the frame generation's GPL code (the
+// lsfg/ folder), so it is under the repository's MIT license. The default is the current behaviour: the code is
+// linked, and the host is then a combined work under GPL-3.0-or-later (android/NOTICE.md).
+val nxLsfg = (project.findProperty("nxLsfg") as String?)?.toBooleanStrictOrNull() ?: true
+
 android {
     namespace = "com.nx.android"
     compileSdk = 37
@@ -52,6 +57,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += listOf("arm64-v8a") }
+        // -PnxLsfg=false: the host the app builds is built without the frame generation's GPL code (the lsfg/ folder),
+        // so it is under the repository's MIT license. The default is the current behaviour: the code is linked, and
+        // the host is then a combined work under GPL-3.0-or-later (android/NOTICE.md).
+        buildConfigField("boolean", "NX_LSFG", nxLsfg.toString())
     }
 
     sourceSets {
@@ -82,6 +91,9 @@ android {
     // The screen is Jetpack Compose (Material 3).
     buildFeatures {
         compose = true
+        // The frame generation's switch (NX_LSFG) is read by the app: the host is built on the device when a game is
+        // ported, and the copyleft component of that build is chosen here (see android/NOTICE.md).
+        buildConfig = true
     }
 
     buildTypes {
