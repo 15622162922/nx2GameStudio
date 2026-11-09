@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Inventory2
@@ -62,6 +67,7 @@ import com.nx.android.ui.components.FilePickerScreen
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.library.ConfigPanel
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
 import com.nx.android.ui.onboarding.OnboardingScreen
@@ -190,6 +196,19 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
+        }
+        // 配置面板画在最上层：它的遮罩要盖住顶栏与整块页面
+        val panelFile = remember { mutableStateOf<File?>(null) }
+        LaunchedEffect(lib.selected) { if (lib.selected != null) panelFile.value = lib.selected }
+        AnimatedVisibility(
+            visible = lib.selected != null,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            panelFile.value?.let { f ->
+                ConfigPanel(lib, port, container.player, f, actions,
+                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onClose = { lib.selected = null })
+            }
         }
     }
 }

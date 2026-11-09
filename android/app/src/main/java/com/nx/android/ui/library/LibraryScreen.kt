@@ -1,11 +1,6 @@
 package com.nx.android.ui.library
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -100,21 +95,7 @@ fun LibraryScreen(lib: LibraryState, port: PortState, player: PlayerState, actio
 
     RowView(lib, port, player, visible, actions, onGoBuilds, onRequest)
 
-    // the back key closes the panel first, the app second
-    BackHandler(enabled = lib.selected != null) { lib.selected = null }
-
-    // the panel's game outlives the closing animation
-    val panelFile = remember { mutableStateOf<File?>(null) }
-    LaunchedEffect(lib.selected) { if (lib.selected != null) panelFile.value = lib.selected }
-    AnimatedVisibility(
-        visible = lib.selected != null,
-        enter = slideInHorizontally { it } + fadeIn(),
-        exit = slideOutHorizontally { it } + fadeOut(),
-    ) {
-        panelFile.value?.let { f ->
-            ConfigPanel(lib, port, player, f, actions, onGoBuilds, onClose = { lib.selected = null })
-        }
-    }
+    // 配置面板不在这里画：它要盖住顶栏，所以由页面的根（MainScreen）在最上层画（见 ui/App.kt）
 }
 
 private fun statusColor(s: GameStatus) = when (s) {
@@ -307,7 +288,7 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            listOfNotNull(titleId ?: "（无 Title ID）", statusLabel(status) +
+            listOfNotNull(titleId, statusLabel(status) +
                 if (status == GameStatus.PORTING) " ${(port.progress * 100).toInt()}%" else "").joinToString("  ·  "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -382,9 +363,12 @@ private fun EmptyLibrary(onPick: () -> Unit) {
 
 // ---- 移植配置面板（右侧全高滑入） --------------------------------------------------------------------------------
 
-/** 移植配置面板：文件路径、状态与该游戏自己的选项，开始移植与安装也从这里走 */
+/**
+ * 移植配置面板：文件路径、状态与该游戏自己的选项，开始移植与安装也从这里走。
+ * 由页面的根在最上层画（MainScreen），它的遮罩要盖住顶栏。
+ */
 @Composable
-private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
+internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
                         f: File, actions: AppActions, onGoBuilds: () -> Unit, onClose: () -> Unit) {
     BackHandler { onClose() }
     val status = lib.statusOf(f)
@@ -396,7 +380,17 @@ private fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
     var confirmDelete by remember { mutableStateOf(false) }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable { onClose() },
+        Modifier.fillMaxSize()
+            // 遮罩：左边留出游戏自己的画面，往右渐渐暗下去接到面板（不是一块死黑）
+            .background(
+                Brush.horizontalGradient(
+                    0f to Color.Transparent,
+                    0.28f to Color(0x8C0E0E0F),
+                    0.44f to Color(0xD90E0E0F),
+                    1f to Color(0xF20E0E0F),
+                )
+            )
+            .clickable { onClose() },
         contentAlignment = Alignment.CenterEnd,
     ) {
         Column(
@@ -542,7 +536,10 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
         })
 }
 
-/** 存档导入（库页侧）：列出这个包导出的存档，选定即写入导入请求——下次启动游戏时换入。导出在游戏内的抽屉里。 */
+/**
+ * 存档（库页侧）：导出与导入都在这里，两个都是写请求——宿主在下次启动游戏时做。
+ * 导出写 saves/export.txt（带 request=export 的记号），宿主做完把结果写回 saves/result.txt。
+ */
 @Composable
 private fun SaveImportRows(pack: File, onToast: (String) -> Unit) {
     var listing by remember { mutableStateOf(false) }
@@ -550,14 +547,15 @@ private fun SaveImportRows(pack: File, onToast: (String) -> Unit) {
     val savesDir = File(pack, "saves")
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     Text("存档", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    if (!listing) {
-        QuietButton("导入存档…", onClick = { listing = true }, modifier = Modifier.fillMaxWidth())
-        Hint("导出存档在游戏运行中的抽屉里；导入在下次启动游戏时生效。", size = 11.sp)
-        return
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        QuietButton("导出存档", onClick = { requestExport(savesDir, onToast) }, modifier = Modifier.weight(1f))
+        QuietButton("导入存档…", onClick = { listing = !listing }, modifier = Modifier.weight(1f))
     }
+    Hint(exportNote(savesDir), size = 11.sp)
+    if (!listing) return
     val exports = remember(listing) { savesDir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name } ?: emptyList() }
     if (exports.isEmpty()) {
-        Hint("还没有导出的存档。运行游戏，在抽屉里点「导出存档」。")
+        Hint("还没有导出的存档。导出在下次启动游戏时生效，之后在这里导入。")
         return
     }
     for (d in exports) {
@@ -583,6 +581,32 @@ private fun SaveImportRows(pack: File, onToast: (String) -> Unit) {
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = null }) { Text("取消") } },
         )
+    }
+}
+
+/** 写导出的请求：宿主在下次启动游戏时导出这份存档，并把结果写回 saves/result.txt */
+private fun requestExport(savesDir: File, onToast: (String) -> Unit) {
+    val ok = runCatching {
+        savesDir.mkdirs()
+        File(savesDir, "export.txt").writeText("request=export\n")
+        true
+    }.getOrDefault(false)
+    onToast(if (ok) "已请求导出：下次启动游戏时导出一份存档" else "写入导出请求失败")
+}
+
+/** 导出现在是什么状态：等着的请求、上一次导出的结果（成功或失败），或者只是一句说明 */
+private fun exportNote(savesDir: File): String {
+    if (File(savesDir, "export.txt").isFile) return "已请求导出：下次启动游戏时导出一份存档"
+    val lines = runCatching { File(savesDir, "result.txt").readText() }.getOrDefault("").lines()
+    val fields = lines.mapNotNull { line ->
+        val i = line.indexOf('=')
+        if (i < 0) null else line.substring(0, i).trim() to line.substring(i + 1).trim()
+    }.toMap()
+    if (fields["request"] != "export") return "导出与导入都在下次启动游戏时生效。"
+    return when (fields["result"]) {
+        "ok" -> "上次导出：${fields["name"] ?: "存档"}"
+        "error" -> "上次导出失败：${fields["error"] ?: "原因不明"}"
+        else -> "导出与导入都在下次启动游戏时生效。"
     }
 }
 

@@ -52,15 +52,16 @@ import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.delay
 
-/** 抽屉的三个标签页 */
+/** 抽屉的两个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
 enum class DrawerTab(val label: String) {
-    FRAMEGEN("帧生成"), DISPLAY("画面与操作"), SAVES("存档")
+    FRAMEGEN("帧生成"), DISPLAY("画面与操作")
 }
 
 /**
- * 游戏内抽屉（:play 进程自己的 UI）：右缘把手或返回唤出，玻璃卡样式与应用一致，三个标签页 + 底部动作行。
+ * 游戏内抽屉（:play 进程自己的 UI）：右缘把手或返回唤出，玻璃卡样式与应用一致，两个标签页 + 底部动作行。
  * 帧生成即改即生效（JNI）；画面与操作直控宿主的菜单状态（手柄、不透明度、震动、FPS 计数、掌机/底座、
- * 布局编辑器）；存档 = 导出与导入（导入按游戏语义在下次启动生效）。Back 不经过这里（GameActivity 分流）。
+ * 布局编辑器）。存档不在这里——导出与导入都在库页选中游戏后的抽屉里（下次启动游戏时生效）；
+ * 游戏运行中要立刻导出，宿主自己的菜单（☰）里还有导出。Back 不经过这里（GameActivity 分流）。
  */
 @Composable
 fun GameDrawer(
@@ -126,7 +127,6 @@ fun GameDrawer(
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow("这个游戏不支持帧生成")
                                         else FrameGenRows(settings, status)
                                     DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity)
-                                    DrawerTab.SAVES -> SaveRows()
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -225,23 +225,6 @@ private fun DisplayRows(
     SwitchRow("帧率计数", fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
     SwitchRow("底座模式", docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
     QuietButton("布局编辑器（拖动按键位置）", onClick = { Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
-}
-
-/** 存档页（游戏内）：只有导出——它需要运行中的宿主。导入在库页选中游戏后的抽屉里（写入导入请求，下次启动生效）。 */
-@Composable
-private fun SaveRows() {
-    var note by remember { mutableStateOf(Native.menuExportNote()) }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("存档", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        QuietButton("导出存档", onClick = {
-            Native.menuExport()
-            note = Native.menuExportNote()
-        })
-    }
-    Text(note.ifEmpty { "把当前进度导出为一份存档" }, style = MaterialTheme.typography.bodySmall,
-         color = MaterialTheme.colorScheme.onSurfaceVariant)
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    HintRow("导入在库页选中游戏后的抽屉里：选定一份导出的存档，下次启动游戏时换入。")
 }
 
 @Composable
