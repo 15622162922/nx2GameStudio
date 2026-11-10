@@ -113,7 +113,7 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
 
     var shown: Boolean
         get() = prefs.bool(shownKey, true)
-        set(v) { prefs.put(shownKey, v); pushPrefs(); invalidate() }
+        set(v) { prefs.put(shownKey, v); pushPrefs(); answerControls(); invalidate() }
     var opacity: Int
         get() = prefs.str(KEY_OPACITY).toIntOrNull() ?: 60
         set(v) { prefs.put(KEY_OPACITY, v.coerceIn(10, 100).toString()); pushPrefs(); invalidate() }
@@ -140,10 +140,46 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
     /** 手柄可见吗（没有物理手柄在用时才画） */
     fun visible(): Boolean = shown && controllers == 0
 
+    /**
+     * 手柄回答触摸吗（它回答就是按键，不回答就每一根手指都是游戏的触摸）。
+     *
+     * 规矩照旧宿主 overlay_layout.h 的 ov_answer：画出来=全部控件回答，藏着=什么都不回答。
+     * 物理手柄在用时手柄让位，也是这样（front_player.c 的注释：这时每一根触摸都是游戏的）。
+     * 手柄藏起来时它看不见，所以它不能还按着键，也不能还抢触摸。
+     */
+    private fun answering(): Boolean = visible()
+
+    /** 上一次它回答吗（null = 还没看过：第一次只看，不放键） */
+    private var answeringLast: Boolean? = null
+
+    /** 空的控件表：没有控件命中，每一根手指都是游戏的触摸（空列表是个单例，不分配） */
+    private val noCtrls = emptyList<PadControl>()
+
+    /**
+     * 这一刻该给宿主什么控件：手柄画着就给它全部，藏着就一个都不给
+     * （藏着的那一片地方不回答：每一根手指都是游戏的触摸）。
+     *
+     * 刚藏起来（或刚出现）时：手里按着的键放掉（藏了就没人看得见它按着），
+     * 摇杆的量与菜单按钮的按住也跟着放，并且告诉宿主「没有键按着了」
+     * （宿主只收 App 给的结果；游戏的触点照旧留着，那是 out 里上一次路由出来的）。
+     */
+    private fun answerControls(): List<PadControl> {
+        val a = answering()
+        if (answeringLast != null && a != answeringLast) {
+            answeringLast = a
+            router.release()
+            lastButtons = 0L
+            runCatching { Native.padInput(0, 0, 0, 0, 0, out.ids, out.xs, out.ys) }
+        }
+        answeringLast = a
+        return if (a) controls() else noCtrls
+    }
+
     /** 物理手柄的个数变了（App 监听系统的输入设备） */
     fun setControllers(n: Int) {
         if (controllers == n) return
         controllers = n
+        answerControls()
         invalidate()
     }
 
@@ -197,7 +233,10 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
     fun onTouch(e: MotionEvent): Boolean {
         val n = minOf(e.pointerCount, 16)
         for (i in 0 until n) { tIds[i] = e.getPointerId(i); tXs[i] = e.getX(i); tYs[i] = e.getY(i) }
-        val ctrls = controls()
+        // 手柄画着才回答触摸：藏起来的时候它那片地方什么都不回答，每根手指都是游戏的触摸
+        // （旧宿主 overlay_layout.h 的 ov_answer：画出来=全部控件回答，藏着=什么都不回答；
+        // 物理手柄在用时手柄让位，也是这样）
+        val ctrls = answerControls()
         // actionMasked，不是 action：getAction() 给的是「动作 | 手指下标 << 8」的合成值，
         // 第二根手指的 POINTER_DOWN 是 261 而不是 5，路由就认不出来（那样两个键不能一起按）
         router.route(e.actionMasked, e.actionIndex, tIds, tXs, tYs, n, ctrls, height.toFloat(), out)
