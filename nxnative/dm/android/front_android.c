@@ -317,7 +317,7 @@ static int data_dir_load(ANativeActivity *a, char *out, size_t cap) {   // the f
 // The player writes the path into the dialog; this thread watches the field and starts the game when it holds a
 // folder with the data pack in it.
 static void *data_poll(void *arg) {
-    ANativeActivity *a = arg;
+    ANativeActivity *a = arg; crash_thread_init();
     for (int i = 0; i < 1200; i++) {   // ten minutes
         usleep(500000);
         char path[700];
@@ -489,7 +489,7 @@ static void menu_drag(const ov_ctl *m, float x, float y, float W, float H) {   /
 // last one goes, the gamepad comes back ----
 static int jx(JNIEnv *E) { if (!(*E)->ExceptionCheck(E)) return 0; (*E)->ExceptionClear(E); return 1; }
 static void *pad_watch(void *a) {
-    JavaVM *vm = a; JNIEnv *E; pthread_setname_np(pthread_self(), "padwatch");
+    JavaVM *vm = a; JNIEnv *E; crash_thread_init(); pthread_setname_np(pthread_self(), "padwatch");
     if ((*vm)->AttachCurrentThread(vm, &E, NULL) != JNI_OK) { LOG("[RED] [input] cannot attach to the Java VM: attached controllers are not watched"); return NULL; }
     jclass cID = (*E)->FindClass(E, "android/view/InputDevice");
     jmethodID mIds = cID ? (*E)->GetStaticMethodID(E, cID, "getDeviceIds", "()[I") : NULL, mGet = cID ? (*E)->GetStaticMethodID(E, cID, "getDevice", "(I)Landroid/view/InputDevice;") : NULL;
@@ -1018,8 +1018,9 @@ int front_text_input(const char *title, const char *sub, const char *guide, cons
     pthread_mutex_unlock(&g_tx_mu);
     dm_input_set(0, 0, 0, 0, 0); dm_touch_set(NULL, 0); g_touch_btn = 0;   // nothing stays pressed in the game
     atomic_store(&g_tx_on, 1); hold_sync(); tx_changed();
+    LOG("[text] entry open: \"%s\" (at most %d characters)", g_tx.title, g_tx.max);   // the log says the entry is up before the app is told
     dm_app_notice(DM_NOTICE_PANEL);   // the app: its drawer steps aside (the text entry is drawn under it otherwise)
-    LOG("[text] entry open: \"%s\" (at most %d characters)", g_tx.title, g_tx.max);
+    LOG("[text] the app was told (the notice goes on its own thread: the game's thread never waits for the app)");
     pthread_mutex_lock(&g_tx_mu);
     while (!g_tx.done) pthread_cond_wait(&g_tx_cv, &g_tx_mu);
     int ok = g_tx.ok; if (ok) snprintf(out, (size_t)out_cap, "%s", g_tx.text);
@@ -1202,7 +1203,7 @@ static void shake_start(void) {
     shake_sensor(!atomic_load(&g_bg));
 }
 static void *input_thread(void *a) {
-    (void)a; g_ilooper = ALooper_prepare(0);
+    (void)a; crash_thread_init(); g_ilooper = ALooper_prepare(0);
     shake_start();
     for (;;) ALooper_pollOnce(-1, NULL, NULL, NULL);
     return NULL;
@@ -1213,7 +1214,7 @@ static void on_queue_destroyed(ANativeActivity *a, AInputQueue *q) { (void)a; AI
 // ---- the host ----
 int main(int argc, char **argv);   // dm/host/main.c
 static void *host_thread(void *a) {
-    (void)a;
+    (void)a; crash_thread_init();
     char mods[600]; snprintf(mods, sizeof mods, "%s/mods", g_root);
     char *argv[] = {"dmhost", mods, NULL};
     atomic_store(&g_running, 1);
@@ -1247,15 +1248,37 @@ __attribute__((visibility("default"))) void ANativeActivity_onCreate(ANativeActi
 // ---- the host's notices to the app (the player): the menu button was tapped, or one of the host's panels is up ----
 // The drawer's state is the app's own (GameActivity), so the host tells it what happened: the player tapped the menu button (the drawer opens), or the
 // host opened one of its panels (the app closes the drawer, so a panel is never hidden under it). The Activity goes into a global reference (the
-// haptics' pattern) and the call runs on whichever thread the host is on, so that thread attaches to the Java VM first.
+// haptics' pattern).
+// The notice goes on a thread of its own: it is a JNI call into the Activity, and the caller's thread must never wait for the app (the game's thread
+// blocked there once, and the game froze with no keyboard). The haptics' pattern again: a thread that attaches to the Java VM and does the work.
 static JavaVM *g_app_vm; static jobject g_app_act; static jmethodID g_app_notice;
+#define NOTICE_Q 8
+static pthread_mutex_t g_notice_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_notice_cv = PTHREAD_COND_INITIALIZER;
+static int g_notice_q[NOTICE_Q], g_notice_n;
+static void *notice_thread(void *a) {
+    (void)a; crash_thread_init();
+    JNIEnv *E = NULL;
+    if ((*g_app_vm)->AttachCurrentThread(g_app_vm, &E, NULL) != JNI_OK) { LOG("[RED] [app] cannot attach to the Java VM: the notices are lost"); return NULL; }
+    for (;;) {
+        pthread_mutex_lock(&g_notice_mu);
+        while (!g_notice_n) pthread_cond_wait(&g_notice_cv, &g_notice_mu);
+        int what = g_notice_q[0];
+        for (int i = 1; i < g_notice_n; i++) g_notice_q[i - 1] = g_notice_q[i];
+        g_notice_n--;
+        pthread_mutex_unlock(&g_notice_mu);
+        (*E)->CallVoidMethod(E, g_app_act, g_app_notice, (jint)what);
+        if ((*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [app] the notice (%d) failed", what); }
+    }
+    return NULL;
+}
 void dm_app_notice(int what) {
     if (!g_app_vm || !g_app_act || !g_app_notice) return;
-    JNIEnv *E = NULL;
-    if ((*g_app_vm)->GetEnv(g_app_vm, (void **)&E, JNI_VERSION_1_6) != JNI_OK &&
-        (*g_app_vm)->AttachCurrentThread(g_app_vm, &E, NULL) != JNI_OK) return;
-    (*E)->CallVoidMethod(E, g_app_act, g_app_notice, (jint)what);
-    if ((*E)->ExceptionCheck(E)) { (*E)->ExceptionClear(E); LOG("[RED] [app] the notice (%d) failed", what); }
+    pthread_mutex_lock(&g_notice_mu);
+    if (g_notice_n == NOTICE_Q) { memmove(g_notice_q, g_notice_q + 1, (NOTICE_Q - 1) * sizeof(int)); g_notice_n--; LOG("[RED] [app] the notice queue is full: the oldest notice is dropped"); }
+    g_notice_q[g_notice_n++] = what;
+    pthread_cond_signal(&g_notice_cv);
+    pthread_mutex_unlock(&g_notice_mu);
 }
 static void app_notice_keep(JNIEnv *E, JavaVM *vm, jobject act) {   // the start call runs on Java's thread: the Activity and its method are looked up here
     g_app_vm = vm;
@@ -1268,10 +1291,15 @@ static void app_notice_keep(JNIEnv *E, JavaVM *vm, jobject act) {   // the start
         if (g_app_act) { (*E)->DeleteGlobalRef(E, g_app_act); g_app_act = NULL; }
         g_app_notice = NULL;
     }
+    static int started;
+    if (!started && g_app_act && g_app_notice) {   // the notices go on a thread of their own (dm_app_notice)
+        started = 1; pthread_t t; if (!pthread_create(&t, NULL, notice_thread, NULL)) pthread_detach(t);
+    }
 }
 
 static void host_start_common(JNIEnv *E, JavaVM *vm, jobject actctx, const char *internal) {
     if (g_host_up) return;   // the dialog's thread and the resume can both get here
+    crash_install();   // the signal handlers: the Android host has no main.c to install them, so a crash here used to kill the game silently
     char p[700], q[720];
     snprintf(p, sizeof p, "%s/log.txt", g_root); char prev[720]; snprintf(prev, sizeof prev, "%s/log.prev.txt", g_root); rename(p, prev);
     if (!freopen(p, "w", stderr)) __android_log_print(ANDROID_LOG_ERROR, "dmhost", "cannot write %s", p);

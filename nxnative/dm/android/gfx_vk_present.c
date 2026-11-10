@@ -11,6 +11,7 @@
 #include "font5x7.h"
 #include "overlay_vert.spv.h"
 #include "overlay_frag.spv.h"
+void crash_thread_init(void);   // the signal alternate stack is per thread (dm.h): the present thread faults on a bad frame, and without it the crash is silent
 
 __attribute__((weak)) ANativeWindow *dm_front_window(void) { return NULL; }
 static uint64_t g_presents;
@@ -829,7 +830,7 @@ static pthread_mutex_t g_pq_mu = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_
 static _Atomic int g_redraw;
 void dm_overlay_redraw(void) { atomic_store(&g_redraw, 1); pthread_mutex_lock(&g_pq_mu); pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu); }
 static void *present_thread(void *arg) {
-    (void)arg; pthread_setname_np(pthread_self(), "vk present");
+    (void)arg; pthread_setname_np(pthread_self(), "vk present"); crash_thread_init();
     typeof(g_pq[0]) last = {0};
     for (;;) {
         pthread_mutex_lock(&g_pq_mu);

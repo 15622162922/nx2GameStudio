@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+void crash_thread_init(void);   // the signal alternate stack is per thread (dm.h): the completion thread faults on a bad frame, and without it the crash is silent
 
 #define VK_DEF(f) PFN_##f f;
 VK_FNS(VK_DEF) VK_DEV_FNS(VK_DEF)
@@ -935,7 +936,7 @@ static void pass_spike_flush(void) {
     g_nsf = 0; g_sf_tot = 0;
 }
 static void *completion_main(void *a) {
-    (void)a; pthread_setname_np(pthread_self(), "dm-vk-complete");
+    (void)a; pthread_setname_np(pthread_self(), "dm-vk-complete"); crash_thread_init();
     for (;;) {
         pthread_mutex_lock(&g_cmu);
         while (!g_ch) pthread_cond_wait(&g_ccv, &g_cmu);

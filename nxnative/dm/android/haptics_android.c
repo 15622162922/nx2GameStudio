@@ -34,7 +34,12 @@ static jclass cVE, cID; static jmethodID mOneShot, mPredef, mVibrate, mCancel, m
 typedef struct { jobject v; int amp; } vib_t;   // a Vibrator (global reference) and whether it controls amplitude
 static int jok(const char *what) {
     if (!(*E)->ExceptionCheck(E)) return 1;
-    (*E)->ExceptionClear(E); LOG("[RED] [haptics] Java exception in %s", what); return 0;
+    (*E)->ExceptionClear(E);
+    // the same failure repeats (the device's vibrator refuses every call): it is logged once per kind, or the log drowns in it
+    static const char *seen[8]; static int nseen;
+    for (int i = 0; i < nseen; i++) if (!strcmp(seen[i], what)) return 0;
+    if (nseen < 8) seen[nseen++] = what;
+    LOG("[RED] [haptics] Java exception in %s", what); return 0;
 }
 static int vib_take(vib_t *v, jobject o) {   // o: a local reference, released here
     v->v = NULL; v->amp = 0;
@@ -54,7 +59,7 @@ static void vib_tap(vib_t *v) {   // a short, light tick; without amplitude cont
 static void vib_stop(vib_t *v) { (*E)->CallVoidMethod(E, v->v, mCancel); jok("cancel"); }
 
 static void *haptics_thread(void *a) {
-    (void)a; pthread_setname_np(pthread_self(), "haptics");
+    (void)a; pthread_setname_np(pthread_self(), "haptics"); crash_thread_init();
     if ((*g_vm)->AttachCurrentThread(g_vm, &E, NULL) != JNI_OK) { LOG("[RED] [haptics] cannot attach to the Java VM"); return NULL; }
     jclass cCtx = (*E)->FindClass(E, "android/content/Context"), cVib = (*E)->FindClass(E, "android/os/Vibrator");
     cVE = (*E)->NewGlobalRef(E, (*E)->FindClass(E, "android/os/VibrationEffect")); cID = (*E)->NewGlobalRef(E, (*E)->FindClass(E, "android/view/InputDevice"));

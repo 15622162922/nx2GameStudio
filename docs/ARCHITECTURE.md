@@ -164,6 +164,13 @@ the app's files folder per title id (`DM_GAME_ID`); the game's language and Vulk
 library's drawer and written into the pack's `env.txt`. The assets are built by `packaging/android-apk/` and are
 not committed; the app's own layer rules: no game-specific code, no pipeline logic (the CLI does all of it).
 
+Two things the host does on Android that the desktop host gets from its `main.c`: the **crash handlers**
+(`crash_install()`, `dm/host/crash.c`) - without them a SIGSEGV kills the game silently, with no backtrace and no
+tombstone - and the **signal alternate stack** of every thread that can fault (`crash_thread_init()`), the guest
+threads and the host's own alike. The host's **notices to the app** (the drawer steps aside for a panel) go on a
+thread of their own: they are JNI calls into the Activity, and the game's thread must never wait for the app (it
+blocked there once, and the game froze with its keyboard never coming up).
+
 ### The app's own language
 
 The app's words live in its own resources: `res/values/strings.xml` is English (the default bundle) and
