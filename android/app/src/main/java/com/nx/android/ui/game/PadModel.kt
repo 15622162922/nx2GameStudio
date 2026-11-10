@@ -184,6 +184,10 @@ class PadRouter {
     var buttons: Long = 0
         private set
 
+    /** 十字键此刻按着的方向（按键位）：画它的高亮用（斜向是两个位） */
+    var dpadDir = 0L
+        private set
+
     fun pressedControls(): Set<Int> = pressed
 
     /** 路由的中间量：复用的数组（一次触摸只填一次，不分配） */
@@ -232,6 +236,7 @@ class PadRouter {
 
         // 每一根按着的手指：它按住的控件给什么
         var btn = 0L
+        var dpad = 0L   // 十字键自己按着的方向（画它的高亮用）
         var lx = 0; var ly = 0; var rx = 0; var ry = 0
         knob[0] = 0f; knob[1] = 0f; knob[2] = 0f; knob[3] = 0f
         var gn = 0
@@ -256,6 +261,7 @@ class PadRouter {
                         val a = atan2(dy, dx)
                         val s = ((a / (Math.PI / 4)).roundToInt()) and 7   // 八个方向，0 = 右，顺时针（y 向下）
                         btn = btn or DPAD_DIRS[s]
+                        dpad = dpad or DPAD_DIRS[s]   // 斜向是两个方向（宿主也是两个位）
                     }
                 }
                 else -> {   // 摇杆
@@ -269,6 +275,7 @@ class PadRouter {
             }
         }
         buttons = btn
+        dpadDir = dpad
         knobs[0] = knob[0]; knobs[1] = knob[1]; knobs[2] = knob[2]; knobs[3] = knob[3]
         out.buttons = btn; out.lx = lx; out.ly = ly; out.rx = rx; out.ry = ry
         // 游戏的触点：数组的长度就是个数（JNI 照它读），个数没变就复用
@@ -305,6 +312,7 @@ class PadRouter {
     fun release() {
         held.clear(); pressed.clear()
         menuPointer = -1; menuDragged = false
+        dpadDir = 0L
         knobs[0] = 0f; knobs[1] = 0f; knobs[2] = 0f; knobs[3] = 0f
     }
 
@@ -327,5 +335,7 @@ class PadRouter {
             1L shl 13,                                     // 上
             (1L shl 13) or (1L shl 14),                    // 右上
         )
+        /** 十字键的方向名 → 它的按键位（主题贴图里的方向名，与 DPAD_DIRS 一样） */
+        val DPAD_BITS = mapOf("right" to (1L shl 14), "down" to (1L shl 15), "left" to (1L shl 12), "up" to (1L shl 13))
     }
 }

@@ -52,6 +52,8 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
     private class Part(val part: String) {
         var idle: Sp? = null
         var held: Sp? = null
+        /** 十字键的方向位（别的控件是 0）：按住了这个方向就画它的按住贴图 */
+        val dirBit: Long = PadRouter.DPAD_BITS[part] ?: 0L
     }
 
     /** 一个控件的贴图：装饰（在别的下面）、摇杆的帽、它的各部分 */
@@ -445,10 +447,11 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
                     drawSp(canvas, atlasB, s, c, kc,
                            router.knobs[ki] * themeTravel * kc, router.knobs[ki + 1] * themeTravel * kc)
                 }
-                // 按键自己：按住了画按住的那张（十字键的方向高亮这次不做：它一直画静止的那张）
-                val useHeld = pressed.contains(i) && !c.isDpad
+                // 按键自己：按住了画按住的那张（十字键：按着哪个方向就亮哪个方向，斜向亮两个）
                 for (p in set.parts) {
-                    val s = if (useHeld) (p.held ?: p.idle) else p.idle
+                    val on = if (c.isDpad) p.dirBit != 0L && (router.dpadDir and p.dirBit) != 0L
+                             else pressed.contains(i)
+                    val s = if (on) (p.held ?: p.idle) else p.idle
                     if (s != null) drawSp(canvas, atlasB, s, c, kc, 0f, 0f)
                 }
             }
