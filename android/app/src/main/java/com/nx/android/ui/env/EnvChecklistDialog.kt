@@ -1,6 +1,7 @@
 package com.nx.android.ui.env
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +36,6 @@ import com.nx.android.appstate.OnboardingState
 import com.nx.android.domain.EnvCheck
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.StatusDot
-import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 
 /**
@@ -58,7 +58,16 @@ fun EnvChecklistDialog(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { onDismiss() },
         contentAlignment = Alignment.Center,
     ) {
-        GlassSheet(modifier = Modifier.widthIn(max = 520.dp).clickable(enabled = false) {}) {
+        // The card: a plain Box, not a GlassSheet. A GlassSheet sizes itself by its modifier (the driver page and
+        // the log give it fillMaxSize); with only a widthIn it has no child that sizes it, and it collapses to
+        // nothing - the scrim shows, the card does not.
+        Box(
+            Modifier.widthIn(max = 520.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
+                .background(NxPalette.Surface.copy(alpha = 0.9f))
+                .clickable(enabled = false) {},
+        ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(stringResource(R.string.env_check_title), style = MaterialTheme.typography.titleMedium,
