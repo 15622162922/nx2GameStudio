@@ -70,6 +70,27 @@ class PreReleaseTest(unittest.TestCase):
         self.assertFalse(guard.has_prerelease(['--prerelease=false']))
         self.assertFalse(guard.has_prerelease([]))
 
+    def test_putting_a_release_back_to_a_draft_keeps_the_flag(self):
+        # publishing a draft without --prerelease drops the flag: the release becomes the repository's "Latest"
+        # and the players on the released version are pushed onto an alpha
+        for command in ('gh release edit v0.3.0-alpha03 --draft=true --repo zFitness/nx2androidX',
+                        'gh release edit v0.3.0-alpha03 --draft=false --repo zFitness/nx2androidX',
+                        'gh release edit v0.3.0-alpha03 --draft --repo zFitness/nx2androidX'):
+            reason = decide(command)
+            self.assertIsNotNone(reason, command)
+            self.assertIn('--prerelease', reason)
+
+    def test_the_draft_round_trip_that_keeps_the_flag_is_allowed(self):
+        for command in ('gh release edit v0.3.0-alpha03 --draft=true --prerelease=true --repo zFitness/nx2androidX',
+                        'gh release edit v0.3.0-alpha03 --draft=false --prerelease=true --repo zFitness/nx2androidX'):
+            self.assertIsNone(decide(command), command)
+
+    def test_the_released_version_is_not_affected(self):
+        self.assertIsNone(decide('gh release edit v0.3.0 --draft=false --repo zFitness/nx2androidX'))
+
+    def test_an_edit_that_publishes_nothing_is_left_alone(self):
+        self.assertIsNone(decide('gh release edit v0.3.0-alpha03 --notes-file notes.md --repo zFitness/nx2androidX'))
+
 
 class ReleaseTargetTest(unittest.TestCase):
     """3. the release is made in this line's repository, and carries the APK only"""

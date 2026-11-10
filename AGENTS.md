@@ -50,9 +50,14 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 
 - 预发布用 GitHub **pre-release**（`--prerelease`），正式版才成为仓库的 "Latest"；app 的更新检查读 "Latest"，
   所以已发布的正式版玩家不会被推上 alpha
+- **把一个已发布的 release 退回草稿再发布（为了重新触发一次构建）会抹掉它的预发布标记**：发布那一步
+  （`--draft=false`）不带 `--prerelease=true`，release 就变成正式版、成了 "Latest"，正式版玩家会被推上 alpha。
+  这条命令要写成 `gh release edit <tag> --draft=true --prerelease=true` 再
+  `gh release edit <tag> --draft=false --prerelease=true`；改完核对 `gh release view <tag> --json isPrerelease`
+  （守卫也会拦不带标记的 `--draft`）
 - 步骤：提交 `chore(release): version <x.y.z>` → 打附注 tag `v<base>-alphaNN` → push 两者 →
   `gh release create v<base>-alphaNN --verify-tag --prerelease --notes-file <notes> --repo zFitness/nx2androidX`，**不带 zip**
-- app 的 `versionName` 在 `android/app/build.gradle.kts`（当前 `0.3.0-alpha02`），与 tag 去掉 `v` 一致
+- app 的 `versionName` 在 `android/app/build.gradle.kts`（当前 `0.3.0-alpha04`），与 tag 去掉 `v` 一致
 - **一次发布只带手机的 APK，别无其它**。桌面 workflow（`release-windows.yml` / `release-macos.yml`）不发版，
   只在需要时手动触发（Actions → 该 workflow → Run workflow），产物留在该次运行的 artifact 里
 - 每个 `gh` 命令都要带 `--repo zFitness/nx2androidX`（本机 gh 默认指向另一个仓库）

@@ -86,6 +86,16 @@ def check_gh(w):
         if tag and not is_prerelease(tag) and has_prerelease(w):
             return (f'{tag} is the released version of the base, not a pre-release: it must not carry --prerelease '
                     '(AGENTS.md, §3 发布).')
+    if sub == 'edit':
+        # putting a published release back to a draft and publishing it again (to run the build once more) drops
+        # the pre-release flag unless the publish carries it: the release becomes the repository's "Latest", and
+        # the players on the released version are pushed onto an alpha
+        tag = next((a for a in w[3:] if not a.startswith('-')), None)
+        if tag and is_prerelease(tag) and any(a.startswith('--draft') for a in w) and not has_prerelease(w):
+            return (f'{tag} is a pre-release: publishing a draft without --prerelease drops the flag - the release '
+                    'becomes the repository\'s "Latest" and the players on the released version are pushed onto an '
+                    'alpha (AGENTS.md, §3 发布). Write it as --draft=true --prerelease=true and then --draft=false '
+                    '--prerelease=true.')
     return None
 
 
@@ -106,24 +116,31 @@ AFTER = ('Release rules (AGENTS.md, §3 发布): the release carries the phone a
          'that the APK is on the release - a failed run means the release has no app in it. A pre-release does not become the '
          'repository\'s "Latest" release, so the app\'s update check stays on the released version.')
 
+EDIT = ('Release rules (AGENTS.md, §3 发布): an edit can drop a pre-release\'s flag - publishing a draft without --prerelease '
+        'makes the release the repository\'s "Latest", and the players on the released version are pushed onto an alpha. '
+        'Check it after the edit: gh release view <tag> --json isPrerelease')
+
 
 def main():
     data = json.load(sys.stdin)
     cmd = (data.get('tool_input') or {}).get('command') or ''
     if 'release' not in cmd and 'tag' not in cmd: return
     creates = False
+    edits = False
     for w in segments(cmd):
         while w and re.fullmatch(r'\w+=.*', w[0]): w = w[1:]   # VAR=value prefixes
         reason = None
         if len(w) > 1 and Path(w[0]).stem == 'gh' and w[1] == 'release':
-            reason = check_gh(w); creates |= reason is None and len(w) > 2 and w[2] == 'create'
+            reason = check_gh(w)
+            creates |= reason is None and len(w) > 2 and w[2] == 'create'
+            edits |= reason is None and len(w) > 2 and w[2] == 'edit'
         elif len(w) > 1 and Path(w[0]).stem == 'git' and w[1] == 'tag':
             reason = check_git_tag(w)
         if reason:
             print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny', 'permissionDecisionReason': reason}}))
             return
-    if creates:
-        print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': AFTER}}))
+    if creates or edits:
+        print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': AFTER if creates else EDIT}}))
 
 
 if __name__ == '__main__':
