@@ -140,6 +140,11 @@ private fun statusLabel(s: GameStatus): String = when (s) {
 private fun experimentalTag(ported: Ported?): String? =
     if (ported?.status == "experimental") stringResource(R.string.lib_experimental) else null
 
+/** 旧版宿主编的数据包：要用当前版本重新移植（宿主的前端变了，老的宿主没有新的入口） */
+@Composable
+private fun reportTag(ported: Ported?): String? =
+    if (ported?.needsRePort == true) stringResource(R.string.lib_needs_report) else null
+
 /** The cover's two colors, picked by the name so one game always wears the same coat */
 private fun coverColors(name: String): List<Color> {
     val h = name.hashCode()
@@ -304,22 +309,23 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
         Text(
             listOfNotNull(titleId, statusLabel(status) +
                 if (status == GameStatus.PORTING) " ${(port.progress * 100).toInt()}%" else "",
-                experimentalTag(ported)).joinToString("  ·  "),
+                experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             // 主按钮：未移植 ▶ 构建（携带游戏与配置跳到构建页，NX2Apple 的 configureBuild），移植中变「查看构建」，
-            // 已完成 ▶ 运行（App 内直接进游戏）
+            // 已完成 ▶ 运行（App 内直接进游戏）；旧版宿主编的包要重新移植，主按钮变成「重新移植」
             val building = status == GameStatus.PORTING
             val running = status == GameStatus.DONE
+            val stale = ported?.needsRePort == true
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (locked) NxPalette.Unbuilt else NxPalette.Cream)
                     .clickable(enabled = !locked) {
-                        if (running) actions.onRun(ported!!.pack, FolderScanner.displayName(f))
+                        if (running && !stale) actions.onRun(ported!!.pack, FolderScanner.displayName(f))
                         else {
                             lib.buildsTarget = f
                             onGoBuilds()
@@ -332,7 +338,12 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                      tint = if (locked) NxPalette.Background else Color.Black)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    when { building -> stringResource(R.string.lib_view_builds); running -> stringResource(R.string.set_run_onboarding); else -> stringResource(R.string.common_build) },
+                    when {
+                        building -> stringResource(R.string.lib_view_builds)
+                        stale -> stringResource(R.string.lib_report_again)
+                        running -> stringResource(R.string.set_run_onboarding)
+                        else -> stringResource(R.string.common_build)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = if (locked) NxPalette.Background else Color.Black,
                 )
@@ -441,7 +452,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(titleId, statusLabel(status), experimentalTag(ported)).joinToString("  ·  "),
+                        listOfNotNull(titleId, statusLabel(status), experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -510,9 +521,18 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                             val locked = player.running
                             if (locked) Hint(locale.str(R.string.lib_close_current_game, player.name))
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                CapsuleButton(locale.str(R.string.builds_run_action), {
-                                    actions.onRun(ported.pack, FolderScanner.displayName(f))
-                                }, modifier = Modifier.weight(1f), enabled = !locked)
+                                // 旧版宿主编的包：运行按钮变成「重新移植」（重新移植这个游戏，用当前版本的宿主）
+                                if (ported.needsRePort) {
+                                    CapsuleButton(locale.str(R.string.lib_report_again), {
+                                        lib.buildsTarget = f
+                                        onClose()
+                                        onGoBuilds()
+                                    }, modifier = Modifier.weight(1f), enabled = !locked)
+                                } else {
+                                    CapsuleButton(locale.str(R.string.builds_run_action), {
+                                        actions.onRun(ported.pack, FolderScanner.displayName(f))
+                                    }, modifier = Modifier.weight(1f), enabled = !locked)
+                                }
                                 CapsuleButton(locale.str(R.string.lib_build_action), {
                                     lib.buildsTarget = f
                                     onClose()

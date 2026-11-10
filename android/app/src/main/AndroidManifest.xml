@@ -12,6 +12,9 @@
     <!-- The port runs in a foreground service (the notification keeps the process alive while the app is
          in the background or the screen is off). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- The vibration: the gamepad's tick when a button goes down, and the game's own rumble (the host's
+         haptics thread). Without it the system's Vibrator throws and nothing moves. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".NxApp"

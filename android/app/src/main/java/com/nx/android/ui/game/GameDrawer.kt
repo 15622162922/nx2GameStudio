@@ -62,9 +62,10 @@ enum class DrawerTab(@StringRes val label: Int) {
 
 /**
  * 游戏内抽屉（:play 进程自己的 UI）：右缘把手或返回唤出，玻璃卡样式与应用一致，两个标签页 + 底部动作行。
- * 帧生成即改即生效（JNI）；画面与操作直控宿主的菜单状态（手柄、不透明度、震动、FPS 计数、掌机/底座、
- * 布局编辑器）。存档不在这里——导出与导入都在库页选中游戏后的抽屉里（下次启动游戏时生效）；
- * 宿主自己的面板（文本输入、布局编辑器、存档选择）画在游戏画面上，所以打开它们之前抽屉先收起。
+ * 帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
+ * （震动、FPS 计数、掌机/底座，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
+ * 没有布局编辑器、没有存档选择器、没有软键盘——游戏的文本输入走系统输入法（App 弹自己的对话框）。
+ * 存档不在这里——导出与导入都在库页选中游戏后的抽屉里（下次启动游戏时生效）。
  * Back 不经过这里（GameActivity 分流）。
  */
 @Composable
@@ -77,6 +78,8 @@ fun GameDrawer(
     onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int,
     onPadOpacity: (Int) -> Unit,
+    onLayoutEditor: () -> Unit,
+    onResetPadLayout: () -> Unit,
     onPauseResume: () -> Unit,
     onExit: () -> Unit,
 ) {
@@ -130,7 +133,7 @@ fun GameDrawer(
                                 when (DrawerTab.entries[tab]) {
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
-                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity) { onOpenChange(false) }
+                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity, onLayoutEditor, onResetPadLayout)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -207,12 +210,13 @@ private fun FrameGenRows(settings: FrameGenSettings, status: String) {
     }
 }
 
-/** 画面与操作页：宿主菜单的行，直控（即改即生效并持久保存在包的 settings.txt） */
+/** 画面与操作页：手柄的显示与浓淡（App 的偏好，唯一真值），其余是宿主的设置（即改即生效并存进包的 settings.txt） */
 @Composable
 private fun DisplayRows(
     padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
-    onCloseDrawer: () -> Unit,
+    onLayoutEditor: () -> Unit,
+    onResetPadLayout: () -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -232,8 +236,10 @@ private fun DisplayRows(
     SwitchRow(stringResource(R.string.drawer_rumble), rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
     SwitchRow(stringResource(R.string.drawer_fps_counter), fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
     SwitchRow(stringResource(R.string.drawer_docked), docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
-    // 布局编辑器是宿主画的，画在游戏画面上：抽屉先收起，否则它盖着编辑器
-    QuietButton(stringResource(R.string.drawer_layout_editor), onClick = { onCloseDrawer(); Native.menuEditOpen() }, modifier = Modifier.fillMaxWidth())
+    // 布局编辑器：App 自己的面板（画在游戏画面上，游戏先等着）
+    QuietButton(stringResource(R.string.drawer_layout_editor), onClick = onLayoutEditor, modifier = Modifier.fillMaxWidth())
+    // 恢复默认布局：控件回到布局自己放的地方与大小（存进数据包的 settings.txt）
+    QuietButton(stringResource(R.string.drawer_pad_reset_layout), onClick = onResetPadLayout, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable

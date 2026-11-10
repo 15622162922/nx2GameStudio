@@ -1,4 +1,4 @@
-// Android port: the on-screen gamepad's layout, shared by the touch handling (front_android.c) and its drawing (gfx_vk_present.c, with the app's theme: overlay_theme.c).
+// Android port: the on-screen gamepad's layout, shared by the touch handling (front_player.c) and its drawing (gfx_vk_present.c, with the app's theme: overlay_theme.c).
 // Two layouts, the tablet's and the phone's (dm/android/overlay_default.tsv): a control's centre is x window heights from its anchor (the left edge, the middle
 // or the right edge: a thumb reaches as far from the edge on any width) and y of the window's height down; its size is in window heights (round controls stay round)
 #pragma once
@@ -13,13 +13,13 @@ static const ov_ctl OV_LAYOUTS[2][DM_AOV_N] = {{DM_AOV_TABLET}, {DM_AOV_PHONE}};
 #define OV_N DM_AOV_N
 // the layout in use: the phone's when the window is at least OV_PHONE_ASPECT wide for its height (a 20:9 phone is 2.2, a 16:10 tablet 1.6), else the tablet's
 #define OV_PHONE_ASPECT 1.9f
-int dm_overlay_layout(void);   // front_android.c: 0 the tablet's, 1 the phone's
+int dm_overlay_layout(void);   // front_player.c: 0 the tablet's, 1 the phone's
 #define OV_CTLS (OV_LAYOUTS[dm_overlay_layout()])
 #define OV_KNOB 0.42f        // a stick's knob radius, of the stick's (the theme-less drawing)
 #define OV_MENU_ALPHA 0.70f
 #define OV_FLASH_NS 180000000ll   // a pressed button's flash fades to its held glow in this time
-// front_android.c → gfx_vk_present.c: what to draw (0 nothing: a controller is attached, and its keys open the menu; 1 the gamepad; 2 only the menu
-// button: the player hid the gamepad, or keys came from a device not counted as a controller), where a stick's knob is (its offset from the stick's centre
+// front_player.c → gfx_vk_present.c: what to draw (0 nothing — in the player the app draws the gamepad over the game's frame, and the host draws no panel of its own;
+// 1 the gamepad; 2 only the menu button), where a stick's knob is (its offset from the stick's centre
 // in stick radii, -1..1), and when each control was pressed (0 = not held; for the d-pad, its four directions by DM_BTN_* bit; a stick: while a finger holds it)
 int dm_overlay_visible(void);
 void dm_overlay_knob(int stick, float *dx, float *dy);
@@ -113,7 +113,7 @@ static inline int ov_menu_item(int tab, int row) { return row == 0 ? OVM_TAB : r
 // changes with each). Bit 16: the text entry's panel instead (its edit count below); bit 17: the layout editor (OVE_ST_* below); bit 18: the save picker (OVS_ST)
 int dm_menu_state(void);
 enum { OVX_IDLE, OVX_BUSY, OVX_DONE, OVX_NOSAVE, OVX_FAILED };   // Export save: the button; copying; the export's name; the game has not saved yet; failed
-int dm_save_note(char *out, int cap);   // front_android.c: the outcome (OVX_*) and the last export's name, or why it failed
+int dm_save_note(char *out, int cap);   // front_player.c: the outcome (OVX_*) and the last export's name, or why it failed
 static inline float ov_menu_scale(void) { float s = dm_overlay_scale(), fit = 0.92f / (OVM_ROWS * OV_MENU_ROW + 2 * OV_MENU_PAD); return s < fit ? s : fit; }
 static inline void ov_menu_rect(float W, float H, float r[4]) {   // x, y, width, height in window pixels
     float s = ov_menu_scale(), pw = OV_MENU_W * H * s, ph = (OVM_ROWS * OV_MENU_ROW + 2 * OV_MENU_PAD) * H * s;
@@ -138,9 +138,7 @@ static inline int ov_menu_track_value(float x, const float p[4], int row) {   //
     return OV_OPACITY_MIN + 5 * (int)lroundf(f * (OV_OPACITY_MAX - OV_OPACITY_MIN) / 5);
 }
 
-// ---- the layout editor (front_android.c, from the menu's Edit layout): the game stays held; every control (the menu button too) can be dragged, and
-// resized by a pinch or the toolbar's - and + (the tapped control, or all of them when none is). A toolbar under the top edge: its hint line and buttons;
-// Cancel with changes asks first, in a prompt in the middle. Both are drawn into the menu panel's raster (gfx_vk_present.c ov_edit_panel) ----
+// ---- the layout editor: the app's own now (it is drawn and driven there, over the game's frame; the host keeps the layout's data and the sizes below) ----
 enum { OVE_SMALLER, OVE_BIGGER, OVE_RESET, OVE_CANCEL, OVE_SAVE, OVE_GRID, OVE_N, OVE_DISCARD = OVE_N, OVE_KEEP, OVE_ALL };
 // the editor's state in dm_menu_state: bit 17, bit 0 the prompt is open, bit 1 something changed, bit 2 grid snapping, bits 4..7 the button held + 1, bits 8..15 the chosen control + 1
 #define OVE_ST 0x20000
@@ -164,15 +162,14 @@ static inline int ov_ed_button_at(float x, float y, const float p[4], int first,
     return -1;
 }
 
-// ---- the save picker (front_android.c, from the menu's Import save): the pause menu's panel and rows, with what front_android.c puts in each row: the saves in
-// saves/ newest first, OVM_ROWS - 2 to a page (left and right page), then the confirmation, then the note that the game closes. dm_menu_state: bit 18, bits 4..7
-// the highlighted row + 1, bits 20..27 the picker's edit count (a page, a confirmation) ----
+// ---- the save picker: the app's own now (the drawer lists the saves and asks for the import; the host does the export and the import itself). The rows below
+// are what the panel draws, when a host draws one: the saves in saves/ newest first, OVM_ROWS - 2 to a page (left and right page), then the confirmation ----
 #define OVS_ST 0x40000
 enum { OVS_EMPTY, OVS_TITLE, OVS_ITEM, OVS_NOTE, OVS_BUTTON, OVS_BACK };   // a row: nothing; the title (left) and the page (right); a save (its name, its size);
 typedef struct { int style; char left[80], right[40]; } ov_srow;            // a line of text; a button (the import); Back or Cancel, centred as Resume is
-int dm_save_rows(ov_srow rows[OVM_ROWS]);   // front_android.c: the picker's rows, 0 when it is not open
+int dm_save_rows(ov_srow rows[OVM_ROWS]);   // the picker's rows, 0 when it is not open (the player front draws none)
 
-// ---- the text entry's keyboard (front_android.c front_text_input, drawn by gfx_vk_present.c ov_text_panel), in the pause menu's panel rectangle ----
+// ---- the text entry's keyboard (front_player.c front_text_input, drawn by gfx_vk_present.c ov_text_panel), in the pause menu's panel rectangle ----
 // Four rows of ten character keys and a row of four wide ones; p is the panel's rectangle (x, y, width, height: the window's for touches, the raster's for drawing).
 // The panel: the title (its top 13%), the text field (to 28%), the keys (to 90%), the key hints
 #define OVK_N 44

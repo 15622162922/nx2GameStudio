@@ -2,6 +2,7 @@ package com.nx.android.game
 
 import android.app.Activity
 import android.content.Intent
+import android.hardware.input.InputManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -25,6 +26,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,8 +44,11 @@ import com.nx.android.data.LosslessDll
 import com.nx.android.data.PrefsStore
 import com.nx.android.ui.ProvideAppLocale
 import com.nx.android.ui.game.GameDrawer
+import com.nx.android.ui.game.PadEditor
 import com.nx.android.ui.game.PadView
+import com.nx.android.ui.game.TextPrompt
 import com.nx.android.ui.theme.NxTheme
+import org.json.JSONObject
 
 /**
  * 音量键归 Android：游戏的音频走媒体音量组（AAUDIO_USAGE_GAME），系统拿不到这些键就永远调不了音量
@@ -105,6 +110,52 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var packPath: String? = null
     private lateinit var padView: PadView
 
+    /** 游戏要文字时（宿主的通知 3）：App 用系统输入法问玩家 */
+    private data class TextReq(val title: String, val text: String, val max: Int)
+    private var textReq by mutableStateOf<TextReq?>(null)
+
+    /** 布局编辑器开着吗（App 自己的面板：游戏等着，触摸归编辑器） */
+    private var editorOpen by mutableStateOf(false)
+
+    // ---- 物理手柄：App 监听系统的输入设备，告诉宿主有几个在用（宿主不再自己轮询设备列表）----
+    private val inputManager: InputManager get() = getSystemService(InputManager::class.java)
+    private val ctrlDevices = mutableSetOf<Int>()   // 真正发过输入的手柄（发过才算在用）
+    private var ctrlListener: InputManager.InputDeviceListener? = null
+    private var ctrlCount = -1
+
+    private fun isGamepad(deviceId: Int): Boolean {
+        val d = inputManager.getInputDevice(deviceId) ?: return false
+        if (d.isVirtual) return false   // 虚拟设备（小米常驻的 uinput-xiaomi 之类）：它说是手柄，却从不发输入
+        val s = d.sources
+        return (s and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+               (s and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+    }
+
+    /** 一个手柄发了输入：它算「在用」，虚拟手柄不算（老前端也是这个规矩：issue #22） */
+    private fun noteController(source: Int, deviceId: Int) {
+        if ((source and (InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK)) == 0) return
+        if (!isGamepad(deviceId)) return
+        if (ctrlDevices.add(deviceId)) pushControllers()
+    }
+
+    private fun pushControllers() {
+        val n = ctrlDevices.size
+        if (n == ctrlCount) return
+        ctrlCount = n
+        padView.setControllers(n)   // 有手柄在用：虚拟手柄让位
+        runCatching { Native.padDevices(n) }   // 宿主还没载入时跳过
+    }
+
+    private fun watchControllers() {
+        val l = object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(id: Int) { pushControllers() }   // 接上了不算在用：它得先发输入
+            override fun onInputDeviceRemoved(id: Int) { if (ctrlDevices.remove(id)) pushControllers() }
+            override fun onInputDeviceChanged(id: Int) { pushControllers() }
+        }
+        ctrlListener = l
+        runCatching { inputManager.registerInputDeviceListener(l, Handler(Looper.getMainLooper())) }
+    }
+
     private fun immersive() {
         window.decorView   // the decor must exist: the insets controller hangs off it (a plain Activity has none until it is asked for)
         if (Build.VERSION.SDK_INT >= 30) window.insetsController?.let {
@@ -124,7 +175,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         frame.addView(surface, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // 虚拟手柄绘制层（android-virtual-pad）：画在游戏画面之上、抽屉之下；不消费触点——命中与分流在宿主
         packPath = intent.getStringExtra(EXTRA_PACK)
-        padView = PadView(this, PrefsStore(this), packPath?.let { java.io.File(it) })
+        val titleId = intent.getStringExtra(EXTRA_TITLE_ID)?.ifEmpty { null }
+        padView = PadView(this, PrefsStore(this), packPath?.let { java.io.File(it) }, titleId)
+        padView.onMenuTapped = { runOnUiThread { drawerOpen = !drawerOpen } }   // ☰ 按钮：App 开自己的抽屉
         frame.addView(padView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // the drawer's layer: a ComposeView over the game's surface (the composition needs the activity's owners on the view)
         val compose = ComposeView(this)
@@ -147,8 +200,14 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             finish()
             return
         }
+        // 旧版宿主编的包：老的前端没有 frontCaps 这个入口（调用即抛），这个包要用当前版本重新移植
+        val caps = runCatching { Native.frontCaps() }.getOrNull()
+        if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0) {
+            toast(locale.str(R.string.game_needs_report))
+            finish()
+            return
+        }
         // the title id keeps this game's saves, temp and log apart from the others' (host_start_common)
-        val titleId = intent.getStringExtra(EXTRA_TITLE_ID)?.ifEmpty { null }
         fgSettings = titleId?.let { FrameGenSettings(PrefsStore(this), it) }
         val env = fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()
         if (!Native.start(pack, filesDir.path, titleId, resources.displayMetrics.densityDpi, env, this)) {
@@ -156,14 +215,17 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             return
         }
         hostRunning = true
+        // 手柄的显示与浓淡：App 的偏好是唯一真值，宿主只留运行时的副本（settings.txt 不再写这两项）
+        runCatching { Native.padPrefs(padView.shown, padView.opacity) }
+        watchControllers()
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
     /**
-     * 宿主的上行通知（front_android.c 的 dm_app_notice）：宿主不知道抽屉，它只说发生了什么。
+     * 宿主的上行通知（front_player.c 的 dm_app_notice）：宿主不知道抽屉，它只说发生了什么。
      * 1 = 玩家点了 ☰（轻点不是拖动）→ 抽屉开关；2 = 宿主打开了自己的面板（文本输入/布局编辑器/存档选择）
-     * → 抽屉收起，面板画在游戏画面上，不被抽屉盖住。
+     * → 抽屉收起，面板画在游戏画面上，不被抽屉盖住；3 = 游戏要文字 → App 用系统输入法问玩家。
      * 通知可能来自宿主的任何线程（触摸那条在主线程，文本输入那条在游戏的线程上），状态只在主线程上改。
      */
     fun onHostNotice(what: Int) {
@@ -171,8 +233,42 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             when (what) {
                 1 -> drawerOpen = !drawerOpen
                 2 -> drawerOpen = false
+                3 -> textReq = readTextRequest()
             }
         }
+    }
+
+    /** 游戏要问的内容（宿主那边挂着，等着 App 的回答） */
+    private fun readTextRequest(): TextReq? = runCatching {
+        val o = JSONObject(Native.textRequest())
+        TextReq(o.optString("title"), o.optString("text"), o.optInt("max", 0))
+    }.getOrNull()
+
+    /** 玩家的回答：文字交回宿主，游戏的线程继续 */
+    private fun submitText(ok: Boolean, text: String) {
+        textReq = null
+        runCatching { Native.textResult(ok, text) }
+    }
+
+    // ---- 布局编辑器（App 自己的面板）：游戏等着，触摸归编辑器 ----
+
+    private fun openEditor() {
+        drawerOpen = false
+        editorOpen = true
+        padView.openEditor()
+        runCatching { Native.hold(true) }   // 游戏先等着（时钟不走，声音静下来）
+    }
+
+    /** 关闭编辑器：改动已经存好了（拖动松手就存，大小对话框确定才存），这里只是收尾 */
+    private fun closeEditor() {
+        editorOpen = false
+        padView.closeEditor()
+        runCatching { Native.hold(false) }
+    }
+
+    /** 恢复默认布局：控件回到布局自己放的地方与大小（存进数据包的 settings.txt） */
+    private fun resetPadLayout() {
+        padView.resetControls()
     }
 
     /** the drawer's tree: handle, panel, and the paused overlay (the surface keeps presenting through it) */
@@ -196,6 +292,8 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onPadShown = { padView.shown = it },
                 padOpacity = { padView.opacity },
                 onPadOpacity = { padView.opacity = it },
+                onLayoutEditor = { openEditor() },
+                onResetPadLayout = { resetPadLayout() },
                 onPauseResume = {
                     paused = !paused
                     Native.lifecycle(if (paused) 0 else 1)
@@ -205,25 +303,43 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                     endGame()
                 },
             )
+            // 布局编辑器：App 自己的面板，画在游戏画面上（游戏先等着）
+            if (editorOpen) {
+                PadEditor(
+                    controls = { padView.controls() },
+                    onDrag = { c, cx, cy -> padView.moveControl(c, cx, cy) },
+                    onDrop = { c, cx, cy -> padView.dropControl(c, cx, cy) },
+                    onSizePreview = { c, s -> padView.previewSize(c, s) },
+                    onSizeCommit = { c, s -> padView.commitSize(c, s) },
+                    onSizeCancel = { c -> padView.cancelPreview(c) },
+                    onDone = { closeEditor() },
+                )
+            }
+            // 游戏的文本输入：系统的输入法（宿主那边挂起游戏等着）
+            textReq?.let { req ->
+                key(req.title + req.text) {
+                    TextPrompt(req.title, req.text, req.max,
+                        onOk = { submitText(true, it) },
+                        onCancel = { submitText(false, "") })
+                }
+            }
         }
     }
 
     // ---- the surface: the window passes over owned, and dropping it destroys the swapchain before it returns ----
-    override fun surfaceCreated(h: SurfaceHolder) = Native.setSurface(h.surface)
-    override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) = Native.setSurface(h.surface)
+    override fun surfaceCreated(h: SurfaceHolder) { Native.setSurface(h.surface); padView.fetchLayout() }
+    override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) { Native.setSurface(h.surface); padView.fetchLayout() }
     override fun surfaceDestroyed(h: SurfaceHolder) = Native.setSurface(null)
 
-    // ---- input: raw snapshots, the shared core classifies (jni_android.c) ----
+    // ---- input: the touches are the app's now (it works out what they hit); the keys go to the host ----
     override fun onTouchEvent(e: MotionEvent): Boolean {
-        val n = minOf(e.pointerCount, 16)
-        val ids = IntArray(n) { e.getPointerId(it) }
-        val xs = FloatArray(n) { e.getX(it) }
-        val ys = FloatArray(n) { e.getY(it) }
-        Native.motion(e.source, e.deviceId, e.action, ids, xs, ys, axes(e))
+        if (editorOpen) return true   // 编辑器开着：触摸归编辑器
+        padView.onTouch(e)
         return true
     }
 
     override fun onGenericMotionEvent(e: MotionEvent): Boolean {
+        noteController(e.source, e.deviceId)   // 手柄动了：它算「在用」，虚拟手柄让位
         Native.motion(e.source, e.deviceId, e.action, IntArray(0), FloatArray(0), FloatArray(0), axes(e))
         return true
     }
@@ -246,6 +362,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             if (e.action == KeyEvent.ACTION_DOWN) {
                 val hostPanel = !drawerOpen && hostPanelUp()   // 抽屉在前面时，Back 归抽屉
                 when {
+                    editorOpen -> closeEditor()   // 编辑器：Back 是收工（改动早就存好了）
                     drawerOpen -> drawerOpen = false
                     hostPanel -> Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)   // 宿主的面板在后退一步
                     else -> drawerOpen = true
@@ -253,8 +370,10 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
             }
             return true   // Back 只在宿主的面板开着时交给宿主
         }
-        if (e.action == KeyEvent.ACTION_DOWN || e.action == KeyEvent.ACTION_UP)
+        if (e.action == KeyEvent.ACTION_DOWN || e.action == KeyEvent.ACTION_UP) {
+            noteController(e.source, e.deviceId)   // 手柄按了键：它算「在用」，虚拟手柄让位
             Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)
+        }
         return true
     }
 
@@ -263,7 +382,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         runCatching { Native.menuState().substringBefore(' ').toIntOrNull() ?: -1 }.getOrDefault(-1) != -1
 
     // ---- lifecycle: the same dance as the NativeActivity's callbacks ----
-    override fun onResume() { super.onResume(); Native.lifecycle(1) }
+    override fun onResume() { super.onResume(); Native.lifecycle(1); padView.fetchLayout() }
 
     /** The phone's language changed (configChanges holds it): the app's words are read again */
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -275,6 +394,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersive()
         Native.lifecycle(if (hasFocus) 2 else 3)
+    }
+
+    override fun onDestroy() {
+        ctrlListener?.let { runCatching { inputManager.unregisterInputDeviceListener(it) } }
+        ctrlListener = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

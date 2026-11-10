@@ -20,7 +20,7 @@ PKG, LIB, LABEL = ARGS.package, ARGS.lib, ARGS.label
 MIN_SDK, TARGET_SDK = 29, 36
 ANDROID_NS = 'http://schemas.android.com/apk/res/android'
 # configChanges: what the game takes without its activity made again. Android relaunches the activity for any other change while it runs, and that ends the game
-# (front_android.c on_destroy: one game per process): switching dark mode (uiMode) ended Link's Awakening in the emulator's Android 13 image. The rest are what
+# (the app's game page ends the :play process: one game per process): switching dark mode (uiMode) ended Link's Awakening in the emulator's Android 13 image. The rest are what
 # Android can change during play (a keyboard or controller connected, split screen, the language, the font size): the set game engines declare
 CONFIG_CHANGES = (0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020 | 0x0040 | 0x0080 | 0x0100 | 0x0200 | 0x0400 | 0x0800 | 0x1000 | 0x2000 | 0x4000
                   | 0x10000000 | 0x40000000)   # mcc mnc locale touchscreen keyboard keyboardHidden navigation orientation screenLayout uiMode screenSize
@@ -49,8 +49,8 @@ MANIFEST = ('manifest', [(False, 'package', PKG), (True, 'versionCode', ARGS.ver
     ('uses-permission', [(True, 'name', 'android.permission.MANAGE_EXTERNAL_STORAGE')], []),
     ('application', [(True, 'label', LABEL)] + ([(True, 'icon', ('ref', ICON_ID))] if ARGS.icon else []) + [(True, 'hasCode', bool(ARGS.dex)), (True, 'debuggable', not ARGS.release), (True, 'isGame', True), (True, 'extractNativeLibs', True),
         (True, 'appCategory', 0),   # a game (appCategory game = 0, and the older isGame): Android's game mode and game dashboard, and the device maker's game tools, apply to it
-        # no predictive back: from target SDK 36 the system takes the back gesture itself and finishes the activity, which ends the game (front_android.c on_destroy), without
-        # dispatching KEYCODE_BACK; opted out, the gesture comes as the Back key, which opens the front end's menu
+        # no predictive back: from target SDK 36 the system takes the back gesture itself and finishes the activity, which ends the game (the app's game page ends the
+        # :play process), without dispatching KEYCODE_BACK; opted out, the gesture comes as the Back key, which the app answers (the drawer)
         (True, 'enableOnBackInvokedCallback', False)], [
         # the launcher (when the APK carries one): the icon opens it, and it starts the game
         *([('activity', [(True, 'name', ARGS.launcher_activity), (True, 'exported', True), (True, 'theme', ('ref', THEME_NO_TITLE)), (True, 'configChanges', ('hex', CONFIG_CHANGES))] + ([(True, 'screenOrientation', 6)] if ARGS.landscape else []), [

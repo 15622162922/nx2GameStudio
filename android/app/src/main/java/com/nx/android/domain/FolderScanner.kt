@@ -8,6 +8,9 @@ import java.io.File
  */
 object FolderScanner {
 
+    /** 宿主的前端（数据包清单的 "host_front"）：当前版本要的前端。老的包里没有这个字段，那样的包要重新移植 */
+    const val HOST_FRONT = "player"
+
     /** A title ID in a file's name: `Zelda [0100000000010000][v0].nsp` → 0100000000010000 */
     fun titleIdIn(name: String): String? =
         Regex("\\[(0[0-9a-fA-F]{15})]").find(name)?.groupValues?.get(1)?.uppercase()
@@ -44,7 +47,8 @@ object FolderScanner {
         return Ported(pack = pack, host = host,
                       icon = File(pack, "icon.png").takeIf { it.isFile },
                       titleId = id, name = man.optString("name"),
-                      status = man.optString("status"))
+                      status = man.optString("status"),
+                      hostFront = man.optString("host_front"))
     }
 
     /** The game's display name: the file's name without its brackets and extension */

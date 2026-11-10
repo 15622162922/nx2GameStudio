@@ -5,7 +5,7 @@ import java.io.IOException
 
 /**
  * The game's runtime log: the host writes its whole stderr into `log.txt` in the game's data pack
- * (front_android.c's host_start_common), so a run's lines - the host's notices and the backtrace of a
+ * (front_player.c's host_start_common), so a run's lines - the host's notices and the backtrace of a
  * crash - lie in the pack. The app shares that log: the file is copied into the download folder and sent
  * from there, the way the save packages go out.
  */

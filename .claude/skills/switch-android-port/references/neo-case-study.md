@@ -59,7 +59,7 @@ The phases are in order. Each records what was done, what broke, how it was foun
 - **First frame:** the publisher logo, 16.66 ms, about 22 draws. Then the intro and the title screen, both correct.
 
 ## G. In the app (minutes)
-- **App-only SIGSEGV at main+0x2a59b4:** the IL2CPP garbage collector scans the main thread's stack from its reported bottom, and with bionic's own stack that range included an unreadable guard page. Fix: mmap a 16 MB stack with a 64 KB guard and pass it with `pthread_attr_setstack` (`front_android.c`).
+- **App-only SIGSEGV at main+0x2a59b4:** the IL2CPP garbage collector scans the main thread's stack from its reported bottom, and with bionic's own stack that range included an unreadable guard page. Fix: mmap a 16 MB stack with a 64 KB guard and pass it with `pthread_attr_setstack` (`front_player.c`).
 - `adb shell input tap` was too short to register; a 250 ms `input swipe` hold works.
 - The first 3D scene ran at 53–81 ms a frame: 145 passes for 148 draws.
 

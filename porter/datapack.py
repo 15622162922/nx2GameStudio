@@ -1,4 +1,4 @@
-# The data pack: everything the app reads from its files folder on the device (/sdcard/Android/data/<package>/files, front_android.c), as a folder beside the APK:
+# The data pack: everything the app reads from its files folder on the device (/sdcard/Android/data/<package>/files, front_player.c), as a folder beside the APK:
 #   mods/          the rewritten code modules (patch_nso.py's outputs)
 #   RomFS/         the game's files (the packed version's merged RomFS)
 #   aoc/<index>/   the DLC the player has
@@ -14,6 +14,8 @@ from pathlib import Path
 MANIFEST = 'nx2a-data.json'
 KEEP_ON_DEVICE = ('settings.txt',)          # the player's choices win over the pack's defaults
 OWNED = ('mods', 'RomFS', 'aoc')            # folders the pack owns on the device: files there that the pack lacks are stale (an older version's) and removed
+HOST_FRONT = 'player'                       # the front end the pack's host was built with (the player front: the app draws the gamepad, the host draws no panel).
+                                          # The app compares it with the front its own build needs: a pack built with another front has to be ported again
 
 
 def link_or_copy(src, dst):
@@ -65,13 +67,22 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     if host: man['host'] = host         # the app's mode: the game's host (libdmplay.so) in the pack, the app copies it into its private folder to run the game
     if icon: man['icon'] = icon
     if drivers: man['drivers'] = list(drivers)
+    man['host_front'] = HOST_FRONT      # the front the host was built with: the app knows a pack from another front has to be ported again
     (tmp / MANIFEST).write_text(json.dumps(man, indent=2), encoding='utf-8')
+    # the exported saves (the player's backups) are not the build's own: the pack is rebuilt whole, so they are put aside and put back
+    keep = dst.with_name(dst.name + '.saves-keep')
+    shutil.rmtree(keep, ignore_errors=True)
+    exported = dst / 'saves'
+    if exported.is_dir(): shutil.move(str(exported), str(keep))
     shutil.rmtree(dst, ignore_errors=True)   # the pack of the last port: it may be gone already (the player deleted it), and the files it holds are the build's own (hard links)
     for i in range(20):   # Windows: a folder just removed can stay delete-pending while another process (an indexer, a virus scan) holds it, and the rename is refused meanwhile
         try: tmp.rename(dst); break
         except PermissionError:
             if i == 19: raise
             time.sleep(0.5)
+    if keep.is_dir():
+        shutil.move(str(keep), str(dst / 'saves'))   # the backups are back where the save manager looks for them
+    shutil.rmtree(keep, ignore_errors=True)
     return man
 
 

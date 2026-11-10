@@ -37,7 +37,7 @@ class AndroidProfiles(unittest.TestCase):
         self.assertIn(NEO, [r.id for r in rows]); self.assertTrue(all(r.android for r in rows))
         self.assertGreater(len(profiles.all_entries(android_only=False)), len(rows))
 
-    def test_fps_setting(self):   # the pause menu's Show FPS (front_android.c settings_load fps=)
+    def test_fps_setting(self):   # the pause menu's Show FPS (front_player.c settings_load fps=)
         d = profile_dir([('status', 'boots'), ('setting', 'fps=1')])
         self.assertEqual(android_profile.load(d.name).settings, {'fps': '1'})
         with self.assertRaises(android_profile.ProfileError): android_profile.load(profile_dir([('status', 'boots'), ('setting', 'fps=2')]).name)
@@ -141,6 +141,33 @@ class DataPack(unittest.TestCase):
             bare = android_profile.load(profile_dir([('status', 'experimental')]).name); os.environ.pop('DM_GAMES_DIR', None)   # no setting rows: --touch alone still writes the file
             datapack.build(t / 'bare-data', profile=bare, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv', settings=pipeline.TOUCH_SETTINGS)
             self.assertEqual((t / 'bare-data/settings.txt').read_text(), 'overlay=0\n')
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
+    def test_the_manifest_says_which_front_the_host_has(self):   # the app compares it with the front it needs: a pack from another front has to be ported again
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
+            (t / 'romfs').mkdir(); (t / 'shaders.dmsv').write_bytes(b'DMSV')
+            p = profiles.load(NEO)
+            man = datapack.build(t / 'out-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
+            self.assertEqual(man['host_front'], datapack.HOST_FRONT)
+            self.assertEqual(datapack.read_manifest(t / 'out-data')['host_front'], datapack.HOST_FRONT)
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
+    def test_the_exported_saves_survive_a_rebuild(self):   # the pack is rebuilt whole: the player's exported backups are put aside and put back
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
+            (t / 'romfs').mkdir(); (t / 'shaders.dmsv').write_bytes(b'DMSV')
+            p = profiles.load(NEO)
+            o = t / 'out-data'
+            datapack.build(o, profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
+            (o / 'saves').mkdir(); (o / 'saves' / '20261110-120000').mkdir(); (o / 'saves' / '20261110-120000' / 'save.dat').write_bytes(b'SAVE')
+            datapack.build(o, profile=p, version='v196609', display='1.04', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
+            self.assertTrue((o / 'saves' / '20261110-120000' / 'save.dat').is_file())   # the backup is still there
+            self.assertFalse((t / 'out-data.saves-keep').exists())                     # and the side folder is gone
         finally:
             shutil.rmtree(t, ignore_errors=True)
 

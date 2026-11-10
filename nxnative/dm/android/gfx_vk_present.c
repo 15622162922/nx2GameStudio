@@ -66,8 +66,8 @@ __attribute__((weak)) float dm_overlay_scale(void) { return 1; }
 __attribute__((weak)) void dm_overlay_knob(int stick, float *dx, float *dy) { (void)stick; *dx = *dy = 0; }
 __attribute__((weak)) int64_t dm_overlay_pressed(int ctl, uint64_t bit) { (void)ctl; (void)bit; return 0; }
 __attribute__((weak)) int dm_menu_state(void) { return -1; }
-__attribute__((weak)) int dm_overlay_fps(void) { return 0; }   // front_android.c: the pause menu's Show FPS
-__attribute__((weak)) int dm_save_note(char *out, int cap) { if (cap > 0) out[0] = 0; return OVX_IDLE; }   // front_android.c: the save manager's rows
+__attribute__((weak)) int dm_overlay_fps(void) { return 0; }   // front_player.c: the pause menu's Show FPS
+__attribute__((weak)) int dm_save_note(char *out, int cap) { if (cap > 0) out[0] = 0; return OVX_IDLE; }   // front_player.c: the save manager's rows
 __attribute__((weak)) int dm_save_rows(ov_srow rows[OVM_ROWS]) { (void)rows; return 0; }
 __attribute__((weak)) int dm_overlay_custom(int layout, int ctl, float *x, float *y, float *s) { (void)layout; (void)ctl; (void)x; (void)y; *s = 1; return 0; }
 __attribute__((weak)) int dm_overlay_custom_ver(void) { return 0; }
@@ -252,7 +252,7 @@ static void ov_menu_icon(const ov_canvas *cv, const ov_ctl *c, const float b[4])
     float bw = r * 0.50f, bt = fmaxf(2, r * 0.11f), gap = r * 0.30f, cx = b[0], cy = b[1];
     for (int k = -1; k <= 1; k++) cv_rrect(cv, cx - bw, cy + k * gap - bt / 2, cx + bw, cy + k * gap + bt / 2, bt / 2, C_WHITE);
 }
-// the text entry (front_android.c front_text_input), in the pause menu's panel: the game's title for it, the field with the text and a caret, the keyboard
+// the text entry (front_player.c front_text_input), in the pause menu's panel: the game's title for it, the field with the text and a caret, the keyboard
 // (overlay_layout.h ov_kb_*: the same rectangles the touches are tested against) with the highlighted key, and the controller's keys
 static void ov_text_panel(const ov_canvas *cv) {
     char title[128], text[256]; int sel, shift; if (!dm_text_entry(title, sizeof title, text, sizeof text, &sel, &shift)) return;
@@ -378,7 +378,7 @@ static void ov_edit_panel(const ov_canvas *cv, int st) {
     cv_text(cv, pr[0] + (pr[2] - cv_text_w(q, qs)) / 2, pr[1] + pr[3] * 0.27f, q, qs, C_WHITE);
     for (int i = OVE_DISCARD; i <= OVE_KEEP; i++) { float b[4]; ov_ed_button(i, pr, b); cv_button(cv, b, words[i], i == OVE_DISCARD, i == held); }
 }
-// The save picker (overlay_layout.h OVS_*): the menu panel's rows, as front_android.c fills them (dm_save_rows); letters as the menu's (notes a little smaller),
+// The save picker (overlay_layout.h OVS_*): the menu panel's rows, as front_player.c fills them (dm_save_rows); letters as the menu's (notes a little smaller),
 // each kind of row at one size: the largest at which all its rows' two texts fit
 static void ov_save_panel(const ov_canvas *cv, int st) {
     ov_srow rows[OVM_ROWS]; if (!dm_save_rows(rows)) return;

@@ -6,156 +6,354 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
-import android.view.HapticFeedbackConstants
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.MotionEvent
 import android.view.View
 import com.nx.android.data.PrefsStore
 import com.nx.android.game.Native
 import org.json.JSONObject
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
 
 /**
- * 虚拟手柄的绘制层（android-virtual-pad）：只画，不碰触点——命中测试与输入分流全在宿主
- * （触点原样转发，front_android.c 的 touch_event 分流），所以触控行为与拆分前逐一致。
- * 绘制优先用数据包自带的主题贴图（overlay/theme.tsv + 图册，与宿主主题同一套数据），
- * 没有主题时退回矢量绘制。布局与实时状态从宿主读取（dm_pad_layout_json / dm_pad_state_json，
- * 控件中心/半径与命中测试同一份数据），版本号或窗口尺寸变化即重读；物理手柄接入时隐藏，
- * 宿主的暂停菜单或布局编辑器画着自己的界面时也让位。
+ * 虚拟手柄的绘制层（android-virtual-pad）：只画，命中判定与输入分流在 App 自己手里
+ * （PadModel 的 PadHit / PadRouter），宿主只收结果（Native.padInput）。
+ *
+ * App 自己知道按住了什么、摇杆的帽在哪：不再每帧轮询宿主的状态，也没有「让位标志」那一套。
+ * 布局来自宿主（dm_pad_layout_json）：控件的位置与大小（按屏幕密度缩放好的），还有圆角与可达范围。
+ * 绘制优先用数据包自带的主题贴图（overlay/theme.tsv + 图册，与宿主主题同一套数据），没有主题时退回矢量绘制。
+ *
+ * 画的时候每帧不分配：贴图按控件分好组（theme.tsv 读进来时就分），名字到下标的表也是，
+ * 贴图的源与目标矩形是复用的，控件表缓存着（编辑器改了它才重算）。
  */
-class PadView(context: Context, private val prefs: PrefsStore, private val pack: File?) : View(context) {
+class PadView(context: Context, private val prefs: PrefsStore, private val pack: File?, private val titleId: String?) : View(context) {
 
     companion object {
         const val KEY_SHOWN = "pad.shown"
         const val KEY_OPACITY = "pad.opacity"
         private val LABELS = mapOf("plus" to "+", "minus" to "−")
+        private const val TAP_MS = 14      // 按下那一下的时长（照旧宿主 haptics_android.c 的 vib_tap）
+        private const val TAP_AMP = 140    // 它的振幅（1..255）
     }
 
-    private data class Ctrl(val n: String, val kind: String, val btn: Long, val cx: Float, val cy: Float, val hw: Float, val hh: Float)
-    private class Sp(val ctl: String, val state: String, val ax: Int, val ay: Int, val aw: Int, val ah: Int, val ox: Float, val oy: Float)
+    /** 一个贴图：图册里的位置与大小、相对控件中心的偏移（设计用的 CSS px） */
+    private class Sp(
+        val part: String, val state: String,
+        val ax: Int, val ay: Int, val aw: Int, val ah: Int, val ox: Float, val oy: Float,
+    )
 
-    private var ctrls: List<Ctrl> = emptyList()
+    /** 控件的一个部分（十字键的一个方向，按键就是它自己）：静止与按住的两张贴图 */
+    private class Part(val part: String) {
+        var idle: Sp? = null
+        var held: Sp? = null
+    }
+
+    /** 一个控件的贴图：装饰（在别的下面）、摇杆的帽、它的各部分 */
+    private class CtlSp {
+        val decor = ArrayList<Sp>(1)
+        val knob = ArrayList<Sp>(1)
+        val parts = ArrayList<Part>(4)
+        fun part(name: String): Part {
+            for (p in parts) if (p.part == name) return p
+            val p = Part(name); parts.add(p); return p
+        }
+    }
+
+    /** 「显示手柄」每个游戏一份（键 pad.shown.<title id>） */
+    private val shownKey = if (titleId.isNullOrEmpty()) KEY_SHOWN else "$KEY_SHOWN.$titleId"
+
+    /** 布局（宿主给的）与路由（App 自己的） */
+    var layout: PadLayout = PadLayout()
+        private set
+    private val router = PadRouter()
     private var layoutName = "tablet"
-    private var layoutVer = -1L
-    private var layoutW = 0f        // 布局 fractions 算出时的宿主窗口尺寸（padLayout 的 w/h）
+    private var layoutVer = -1
+    private var layoutW = 0f        // 布局算出来的宿主窗口尺寸
     private var layoutH = 0f
-    private var stateVer = -1
-    private var pressed: Set<Int> = emptySet()
-    private var btnBits = 0L
-    private var pads = 0
-    private var hostUi = false      // 宿主自己画着界面（暂停菜单 / 布局编辑器）：手柄让位
-    private var knobs = floatArrayOf(0f, 0f, 0f, 0f)   // lx ly rx ry，±1（窗口坐标，向下为正）
+    private var controllers = 0      // 正在使用的物理手柄（有的话，虚拟手柄让位）
+
+    /** 编辑器：控件下标 → 覆盖（拖动中的位置、大小对话框的预览）。改动只留在 App 这里，存盘时才写进宿主 */
+    private class Pend(val cx: Float, val cy: Float, val s: Float)
+    private val pend = HashMap<Int, Pend>()
+
+    /** 控件表（画的时候用）：缓存着，编辑器的改动与布局重读让它失效 */
+    private var controlsCache: List<PadControl>? = null
+
+    /** 编辑器开着吗（画的时候压暗画面，给每个控件画一圈细白框） */
+    var editing = false
+        private set
 
     private var themeReady = false
     private var themeAlpha = 1f
     private var themeScale = 1f       // atlas texels per CSS px
     private var themeTravel = 10f     // CSS px
-    private var designW = 0f
     private var designH = 0f
     private var atlas: Bitmap? = null
-    private var themeSprites: List<Sp> = emptyList()
+
+    /** 贴图按控件分好组：名字 → 它的贴图（读 theme.tsv 时分好，画的时候不再分） */
+    private val themeByCtl = HashMap<String, CtlSp>()
+    /** 每个控件（下标）的贴图：与布局里的控件一一对应 */
+    private var spriteOf = ArrayList<CtlSp?>()
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val spPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val path = Path()
-    private val rect = RectF()
+    private val dimPaint = Paint()
+    private val srcRect = Rect()
+    private val dstRect = RectF()
 
     var shown: Boolean
-        get() = prefs.bool(KEY_SHOWN, true)
-        set(v) { prefs.put(KEY_SHOWN, v); pushLayer(); invalidate() }
+        get() = prefs.bool(shownKey, true)
+        set(v) { prefs.put(shownKey, v); pushPrefs(); invalidate() }
     var opacity: Int
         get() = prefs.str(KEY_OPACITY).toIntOrNull() ?: 60
-        set(v) { prefs.put(KEY_OPACITY, v.coerceIn(10, 100).toString()); invalidate() }
+        set(v) { prefs.put(KEY_OPACITY, v.coerceIn(10, 100).toString()); pushPrefs(); invalidate() }
 
-    private fun visible(): Boolean = shown && !hostUi && pads == 0
-
-    /**
-     * 宿主那边的手柄层（虚拟手柄与 ☰ 菜单按钮是一层）：画出来才回答触摸，这一层藏起来时那一块的触摸还给游戏。
-     * 宿主开着的时候（它自己的面板要用这一层）不回答：宿主的面板自己收触摸。
-     * 推给宿主的是「画不画」，宿主那边据此决定那片区域答不答触摸（front_android.c 的 ov_answer）。
-     */
-    private var layerDrawn = true   // 上次告诉宿主的状态
-    private fun pushLayer() {
-        val v = visible()
-        if (v == layerDrawn) return
-        layerDrawn = v
-        runCatching { Native.padLayer(v) }   // 宿主还没载入（这里在 System.load 之前）或旧宿主没有这个入口：跳过
-    }
-
-    private val loop = object : Runnable {
-        override fun run() {
-            tick()
-            postOnAnimationDelayed(this, if (visible()) 16 else 250)
+    init {
+        // 玩家还没表过态时，把数据包的默认记下来：--touch 的数据包写着 overlay=0（手柄先藏着），
+        // 而宿主会重写 settings.txt（那两项不再由它保存），所以第一次见到就由 App 收下
+        if (!prefs.prefs.contains(shownKey)) {
+            val legacy = prefs.prefs.contains(KEY_SHOWN)
+            prefs.put(shownKey, if (legacy) prefs.bool(KEY_SHOWN, true) else packSaysHidden())
         }
     }
+
+    /** 数据包的第一份设置里写着 overlay=0 吗（--touch 的游戏：手柄先藏着） */
+    private fun packSaysHidden(): Boolean = runCatching {
+        val f = pack?.let { File(it, "settings.txt") } ?: return@runCatching false
+        if (!f.isFile) return@runCatching false
+        f.readLines().any { it.trim().startsWith("overlay=0") }
+    }.getOrDefault(false)
+
+    /** 把这两个值告诉宿主（宿主只留运行时的副本） */
+    private fun pushPrefs() = runCatching { Native.padPrefs(shown, opacity) }   // 宿主还没载入时跳过
+
+    /** 手柄可见吗（没有物理手柄在用时才画） */
+    fun visible(): Boolean = shown && controllers == 0
+
+    /** 物理手柄的个数变了（App 监听系统的输入设备） */
+    fun setControllers(n: Int) {
+        if (controllers == n) return
+        controllers = n
+        invalidate()
+    }
+
+    // ---- 布局：宿主给的，版本或窗口尺寸变了就重读 ----
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         fetchLayout()
         loadTheme()
-        postOnAnimationDelayed(loop, 100)   // 第一次 tick 在宿主载入之后，手柄层的事那时才推给宿主
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        if (w > 0 && h > 0 && (w != ow || h != oh)) fetchLayout()   // 尺寸一变（旋转/满屏切换）重拉布局：宿主按当前窗口算的， fractions 不再带着启动时的竖屏尺寸
+        if (w > 0 && h > 0 && (w != ow || h != oh)) fetchLayout()   // 尺寸一变（旋转/满屏切换）重拉布局
     }
 
-    override fun onDetachedFromWindow() {
-        removeCallbacks(loop)
-        super.onDetachedFromWindow()
-    }
-
-    /** 布局重读（版本或窗口尺寸变化）+ 状态轮询；按压变化才触觉反馈，状态/版本变化才重绘 */
-    private fun tick() {
+    /** 布局重读（宿主的版本号或窗口尺寸变了） */
+    fun fetchLayout() {
         runCatching {
-            val st = JSONObject(Native.padState())
-            val v = st.optLong("v", -1)
-            hostUi = st.optBoolean("e", false) || st.optBoolean("m", false)   // e: 编辑器 m: 宿主菜单
-            pads = st.optInt("pads", 0)
-            pushLayer()   // 宿主的面板开着、手柄接上了：那一层不画了，宿主也不该再回答那里的触摸
-            // 窗口尺寸也要比：旋转/满屏切换时 fetchLayout 可能跑在宿主拿到新 Surface 之前，fractions 是
-            // 旧宽高比的，而 ver 不因尺寸变化而走——按 w/h 不匹配每帧重拉，宿主窗口一更新就自愈
-            if (v != layoutVer || layoutW != width.toFloat() || layoutH != height.toFloat()) fetchLayout()
-            if (hostUi || pads > 0 || !shown) { invalidate(); return }
-            btnBits = st.optLong("btn", 0)
-            val p = st.optJSONArray("p")
-            val np = p?.length() ?: 0
-            val npSet = buildSet { for (i in 0 until np) add(p!!.optInt(i)) }
-            val changed = npSet != pressed
-            pressed = npSet
-            val k = st.optJSONArray("k")
-            if (k != null && k.length() == 2) {
-                val ka = k.optJSONArray(0) ?: return
-                val kb = k.optJSONArray(1) ?: return
-                knobs[0] = ka.optDouble(0, 0.0).toFloat(); knobs[1] = ka.optDouble(1, 0.0).toFloat()
-                knobs[2] = kb.optDouble(0, 0.0).toFloat(); knobs[3] = kb.optDouble(1, 0.0).toFloat()
-            }
-            if (changed) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val o = JSONObject(Native.padLayout())
+            val l = PadLayout.parse(o.toString())
+            if (l.w <= 0f || l.h <= 0f) return   // 宿主还没拿到窗口：这份布局没有意义，等下一次
+            layoutVer = l.ver
+            layoutW = l.w; layoutH = l.h
+            if (l.name != layoutName) { layoutName = l.name; loadTheme() }   // 布局换了（旋转跨过 1.9）：图册与精灵跟着换
+            layout = l
+            controlsCache = null
+            buildCtlIndex()
             invalidate()
         }
     }
 
-    private fun fetchLayout() {
-        runCatching {
-            val o = JSONObject(Native.padLayout())
-            layoutVer = o.optLong("ver", -1)
-            layoutW = o.optDouble("w", 0.0).toFloat(); layoutH = o.optDouble("h", 0.0).toFloat()
-            val name = o.optString("layout", "tablet")
-            if (name != layoutName) { layoutName = name; loadTheme() }   // 布局换了（旋转跨过 1.9）：图册与精灵跟着换
-            val arr = o.optJSONArray("controls") ?: return
-            val list = ArrayList<Ctrl>(arr.length())
-            for (i in 0 until arr.length()) {
-                val c = arr.optJSONObject(i) ?: continue
-                list.add(Ctrl(c.optString("n"), c.optString("k"), c.optLong("b"),
-                              c.optDouble("x", 0.0).toFloat(), c.optDouble("y", 0.0).toFloat(),
-                              c.optDouble("hw", 0.0).toFloat(), c.optDouble("hh", 0.0).toFloat()))
+    /** 控件的名字 → 它在布局里的下标（画的时候不用每帧在列表里找） */
+    private fun buildCtlIndex() {
+        spriteOf = ArrayList(layout.controls.size)
+        for (c in layout.controls) spriteOf.add(themeByCtl[c.name])
+    }
+
+    // ---- 触摸：路由，然后把结果送给宿主 ----
+
+    /** 触摸的快照（复用的：一次触摸不分配） */
+    private val tIds = IntArray(16)
+    private val tXs = FloatArray(16)
+    private val tYs = FloatArray(16)
+    private val out = PadOutput()
+
+    /**
+     * 一次触摸：算出每个手指落在哪个控件上，给游戏按键位、摇杆与触点。
+     * 返回 true：这个事件 App 吃掉了（游戏的触点已经由路由分好）。
+     */
+    fun onTouch(e: MotionEvent): Boolean {
+        val n = minOf(e.pointerCount, 16)
+        for (i in 0 until n) { tIds[i] = e.getPointerId(i); tXs[i] = e.getX(i); tYs[i] = e.getY(i) }
+        val ctrls = controls()
+        // actionMasked，不是 action：getAction() 给的是「动作 | 手指下标 << 8」的合成值，
+        // 第二根手指的 POINTER_DOWN 是 261 而不是 5，路由就认不出来（那样两个键不能一起按）
+        router.route(e.actionMasked, e.actionIndex, tIds, tXs, tYs, n, ctrls, height.toFloat(), out)
+        // 菜单按钮：拖动就是挪按钮（立刻存进宿主的布局），点按就是开抽屉
+        if (router.menuPointer >= 0) {
+            val i = tIds.indexOf(router.menuPointer)
+            if (i >= 0 && router.menuMoved(tXs[i], tYs[i], height.toFloat())) {
+                val c = ctrls.indexOfFirst { it.isMenu }
+                if (c >= 0) {
+                    val pos = router.menuPosition(tXs[i], tYs[i], ctrls[c], width.toFloat(), height.toFloat())
+                    runCatching {
+                        Native.padLayoutSet(c, pos.first, pos.second, ctrls[c].s)
+                        Native.padLayoutSave()
+                    }
+                    fetchLayout()
+                }
             }
-            ctrls = list
         }
+        if (router.takeMenuTap()) onMenuTapped()
+        runCatching {
+            Native.padInput(out.buttons, out.lx, out.ly, out.rx, out.ry, out.ids, out.xs, out.ys)
+        }
+        // 按下的那一下震：新的键被按住就震一下（旧宿主也是这样：dm_haptics_android_tap）
+        if ((out.buttons and lastButtons.inv()) != 0L) tapVibration()
+        lastButtons = out.buttons
+        invalidate()
+        return true
+    }
+
+    /** 上一次路由出来的按键位（拿来算「哪个键是刚按下的」） */
+    private var lastButtons = 0L
+
+    /**
+     * 按键按下的那一下短震：照旧宿主 haptics_android.c 的 vib_tap（14 ms、振幅 140；
+     * 机器没有振幅控制就打系统的点击效果）。系统自己的触感反馈（performHapticFeedback）跟随
+     * 「触摸振动」这个设置，很多机器上根本不震，所以这里直接用 Vibrator。
+     */
+    private fun tapVibration() {
+        val v = vibrator ?: return
+        if (!rumbleOn()) return
+        runCatching {
+            when {
+                v.hasAmplitudeControl() -> v.vibrate(VibrationEffect.createOneShot(TAP_MS.toLong(), TAP_AMP))
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> v.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+                else -> @Suppress("DEPRECATION") v.vibrate(TAP_MS.toLong())
+            }
+        }
+    }
+
+    /** 抽屉里的「震动」开关：它也是宿主自己的设置（旧宿主给按键 tick 用的就是它） */
+    private fun rumbleOn(): Boolean = runCatching { Native.menuGet(2) != 0 }.getOrDefault(true)
+
+    /** 机器的振动器（API 31 起走 VibratorManager） */
+    private val vibrator: Vibrator? = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+    }.getOrNull()
+
+    /** 点按了菜单按钮（App 开自己的抽屉） */
+    var onMenuTapped: () -> Unit = {}
+
+    /** 画哪些控件（编辑器开着时用改动过的那一份） */
+    fun controls(): List<PadControl> {
+        controlsCache?.let { return it }
+        val base = layout.controls
+        val outList: List<PadControl> = if (pend.isEmpty()) base else {
+            val l = ArrayList<PadControl>(base.size)
+            for ((i, c) in base.withIndex()) {
+                val p = pend[i]
+                l += if (p == null) c else padResized(c, p.s, layout.scale, p.cx, p.cy)
+            }
+            l
+        }
+        controlsCache = outList
+        return outList
+    }
+
+    // ---- 编辑器：改动记在 App 这里，存盘时写进宿主的布局 ----
+
+    fun openEditor() {
+        editing = true
+        pend.clear()
+        controlsCache = null
+        invalidate()
+    }
+
+    fun closeEditor() {
+        editing = false
+        pend.clear()
+        controlsCache = null
+        invalidate()
+    }
+
+    /** 拖动一个控件（窗口高度为单位）：只改 App 这里的画面 */
+    fun moveControl(ctl: Int, cx: Float, cy: Float) {
+        val c = layout.controls.getOrNull(ctl) ?: return
+        val p = pend[ctl]
+        pend[ctl] = Pend(cx, cy, p?.s ?: c.s)
+        controlsCache = null
+        invalidate()
+    }
+
+    /** 松手：把位置写进宿主并存进数据包的 settings.txt */
+    fun dropControl(ctl: Int, cx: Float, cy: Float) {
+        val c = layout.controls.getOrNull(ctl) ?: return
+        val s = pend[ctl]?.s ?: c.s
+        writeLayout(ctl, cx, cy, s)
+        pend.remove(ctl)
+        controlsCache = null
+        fetchLayout()
+    }
+
+    /** 大小对话框：滑杆拖着的时候先看看多大（只改 App 这里的画面） */
+    fun previewSize(ctl: Int, size: Float) {
+        val c = layout.controls.getOrNull(ctl) ?: return
+        val p = pend[ctl]
+        pend[ctl] = Pend(p?.cx ?: c.cx, p?.cy ?: c.cy, size)
+        controlsCache = null
+        invalidate()
+    }
+
+    /** 大小对话框：确定，把大小写进宿主并存进数据包的 settings.txt */
+    fun commitSize(ctl: Int, size: Float) {
+        val c = layout.controls.getOrNull(ctl) ?: return
+        val p = pend[ctl]
+        writeLayout(ctl, p?.cx ?: c.cx, p?.cy ?: c.cy, size)
+        pend.remove(ctl)
+        controlsCache = null
+        fetchLayout()
+    }
+
+    /** 大小对话框：取消，回到原来的大小 */
+    fun cancelPreview(ctl: Int) {
+        if (pend.remove(ctl) == null) return
+        controlsCache = null
+        invalidate()
+    }
+
+    /** 写进宿主：位置是窗口的分数（横向按宽高比换一下），大小是系数 */
+    private fun writeLayout(ctl: Int, cx: Float, cy: Float, size: Float) {
+        val aspect = if (layout.w > 0f && layout.h > 0f) layout.w / layout.h else 1f
+        runCatching {
+            Native.padLayoutSet(ctl, cx / aspect, cy, size)
+            Native.padLayoutSave()
+        }
+    }
+
+    /** 恢复默认（布局自己放的地方与大小）：宿主把存着的偏移清掉，控件回到布局给的位置 */
+    fun resetControls() {
+        pend.clear()
+        controlsCache = null
+        runCatching { Native.padLayoutReset(); Native.padLayoutSave() }
+        fetchLayout()
+        invalidate()
     }
 
     // ---- 主题：数据包的 overlay/theme.tsv + 图册（与宿主主题同源数据）----
@@ -165,7 +363,7 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
         runCatching {
             val tsv = File(packDir, "overlay/theme.tsv").readText()
             var atlasName: String? = null
-            val sprites = ArrayList<Sp>()
+            val groups = HashMap<String, CtlSp>()
             var dw = 0f; var dh = 0f
             for (raw in tsv.split('\n')) {
                 val line = raw.trimEnd('\r')
@@ -174,20 +372,30 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
                 when {
                     c.size >= 2 && c[0] == "alpha" -> themeAlpha = c[1].toFloatOrNull() ?: 1f
                     c.size >= 7 && c[0] == "layout" -> if (c[1] == layoutName) {
-                        atlasName = c[4]; dw = c[2].toFloatOrNull() ?: 0f; dh = c[3].toFloatOrNull() ?: 0f
+                        atlasName = c[4]; dh = c[3].toFloatOrNull() ?: 0f
                         themeScale = c[5].toFloatOrNull() ?: 1f; themeTravel = c[6].toFloatOrNull() ?: 10f
                     }
-                    c.size >= 10 && c[0] == "sprite" && c[1] == layoutName ->
-                        sprites.add(Sp(c[2], c[4], c[5].toIntOrNull() ?: 0, c[6].toIntOrNull() ?: 0,
-                                       c[7].toIntOrNull() ?: 0, c[8].toIntOrNull() ?: 0,
-                                       c[9].toFloatOrNull() ?: 0f, c.getOrNull(10)?.toFloatOrNull() ?: 0f))
+                    c.size >= 10 && c[0] == "sprite" && c[1] == layoutName -> {
+                        // sprite <layout> <control> <part> <state> <atlas x> <y> <w> <h> <ox> <oy>
+                        val set = groups.getOrPut(c[2]) { CtlSp() }
+                        val sp = Sp(c[3], c[4], c[5].toIntOrNull() ?: 0, c[6].toIntOrNull() ?: 0,
+                                    c[7].toIntOrNull() ?: 0, c[8].toIntOrNull() ?: 0,
+                                    c[9].toFloatOrNull() ?: 0f, c.getOrNull(10)?.toFloatOrNull() ?: 0f)
+                        when (sp.state) {
+                            "decor" -> set.decor.add(sp)
+                            "knob" -> set.knob.add(sp)
+                            "idle" -> set.part(sp.part).idle = sp
+                            "held" -> set.part(sp.part).held = sp
+                        }
+                    }
                 }
             }
             val name = atlasName ?: return
             val bmp = BitmapFactory.decodeFile(File(File(packDir, "overlay"), name).absolutePath) ?: return
-            atlas = bmp; designW = dw; designH = dh
-            themeSprites = sprites
-            themeReady = themeSprites.isNotEmpty() && dw > 0 && dh > 0
+            atlas = bmp; designH = dh
+            themeByCtl.clear(); themeByCtl.putAll(groups)
+            themeReady = groups.isNotEmpty() && dh > 0
+            buildCtlIndex()
         }
     }
 
@@ -195,57 +403,94 @@ class PadView(context: Context, private val prefs: PrefsStore, private val pack:
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val ctrls = controls()
+        if (editing) {
+            // 编辑态：画面压暗（游戏本来就等着），手柄照常画，每个控件一圈细白框提示它的边界
+            dimPaint.color = Color.argb(76, 0, 0, 0)
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+            drawPad(canvas, ctrls)
+            drawFrames(canvas, ctrls)
+            return
+        }
         if (!visible() || ctrls.isEmpty()) return
-        val W = width.toFloat(); val H = height.toFloat()
+        drawPad(canvas, ctrls)
+    }
+
+    /** 手柄本身：主题贴图（没有主题时退回矢量） */
+    private fun drawPad(canvas: Canvas, ctrls: List<PadControl>) {
+        val H = height.toFloat()
         val a = (opacity / 100f) * themeAlpha
         text.textSize = H * 0.022f
+        val pressed = router.pressedControls()
 
-        if (themeReady && atlas != null) {
-            // 主题贴图：精灵矩形在图册上，位置 = 控件中心（窗口分数 × 视图）+ 偏移（CSS px × 视图/设计高）。
-            // 偏移是精灵左上角相对中心的量（theme.tsv 的约定，已含居中），不能再按中心对齐——那会把每个
-            // 精灵向左上挪半个自身（基座挪得比红球多，摇杆和它的红球就错开了），与宿主 ov_tsp 一致
-            val atlasB = atlas!!
-            fun centre(c: Ctrl): Pair<Float, Float> = c.cx * W to c.cy * H
-            fun drawSp(s: Sp, cx: Float, cy: Float) {
-                val vw = s.aw / themeScale * (H / designH); val vh = s.ah / themeScale * (H / designH)
-                val dx = s.ox * (H / designH); val dy = s.oy * (H / designH)
-                spPaint.alpha = (255 * a).toInt()
-                canvas.drawBitmap(atlasB, Rect(s.ax, s.ay, s.ax + s.aw, s.ay + s.ah),
-                                  RectF(cx + dx, cy + dy, cx + dx + vw, cy + dy + vh), spPaint)
+        val atlasB = atlas
+        if (themeReady && atlasB != null) {
+            // 主题贴图：精灵矩形在图册上，位置 = 控件中心（窗口高度 × 视图高度）+ 偏移（CSS px × 缩放）。
+            // 缩放与宿主 ov_tsp 一样：窗口高 / 设计高 × 密度系数 × 控件自己的大小系数——少了后两个，
+            // 贴图就比命中框小，按键看着没变大
+            val kBase = (H / designH) * layout.scale
+            spPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
+            // 装饰：在别的下面（宿主 ov_theme_draw 也是先画装饰）
+            for ((i, c) in ctrls.withIndex()) {
+                val set = spriteOf.getOrNull(i) ?: continue
+                for (s in set.decor) drawSp(canvas, atlasB, s, c, kBase * c.s, 0f, 0f)
             }
-            fun knobOffset(stick: String): Pair<Float, Float> {
-                val i = if (stick == "stick_l") 0 else 2
-                return knobs[i] * themeTravel * (H / designH) to knobs[i + 1] * themeTravel * (H / designH)
-            }
-            for (s in themeSprites.filter { it.state == "decor" }) {
-                ctrls.firstOrNull { it.n == s.ctl }?.let { val (cx, cy) = centre(it); drawSp(s, cx, cy) }
-            }
-            for (s in themeSprites.filter { it.state == "knob" }) {
-                val (kx, ky) = knobOffset(s.ctl)
-                ctrls.firstOrNull { it.n == s.ctl }?.let { val (cx, cy) = centre(it); drawSp(s, cx + kx, cy + ky) }
-            }
-            for (s in themeSprites.filter { it.state == "idle" }) {
-                val idx = ctrls.indexOfFirst { it.n == s.ctl }
-                val held = idx >= 0 && pressed.contains(idx)
-                val heldSp = themeSprites.firstOrNull { it.ctl == s.ctl && it.state == "held" }
-                ctrls.firstOrNull { it.n == s.ctl }?.let { c ->
-                    val (cx, cy) = centre(c)
-                    if (held && heldSp != null) drawSp(heldSp, cx, cy) else drawSp(s, cx, cy)
+            // 控件：一个一个来（布局的顺序）
+            for ((i, c) in ctrls.withIndex()) {
+                val set = spriteOf.getOrNull(i) ?: continue
+                val kc = kBase * c.s
+                // 摇杆的帽：跟着手指走（宿主 ov_theme_draw 乘的是 travel × 自己的缩放）
+                for (s in set.knob) {
+                    val ki = if (c.name == "stick_r") 2 else 0
+                    drawSp(canvas, atlasB, s, c, kc,
+                           router.knobs[ki] * themeTravel * kc, router.knobs[ki + 1] * themeTravel * kc)
+                }
+                // 按键自己：按住了画按住的那张（十字键的方向高亮这次不做：它一直画静止的那张）
+                val useHeld = pressed.contains(i) && !c.isDpad
+                for (p in set.parts) {
+                    val s = if (useHeld) (p.held ?: p.idle) else p.idle
+                    if (s != null) drawSp(canvas, atlasB, s, c, kc, 0f, 0f)
                 }
             }
             return
         }
 
         // 矢量退路（包里没有主题时）
-        for (c in ctrls) {
-            val cx = c.cx * W; val cy = c.cy * H; val rr = c.hw * W
-            val held = pressed.contains(ctrls.indexOf(c))
+        for ((i, c) in ctrls.withIndex()) {
+            val cx = c.cx * H; val cy = c.cy * H; val rr = c.hw * H
+            val held = pressed.contains(i)
             fill.color = Color.argb(((if (held) 55 else 25) * a).toInt(), 255, 255, 255)
             canvas.drawCircle(cx, cy, rr, fill)
             line.color = Color.argb((190 * a).toInt(), 255, 255, 255); line.strokeWidth = 2.5f
             canvas.drawCircle(cx, cy, rr, line)
             text.color = Color.argb((220 * a).toInt(), 255, 255, 255)
-            canvas.drawText(label(c.n), cx, cy + text.textSize / 3, text)
+            canvas.drawText(label(c.name), cx, cy + text.textSize / 3, text)
+        }
+    }
+
+    /** 一个贴图：源矩形在图册上，目标矩形在控件中心加偏移的地方（矩形是复用的，不分配） */
+    private fun drawSp(canvas: Canvas, atlasB: Bitmap, s: Sp, c: PadControl, k: Float, ox: Float, oy: Float) {
+        val vw = s.aw / themeScale * k; val vh = s.ah / themeScale * k
+        val dx = s.ox * k + ox; val dy = s.oy * k + oy
+        val cx = c.cx * height + dx; val cy = c.cy * height + dy
+        srcRect.set(s.ax, s.ay, s.ax + s.aw, s.ay + s.ah)
+        dstRect.set(cx, cy, cx + vw, cy + vh)
+        canvas.drawBitmap(atlasB, srcRect, dstRect, spPaint)
+    }
+
+    /**
+     * 编辑器里的框：每个控件一圈细白框，提示它的边界（宿主从前也是这样画的：ov_render 的 edit 分支，
+     * SP_WHITE 细框，透明度 0.35）。
+     */
+    private fun drawFrames(canvas: Canvas, ctrls: List<PadControl>) {
+        val H = height.toFloat()
+        val t = max(2f, H * 0.003f)
+        line.color = Color.argb(90, 255, 255, 255)
+        line.strokeWidth = t
+        for (c in ctrls) {
+            val cx = c.cx * H; val cy = c.cy * H
+            val hw = c.hw * H; val hh = c.hh * H
+            canvas.drawRect(cx - hw, cy - hh, cx + hw, cy + hh, line)
         }
     }
 }

@@ -28,6 +28,19 @@ die() { echo "android-apk: $*" >&2; exit 1; }
 command -v gh >/dev/null || die "the gh CLI is needed (the rootfs comes from the nixport payload release)"
 command -v python3 >/dev/null || die "python3 is needed"
 
+# The Gradle build needs a JDK the Android plugin can make its image with (jlink): a GraalVM fails
+# there ("Failed to transform core-for-system-modules.jar"). Android Studio's own runtime is the one
+# that is known to work, so it is the default when it is there; a machine without it (CI) keeps the
+# JAVA_HOME it was given. NX2A_JDK overrides both.
+if [[ -n ${NX2A_JDK:-} ]]; then
+    export JAVA_HOME=$NX2A_JDK
+else
+    for jbr in "/Applications/Android Studio.app/Contents/jbr/Contents/Home" "$HOME/Library/Java/JavaVirtualMachines"; do
+        if [[ -x $jbr/bin/jlink ]]; then export JAVA_HOME=$jbr; break; fi
+    done
+fi
+[[ -n ${JAVA_HOME:-} ]] || die "no JDK was found (set JAVA_HOME or NX2A_JDK to one)"
+
 mkdir -p "$cache"
 
 # 1. the rootfs (the supply channel's release)

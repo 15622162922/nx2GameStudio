@@ -79,7 +79,7 @@ def app_stem(g, name):   # the file name of the APK and the data pack: the profi
     return ipa[:-4] if ipa.endswith('.ipa') else ipa
 
 
-# --touch: the pause menu's first-launch defaults for a game played by touch. The gamepad's controls take every touch that goes down on them or near them (front_android.c ctl_at,
+# --touch: the pause menu's first-launch defaults for a game played by touch. The gamepad's controls take every touch that goes down on them or near them (front_player.c ctl_at,
 # overlay_layout.h ov_reach: about a quarter of a tablet's screen, at its sides); hidden, only the menu button does and every other touch is the game's, in both modes (hle_hid.c
 # touch_on). As Unpacking's profile (setting overlay=0); the pause menu's Gamepad item shows it again, and a controller works either way
 TOUCH_SETTINGS = {'overlay': '0'}

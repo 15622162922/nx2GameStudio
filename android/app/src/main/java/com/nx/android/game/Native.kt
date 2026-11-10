@@ -10,6 +10,9 @@ import android.view.Surface
  * start in one process is refused on the native side.
  */
 object Native {
+    /** 能力位：玩家前端（App 画虚拟手柄，宿主不画自己的面板） */
+    const val FRONT_CAPS_PLAYER = 1
+
     @JvmStatic external fun start(pack: String, internal: String, titleId: String?, dpi: Int, env: Array<String>, ctx: Context): Boolean
     @JvmStatic external fun setSurface(surface: Surface?)
     @JvmStatic external fun motion(source: Int, device: Int, action: Int, ids: IntArray, xs: FloatArray, ys: FloatArray, axis: FloatArray): Boolean
@@ -30,10 +33,42 @@ object Native {
     @JvmStatic external fun menuImport(name: String): Boolean
     @JvmStatic external fun menuExportNote(): String
 
-    /** 虚拟手柄（App 绘制层）：布局与实时状态（JSON，见 front_android.c 的 dm_pad_*） */
+    /** 虚拟手柄（App 绘制层）：布局（JSON，见 front_player.c 的 dm_pad_layout_json）：控件的位置与大小 */
     @JvmStatic external fun padLayout(): String
-    @JvmStatic external fun padState(): String
 
-    /** 虚拟手柄层（虚拟手柄与 ☰ 菜单按钮是一层）：App 画不画它——不画时那一块不回答触摸，触摸还给游戏 */
-    @JvmStatic external fun padLayer(drawn: Boolean)
+    /**
+     * 虚拟手柄的输入：App 自己判定了每个手指落在哪个控件上，把结果告诉宿主——按键位、两个摇杆，
+     * 以及属于游戏触摸屏的那些触点（窗口坐标，宿主自己换算到画面里）。
+     */
+    @JvmStatic external fun padInput(buttons: Long, lx: Int, ly: Int, rx: Int, ry: Int,
+                                     ids: IntArray, xs: FloatArray, ys: FloatArray)
+
+    /** 布局编辑（App 的编辑器）：控件的新位置与大小系数、恢复默认、保存进数据包的 settings.txt */
+    @JvmStatic external fun padLayoutSet(ctl: Int, x: Float, y: Float, size: Float)
+    @JvmStatic external fun padLayoutReset()
+    @JvmStatic external fun padLayoutSave()
+
+    /** App 自己的面板开着（布局编辑器）：游戏先等着 */
+    @JvmStatic external fun hold(on: Boolean)
+
+    /**
+     * 手柄的显示与浓淡：App 的偏好是唯一真值，宿主只留运行时的副本（settings.txt 不再写这两项）。
+     */
+    @JvmStatic external fun padPrefs(shown: Boolean, opacity: Int)
+
+    /** 正在使用的物理手柄个数（App 监听系统的输入设备后告诉宿主；宿主不再自己轮询设备列表） */
+    @JvmStatic external fun padDevices(count: Int)
+
+    /**
+     * 游戏的文本输入：宿主挂起游戏的线程并通知 App，App 用系统输入法问玩家，再把文字交回宿主
+     * （textResult 唤醒游戏的线程）。textRequest 是要问的内容（JSON：title/text/max）。
+     */
+    @JvmStatic external fun textRequest(): String
+    @JvmStatic external fun textResult(ok: Boolean, text: String)
+
+    /**
+     * 宿主的前端版本（能力位）：旧前端的宿主没有这个入口（调用即抛 UnsatisfiedLinkError），App 据此
+     * 认出「这个数据包是用旧前端编的」，请玩家重新移植。位：1 = 玩家前端（App 画手柄，宿主不画面板）。
+     */
+    @JvmStatic external fun frontCaps(): Int
 }

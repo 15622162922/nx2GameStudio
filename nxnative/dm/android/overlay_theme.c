@@ -12,7 +12,7 @@
 #include <zlib.h>
 
 __attribute__((weak)) AAssetManager *dm_front_assets(void) { return NULL; }
-__attribute__((weak)) const char *dm_front_root(void);   // front_android.c: the pack (the player's path has no APK assets, the theme comes from its overlay/)
+__attribute__((weak)) const char *dm_front_root(void);   // front_player.c: the pack (the player's path has no APK assets, the theme comes from its overlay/)
 
 static uint8_t *file_asset(const char *path, size_t *n) {
     FILE *f = fopen(path, "rb"); if (!f) return NULL;
