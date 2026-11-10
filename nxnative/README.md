@@ -117,4 +117,4 @@ How it works, the script's options, running games on the Mac, adding a game, and
 
 ## License
 
-MIT (see [LICENSE](LICENSE)). Third-party code keeps its own license; see [dm/third_party](dm/third_party/README.md).
+GPL-3.0-or-later (see [LICENSE](LICENSE)); the tree was MIT licensed upstream and was relicensed under that license's sublicense clause, keeping the upstream author's notice. Third-party code keeps its own license; see [dm/third_party](dm/third_party/README.md).

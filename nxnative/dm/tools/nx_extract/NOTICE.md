@@ -1,8 +1,8 @@
 # NOTICE: nx_extract
 
 `nx_extract` is the NSP reader of this project: it reads the NCAs and layers
-a patch NCA over its base NCA to get the merged RomFS. Its own code is MIT,
-covered by the repository's [LICENSE](../../../LICENSE).
+a patch NCA over its base NCA to get the merged RomFS. Its own code is
+GPL-3.0-or-later, covered by the repository's [LICENSE](../../../LICENSE).
 
 It depends on **LibHac**, which reimplements parts of the Nintendo Switch
 operating system's content formats so that they can be read. LibHac is MIT,

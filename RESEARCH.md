@@ -92,7 +92,7 @@ On Android the Vulkan equivalent is `VK_EXT_external_memory_host`, and it is **n
   - no firmware or keys needed on the phone.
 - **I found no Android port or fork of nxnative** (GitHub search, 2026-10-24).
 - **Legal:** In February 2026 Nintendo sent DMCA notices against 13 Switch emulator projects (Eden, Citron, Kenji-NX, MeloNX, Ryujinx/Ryubing, Sudachi, Suyu, yuzu, …). The stated basis was decrypting games with `prod.keys` as circumvention of protection measures. nxnative/NX2Apple do exactly the same decryption at build time, so an Android port would carry the same exposure regardless of the "bring your own dump" framing.
-- Licensing: nxnative is MIT; it vendors Ryujinx's shader translator (MIT). Borrowing yuzu/Eden code (GPLv3), such as their Vulkan BCn decoders, would make the port GPL.
+- Licensing: nxnative is MIT; it vendors Ryujinx's shader translator (MIT). Borrowing yuzu/Eden code (GPLv3), such as their Vulkan BCn decoders, would make the port GPL. (This note predates the repository's own relicensing to GPL-3.0-or-later, which is where the port landed.)
 
 ## 5. Verdict and suggested path
 

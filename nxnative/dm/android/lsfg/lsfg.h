@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Lossless Scaling frame generation (LSFG) for the Vulkan replay, ported to C for Banana Native from Eden (src/video_core/frame_gen, src/video_core/renderer_vulkan/present/
-// frame_gen*, lsfg_*), which builds on lsfg-vk. This folder is GPL-3.0-or-later (LICENSE.md here); an APK built with it (NX_LSFG, the default) is GPL-3.0-or-later as a whole.
+// frame_gen*, lsfg_*), which builds on lsfg-vk. This folder is GPL-3.0-or-later (LICENSE.md here), the same terms as the rest of the tree; an APK built with it (NX_LSFG, the default) is GPL-3.0-or-later as a whole.
 // The shaders come from the user's own Lossless.dll at run time: never bundled.
 #pragma once
 #include <stddef.h>

@@ -22,8 +22,8 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         if (touch) args += "--touch"
         if (fps60) args += "--fps60"
         if (experimental) args += "--experimental"
-        // A build without the frame generation's GPL code (the Gradle property nxLsfg=false): the host the app
-        // builds on the device is then under the repository's MIT license (android/NOTICE.md).
+        // A build without the frame generation (the Gradle property nxLsfg=false): the host the app builds on the
+        // device is then smaller and the frame generation reports that it is not in this build (android/NOTICE.md).
         if (!BuildConfig.NX_LSFG) args += "--no-lsfg"
         return start(args, onEnd)
     }

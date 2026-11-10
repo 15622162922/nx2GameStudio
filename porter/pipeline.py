@@ -43,7 +43,7 @@ class Options:
     vercode_offset: int = 0            # added to the APK's versionCode: a rebuild of the same game version installs over a build with a higher one (version_code)
     alias_headroom: int = None         # GB more alias region (alias_headroom); None: ALIAS_HEADROOM for a version the profile was not brought up on, none for one it was
     jobs: int = field(default_factory=lambda: os.cpu_count() or 8)
-    no_lsfg: bool = False              # build the host without the frame generation's GPL code (dm/android/build.py --no-lsfg): the host is then under the repository's MIT license
+    no_lsfg: bool = False              # build the host without the frame generation (the lsfg/ code, dm/android/build.py --no-lsfg): the host is then smaller and the frame generation reports "not in this build"
 
 
 # The Vulkan driver loader and its four hooks: the host loads a driver through libadrenotools (dm/android/gfx_vk_core.c,

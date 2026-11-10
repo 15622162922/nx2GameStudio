@@ -6,8 +6,8 @@ sits next to the code it covers. This file is the index: for each component it
 gives the license, the version, where it came from and where the full license
 text is.
 
-The MIT license of this repository's own code is in [LICENSE](LICENSE). What is
-*not* covered by it is listed here.
+The license of this repository's own code is GPL-3.0-or-later, in
+[LICENSE](LICENSE). What is *not* covered by it is listed here.
 
 ## In the source tree (`nxnative/dm/third_party/`)
 
@@ -38,9 +38,9 @@ describes what every one of them is, which version it is and where it is used.
 | The LSFG frame generation port | GPL-3.0-or-later | `nxnative/dm/android/lsfg/` | `nxnative/dm/android/lsfg/LICENSE.md`, full text in `nxnative/dm/android/lsfg/COPYING` |
 
 The LSFG port is from the Eden emulator's frame generation, which builds on
-lsfg-vk; both are GPL-3.0-or-later. It is the one copyleft component in the
-tree: the phone APK links it by default, so the APK as a whole is distributed
-under GPL-3.0-or-later. See [android/NOTICE.md](android/NOTICE.md).
+lsfg-vk; both are GPL-3.0-or-later, and so is this folder — the same terms as
+the rest of the tree. The phone APK links it by default, so the APK as a whole
+is distributed under GPL-3.0-or-later. See [android/NOTICE.md](android/NOTICE.md).
 
 ## Shipped as binaries
 
@@ -50,7 +50,7 @@ with them.
 | Component | License | Where it ships | License text |
 |---|---|---|---|
 | The shader translation tool `dmsh_xlate` and its .NET dependencies (Humanizer, MessagePack, Gommon, Microsoft.IO.RecyclableMemoryStream, System.CodeDom) | MIT | `nxnative/dm/gfx/tools/dmsh_xlate_bin/` | `nxnative/dm/gfx/tools/dmsh_xlate_bin/NOTICE.md` and `LICENSES/` beside it |
-| `nx_extract` (the NSP reader) and LibHac 0.19.0 | MIT | built from `nxnative/dm/tools/nx_extract/`, restored from NuGet | MIT; the LibHac package is MIT |
+| `nx_extract` (the NSP reader) and LibHac 0.19.0 | GPL-3.0-or-later (its own code); LibHac is MIT | built from `nxnative/dm/tools/nx_extract/`, restored from NuGet | the repository's [LICENSE](LICENSE); the LibHac package is MIT |
 | The .NET runtime the phone app ships | MIT | the app's payload (`dotnet.pkg`) | the .NET SDK's own terms, fetched from Microsoft |
 
 ## Fetched at run time, never shipped

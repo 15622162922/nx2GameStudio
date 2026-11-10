@@ -140,15 +140,16 @@ Two changes in the tool itself make it run on an ARM64 Linux host:
 - `porter/toolchain.py` finds an NDK that ships with the program (`NX2A_NDK`), and `porter/fetch.py` does not
   fetch adb on an ARM64 Linux host (Google ships platform-tools for Linux as x86-64 only).
 
-The frame generation's license switch: the host the app builds links the GPL code of `nxnative/dm/android/lsfg/` by
-default, so that host is a combined work under GPL-3.0-or-later. Build the app with `-PnxLsfg=false` and the host is
-built without it, under the repository's MIT license; the same host built by the command line is `porter port --no-lsfg`.
+The frame generation's switch: the host the app builds links the code of `nxnative/dm/android/lsfg/` by default. Build
+the app with `-PnxLsfg=false` and the host is built without it — a smaller host, with the frame generation reporting
+that it is not in this build; the same host built by the command line is `porter port --no-lsfg`. The switch does not
+change the license of the build: the code it is made from is GPL-3.0-or-later either way.
 [android/NOTICE.md](../android/NOTICE.md) says what that means for the app.
 
 ## Licenses
 
-The repository's own code is MIT ([LICENSE](../LICENSE)); nxnative and the vendored third-party code keep their own
-licenses. Three rules when the tree changes:
+The repository's own code is GPL-3.0-or-later ([LICENSE](../LICENSE)), nxnative included; the vendored third-party code
+keeps its own licenses. Three rules when the tree changes:
 
 - A vendored component keeps its license file in its own directory, and its row in
   [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) says its license, version and origin. A new component, a new

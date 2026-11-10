@@ -142,16 +142,16 @@ The game profiles under `nxnative/dm/games/` hold interoperation metadata only: 
 
 ## License
 
-The code this repository owns — the porter, the desktop app, the phone app and the packaging — is MIT: [LICENSE](LICENSE). nxnative, the engine it is built on, is MIT as well ([nxnative/LICENSE](nxnative/LICENSE)), and the third-party code in the tree keeps its own license; every component is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The code this repository owns and maintains — the porter, the desktop app, the phone app, the packaging, the docs and the nxnative engine tree this fork maintains — is GPL-3.0-or-later: [LICENSE](LICENSE). The third-party code in the tree keeps its own license; every component is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-One exception: the phone app's frame generation ([nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)) is GPL-3.0-or-later, so the host the app builds is a combined work under that license unless it is built without it. What that means for the app, and how to get an MIT build, is in [android/NOTICE.md](android/NOTICE.md).
+The phone app's frame generation ([nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)) is GPL-3.0-or-later as well, the same terms as the rest of the tree. It can be left out of a build, but that does not change the license of the code the build was made from. What that means for the app is in [android/NOTICE.md](android/NOTICE.md).
 
 ## Acknowledgements
 
 This project is one branch of a family, and it stands on other people's work:
 
 - **[nx2android](https://github.com/shirai91/nx2android)** — the project this repository is built on: it ports a game on the PC and packages the APK; this repository is its phone side.
-- **[seedds/nxnative](https://github.com/seedds/nxnative)** — the engine underneath it: the host that stands in for the console's services, the NVN-on-Vulkan replay, the shader translator, and the game profiles that many of these ports were brought up against. MIT licensed; our fork of it lives in `nxnative/`.
+- **[seedds/nxnative](https://github.com/seedds/nxnative)** — the engine underneath it: the host that stands in for the console's services, the NVN-on-Vulkan replay, the shader translator, and the game profiles that many of these ports were brought up against. MIT licensed upstream; our fork of it, which lives in `nxnative/`, is GPL-3.0-or-later like the rest of this repository.
 - **The nxnative contributors** — for the engine, the tooling and the profiles.
 - **[NX2Apple](https://github.com/LNPANDY/NX2Apple)** — the Apple route of the same engine: the macOS builder and the shared iPhone/iPad library. Thanks for keeping the line alive on Apple devices.
 - **[BananaNative](https://github.com/Raphix91/BananaNative)** — the branch that takes the engine to Android and runs a few Switch 2 games natively on a phone. Thanks for taking it further than we did.

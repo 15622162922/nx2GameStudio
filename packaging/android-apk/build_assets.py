@@ -230,9 +230,9 @@ def main():
     # globalization fix (the phone's .NET has no ICU): both are run by the app, so they travel with it
     shutil.copy2(REPO / 'packaging/android-apk/patch_interp.py', tool / 'tools/patch_interp.py')
     shutil.copy2(REPO / 'packaging/android-apk/fix_globalization.py', tool / 'tools/fix_globalization.py')
-    # The license texts the app redistributes: its own (the tree's LICENSE covers the porter and the engine), the
-    # index of the third-party components, and the notice of the app's own license (the GPL frame generation it
-    # links by default). The third-party licenses of the vendored code travel with it, in their own directories.
+    # The license texts the app redistributes: its own (the tree's LICENSE covers the porter and the engine, and
+    # carries the GPL-3.0-or-later text), the index of the third-party components, and the notice of the app's own
+    # license. The third-party licenses of the vendored code travel with it, in their own directories.
     for src, dst in (('LICENSE', 'LICENSE'), ('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'), ('android/NOTICE.md', 'android/NOTICE.md')):
         d = tool / dst; d.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(REPO / src, d)
     # the C# tools are built on the phone: the NuGet packages they restore have to be there (no network)

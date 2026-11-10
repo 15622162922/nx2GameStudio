@@ -144,16 +144,16 @@ nx2android 移植时读取你的游戏文件，需要你自己的 `prod.keys` �
 
 ## 许可
 
-本仓库自己拥有的代码 —— 移植器、桌面工具、手机 App 和打包部分 —— 是 MIT：[LICENSE](LICENSE)。它所基于的引擎 nxnative 也是 MIT（[nxnative/LICENSE](nxnative/LICENSE)），树里的第三方代码保留各自的许可，每个组件都列在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库自己拥有并维护的代码 —— 移植器、桌面工具、手机 App、打包、文档，以及本 fork 维护的 nxnative 引擎树 —— 是 GPL-3.0-or-later：[LICENSE](LICENSE)。树里的第三方代码保留各自的许可，每个组件都列在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-有一个例外：手机 App 的帧生成（[nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)）是 GPL-3.0-or-later，所以 App 构建出来的宿主程序在这个许可下属于衍生作品，除非构建时不带它。这对 App 意味着什么、以及怎么拿到一个 MIT 的构建，见 [android/NOTICE.md](android/NOTICE.md)。
+手机 App 的帧生成（[nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)）同样是 GPL-3.0-or-later，与整棵树一致。构建时可以不带上它，但那不会改变构建所用代码的协议。这对 App 意味着什么，见 [android/NOTICE.md](android/NOTICE.md)。
 
 ## 致谢
 
 这条分支是一个家族里的一支，它脚下是别人的地基：
 
 - **[nx2android](https://github.com/shirai91/nx2android)** —— 本仓库基于的项目：PC 端把游戏移植打包成 APK；本仓库是它的手机端。
-- **[seedds/nxnative](https://github.com/seedds/nxnative)** —— 它底下的引擎：顶替主机系统服务的宿主程序、NVN 到 Vulkan 的图形回放、着色器翻译器，以及这些移植大多参照过的游戏 profile。MIT 许可，我们的 fork 在 `nxnative/` 里。
+- **[seedds/nxnative](https://github.com/seedds/nxnative)** —— 它底下的引擎：顶替主机系统服务的宿主程序、NVN 到 Vulkan 的图形回放、着色器翻译器，以及这些移植大多参照过的游戏 profile。上游是 MIT 许可；我们的 fork（`nxnative/`）与本仓库其余部分一样是 GPL-3.0-or-later。
 - **nxnative 的各位贡献者** —— 引擎、工具链和 profile 都是他们写的。
 - **[NX2Apple](https://github.com/LNPANDY/NX2Apple)** —— 同一条引擎的苹果路线：macOS 构建器和 iPhone/iPad 共享的游戏库。谢谢他们让这条路在苹果设备上一直活着。
 - **[BananaNative](https://github.com/Raphix91/BananaNative)** —— 把引擎带到安卓、让几款 Switch 2 游戏在手机上原生跑起来的分支。谢谢他们走到比我们更远的地方。

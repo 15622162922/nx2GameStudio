@@ -53,8 +53,8 @@ def _parser():
                          'brought up on, none for one it was)')
     po.add_argument('--jobs', type=int, default=os.cpu_count() or 8)
     po.add_argument('--no-lsfg', action='store_true',
-                    help='build the host without the frame generation (the GPL lsfg/ code): the host is then under the repository\'s MIT license '
-                         '(dm/android/build.py --no-lsfg); the frame generation reports "not in this build"')
+                    help='build the host without the frame generation (the lsfg/ code): the host is then smaller and the frame generation '
+                         'reports "not in this build" (dm/android/build.py --no-lsfg)')
     po.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'), help='json: one JSON event per line, for the GUI')
     ins = sub.add_parser('install', help='install a port made earlier'); ins.add_argument('data', help='the data pack folder (<App>-data)'); ins.add_argument('--apk', help='the APK (default: <App>.apk beside the pack)')
     ins.add_argument('--device', default=''); ins.add_argument('--replace-signer', action='store_true'); ins.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'))

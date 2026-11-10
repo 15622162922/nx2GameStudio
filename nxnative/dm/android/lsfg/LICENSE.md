@@ -5,10 +5,10 @@ The files here are a C port of the Lossless Scaling frame generation (LSFG) of [
 [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk). Both are licensed GPL-3.0-or-later, and so is this folder: each file keeps its SPDX copyright lines
 (Eden Emulator Project 2026, lsfg-vk 2025). The full license text is [COPYING](COPYING).
 
-The rest of nxnative is MIT ([LICENSE](../../../LICENSE)), and so is the rest of the repository ([LICENSE](../../../../LICENSE)). The Android host links these files by
-default (`-DNX_LSFG=1`, set by `nxnative/dm/android/build.py`): the host it builds — `libdmplay.so` for the app, `libdmhost.so` for the per-game APK — is then a combined
-work under GPL-3.0-or-later as a whole; see [android/NOTICE.md](../../../../android/NOTICE.md). Built without them (`build.py --no-lsfg`, which the porter takes as
-`--no-lsfg` and the app as the Gradle property `-PnxLsfg=false`), none of this folder is in the host, and the host is under the repository's MIT license.
+The rest of nxnative is under the same terms ([LICENSE](../../../LICENSE)), and so is the rest of the repository ([LICENSE](../../../../LICENSE)). The Android host links these files by
+default (`-DNX_LSFG=1`, set by `nxnative/dm/android/build.py`): the host it builds — `libdmplay.so` for the app, `libdmhost.so` for the per-game APK — is then under
+GPL-3.0-or-later as a whole; see [android/NOTICE.md](../../../../android/NOTICE.md). Built without them (`build.py --no-lsfg`, which the porter takes as
+`--no-lsfg` and the app as the Gradle property `-PnxLsfg=false`), none of this folder is in the host, and the host is under the same terms: leaving the frame generation out does not change the license of the code the build was made from.
 
 The phone app ships this folder's source in its assets, so the source that the GPL work is built from travels with the app that builds it.
 
