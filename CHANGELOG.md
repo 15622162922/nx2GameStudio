@@ -8,6 +8,24 @@ players on the released version are not pushed onto an alpha.
 
 The release page has the APK and the full notes: <https://github.com/zFitness/nx2androidX/releases>.
 
+## v0.3.0-alpha04 - 2026-11-10
+
+### Added
+
+- **The app's data pack is built in the app's own folder** (`files/ports`), not on the shared storage. The extracted game files were copied over FUSE, which is slow (50-100 MB/s) and fragile; the copy now runs at the device's write speed (200-230 MB/s measured) and no media scanner shares the files. The log of 2026-11-09 shows three ports of Tears of the Kingdom dying in that stage: the system killed the app, a half-made pack left behind made the next port fail, and a cancel interrupted a read. The game reads its files from there as well.
+- **The free-and-open-source notice.** It is shown once, when the setup finishes, and on the first start of an app that had already done the setup. It says the app is free and open source, that selling it is not allowed, and that a player who paid for it can ask the seller for a refund. "View the repo" opens the fork's page on GitHub.
+- **Tapping the version in the Settings opens the repository on GitHub.** The underline says the row can be tapped; a device without a browser has no other way there, so the app stays quiet.
+- **An experimental port says so.** The data pack's manifest carries the profile's own status: a game that was never brought up on Android is written with the status experimental, and the library shows it as one - the player is told the port may stop at a path that was never walked.
+- **A developer setup guide** (`docs/GETTING_STARTED.md`).
+
+### Fixed
+
+- **A game's text entry froze the game and then killed it.** The host told the app "the drawer steps aside" with a JNI call made on the game's own thread, and that call blocked there: the log showed the entry opening and nothing after it, and the process died of SIGSEGV with no backtrace and no tombstone. The notice goes on a thread of its own now - the game's thread must never wait for the app.
+- **A crash on Android was silent.** The crash handlers were only installed by the desktop host, so a SIGSEGV killed the game silently: the kernel had nowhere to run a handler, the process died of the signal and the log stayed empty. They are installed now, and every thread that can fault gets the signal alternate stack.
+- **The log said the wrong reason.** The line read "audio suspended (background / interruption)" every time the game was held, but the game is held for three reasons: the app is in the background, the pause menu is open, or a text entry is open. A game's name entry froze with the keyboard never coming up, and the log blamed the background. The host names the reason now.
+- **The app checks the all-files permission before a port starts.** Without it the game file cannot be read, and the port died in the middle of a Python stack trace.
+- **The cleanup of a half-made pack is tolerant now.** The folder may be gone already (another process removed it), and a directory that vanishes while it is being removed must not stop the port - that was the FileNotFoundError that ended with exit 139.
+
 ## v0.3.0-alpha03 - 2026-11-10
 
 ### Added
