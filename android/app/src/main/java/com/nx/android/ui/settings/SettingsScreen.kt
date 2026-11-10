@@ -1,8 +1,6 @@
 package com.nx.android.ui.settings
 
-import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,7 +51,6 @@ import com.nx.android.data.Drivers
 import com.nx.android.data.Env
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PortRunner
-import com.nx.android.domain.UpdateVersion
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
@@ -68,6 +65,7 @@ import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.update.UpdateCheckRow
+import com.nx.android.ui.update.openRepo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -408,16 +406,5 @@ private fun AboutSection(ob: OnboardingState, update: UpdateState, actions: AppA
             }
             QuietButton(stringResource(R.string.set_run_onboarding), { ob.open() })
         }
-    }
-}
-
-/**
- * 打开 GitHub 仓库页面。设备上没有浏览器时没有第二条路，安静地过去。
- */
-private fun openRepo(context: Context) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateVersion.REPO_URL)))
-    } catch (e: Exception) {
-        // 没有浏览器：App 里没有别的路可以走到那里，安静地过去
     }
 }

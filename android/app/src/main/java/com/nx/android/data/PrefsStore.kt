@@ -34,6 +34,8 @@ class PrefsStore(ctx: Context) {
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"
         const val OB_COMPLETED = "ob.completed"
+        // the open-source notice: the player has seen it (once is enough)
+        const val OSS_NOTICE_SHOWN = "oss.notice.shown"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
         const val PORT_HISTORY = "port.history"

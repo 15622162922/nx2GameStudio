@@ -39,6 +39,17 @@ fun openReleases(context: Context) {
 }
 
 /**
+ * 仓库主页：源码、issue 与 release 都在那里。设置页的版本号与开源声明都跳到这里。
+ */
+fun openRepo(context: Context) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateVersion.REPO_URL)))
+    } catch (e: Exception) {
+        // 没有浏览器：App 里没有别的路可以走到那里，安静地过去
+    }
+}
+
+/**
  * 主页上的那条提示：有新版本时出现。不挡事（不是弹窗），可以关掉——关掉之后这个版本不再提。
  */
 @Composable

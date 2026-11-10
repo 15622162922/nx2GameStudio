@@ -127,6 +127,10 @@
     <string name="set_rerun_onboarding">Run the setup again</string>
     <string name="set_rerun_onboarding_hint">The parts that are done (the permission, the environment, the keys) are recognised and shown as done</string>
     <string name="set_run_onboarding">Run</string>
+    <string name="oss_notice_title">Free and open source</string>
+    <string name="oss_notice_body">This app (nx2androidX) is free, open-source software, and its source is public on GitHub.\n\nSelling it is not allowed: the app is free, and no one may charge for a copy.\n\nIf you paid for this app, please ask the seller for a refund.</string>
+    <string name="oss_notice_ok">Got it</string>
+    <string name="oss_notice_repo">View the repo</string>
     <string name="driver_section">Vulkan driver</string>
     <string name="driver_builtin">Built in</string>
     <string name="driver_where">The installed drivers are picked in the library\'s drawer, in the game\'s run options.</string>

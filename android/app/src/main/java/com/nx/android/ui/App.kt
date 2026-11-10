@@ -61,6 +61,7 @@ import com.nx.android.AppContainer
 import com.nx.android.R
 import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
+import com.nx.android.data.PrefsStore
 import com.nx.android.data.StorageVolumes
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameConfig
@@ -80,6 +81,7 @@ import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.theme.NxTheme
 import com.nx.android.ui.update.UpdateBanner
+import com.nx.android.ui.update.openRepo
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -129,7 +131,14 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
         var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
         var driversOpen by remember { mutableStateOf(false) }
         var logOpen by remember { mutableStateOf(false) }
+        var ossNotice by rememberSaveable { mutableStateOf(false) }
         val ctx = androidx.compose.ui.platform.LocalContext.current
+        // 开源声明：引导走完的那一刻弹一次，老用户（早已完成引导）升级后第一次启动也弹；记在 prefs 里，只此一次
+        LaunchedEffect(container.onboarding.active) {
+            if (!container.onboarding.active
+                && container.prefs.bool(PrefsStore.OB_COMPLETED)
+                && !container.prefs.bool(PrefsStore.OSS_NOTICE_SHOWN)) ossNotice = true
+        }
         Box(Modifier.fillMaxSize().background(NxPalette.Background)) {
             if (container.onboarding.active) {
                 OnboardingScreen(container.onboarding, actions) { pickerReq = it }
@@ -187,9 +196,43 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                 BackHandler { logOpen = false }
                 LogOverlay(onClose = { logOpen = false }, text = remember { actions.readLog() })
             }
+            // 开源声明：盖在最后面，玩家先看到它
+            if (ossNotice) {
+                OpenSourceNoticeDialog(
+                    onClose = {
+                        ossNotice = false
+                        container.prefs.put(PrefsStore.OSS_NOTICE_SHOWN, true)
+                    },
+                    onRepo = {
+                        openRepo(ctx)
+                        ossNotice = false
+                        container.prefs.put(PrefsStore.OSS_NOTICE_SHOWN, true)
+                    },
+                )
+            }
         }
         }
     }
+}
+
+/**
+ * 开源声明：这个软件是免费开源的，禁止盗卖；花钱买到的请联系卖家退款。
+ *
+ * 它只出现一次：记在 prefs 里，关掉就不再出现。
+ */
+@Composable
+private fun OpenSourceNoticeDialog(onClose: () -> Unit, onRepo: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(stringResource(R.string.oss_notice_title), fontWeight = FontWeight.Bold) },
+        text = { Text(stringResource(R.string.oss_notice_body)) },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text(stringResource(R.string.oss_notice_ok), color = NxPalette.Building) }
+        },
+        dismissButton = {
+            TextButton(onClick = onRepo) { Text(stringResource(R.string.oss_notice_repo)) }
+        },
+    )
 }
 
 @Composable
