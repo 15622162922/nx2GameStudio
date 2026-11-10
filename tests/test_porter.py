@@ -169,6 +169,35 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
+    def test_a_leftover_half_made_pack(self):   # a port killed mid-way leaves one behind: it must not stop the next port (the log of 2026-11-09: FileNotFoundError, then exit 139)
+        from unittest import mock
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
+            (t / 'romfs/Data').mkdir(parents=True); (t / 'romfs/Data/a.bin').write_bytes(b'y' * 20)
+            (t / 'shaders.dmsv').write_bytes(b'DMSV')
+            (t / 'out-data.partial').mkdir()   # the half-made pack of the port that was killed
+            real = shutil.rmtree
+            def vanishing(p, *a, **k):
+                real(p, *a, **k)      # the tree goes
+                real(p, *a, **k)      # and the folder is gone when the next sweep comes: the port must not mind
+            p = profiles.load(NEO)
+            with mock.patch.object(shutil, 'rmtree', vanishing):
+                datapack.build(t / 'out-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
+            self.assertTrue((t / 'out-data' / datapack.MANIFEST).is_file()); self.assertFalse((t / 'out-data.partial').exists())
+        finally: shutil.rmtree(t, ignore_errors=True)
+
+    def test_the_pack_s_place(self):   # the app's mode: the pack goes to the app's own folder, beside the build folders (the same volume, so the pack hard links the build's files); the desktop's mode: the output folder
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            port = pipeline.Port(pipeline.Options(t))
+            port.g = game.load(NEO); port.app_name = 'NEO'; port.work_root = t / 'work'; port.o.out = t
+            stem = pipeline.app_stem(port.g, port.app_name)
+            self.assertEqual(port.data_dir(), t / f'{stem}-data')                 # the desktop: the output folder
+            port.o.app = True
+            self.assertEqual(port.data_dir(), t / 'ports' / f'{stem}-data')      # the app: the app's own folder
+        finally: shutil.rmtree(t, ignore_errors=True)
+
     def test_the_loader_is_the_app_s_own(self):   # the host dlopens the loader by name: only the app's native library folder is on the linker's path, so the loader lives there and the pack carries the hooks
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_loader_'))
         try:
@@ -360,16 +389,16 @@ class Misc(unittest.TestCase):
     def test_disk_space(self):   # twice the game files, less what the build folder holds, plus 1 GB
         from types import SimpleNamespace as NS
         d = Path(tempfile.mkdtemp(prefix='nx2a_test_game_')); (d / 'g.nsp').write_bytes(b'\0' * 2**20); work = d / 'build'
-        p = NS(o=NS(folder=d), work=work, fam={'base': d / 'g.nsp', 'updates': [], 'dlc': []}); real = shutil.disk_usage
+        p = NS(o=NS(folder=d, app=False), work=work, fam={'base': d / 'g.nsp', 'updates': [], 'dlc': []}); real = shutil.disk_usage
         try:
             shutil.disk_usage = lambda _: NS(free=2**30 + 2**20)
             with self.assertRaises(pipeline.BuildError): pipeline.Port.check_space(p)
             work.mkdir(); (work / 'x').write_bytes(b'\0' * 2**20); pipeline.Port.check_space(p)   # a build folder already there counts
         finally: shutil.disk_usage = real
 
-    def space_port(self, folder, fam, work):   # a port-like object for the space check alone (the check reads the picked game's files and the build folder)
+    def space_port(self, folder, fam, work, app=False):   # a port-like object for the space check alone (the check reads the picked game's files and the build folder)
         from types import SimpleNamespace as NS
-        return NS(o=NS(folder=folder), work=work, fam=fam)
+        return NS(o=NS(folder=folder, app=app), work=work, fam=fam)
 
     def space_fits(self, port, free):   # does the check pass with this much free space on the disk?
         from types import SimpleNamespace as NS
@@ -404,6 +433,16 @@ class Misc(unittest.TestCase):
             p = self.space_port(d, fam, work)
             self.assertIsNone(self.space_fits(p, 2**30 + 6 * 2**20))      # three files of 1 MB, twice over, plus 1 GB
             self.assertIsNotNone(self.space_fits(p, 2**30 + 6 * 2**20 - 1))
+        finally: shutil.rmtree(d, ignore_errors=True)
+
+    def test_space_in_the_app_s_mode(self):   # the app's mode asks for the same as the desktop: the pack is a copy (an app may not hard link, Android's SELinux), so it needs room of its own
+        d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))
+        try:
+            (d / 'a.nsp').write_bytes(b'\0' * 2**20)
+            work = d / 'build'
+            p = self.space_port(d, {'base': d / 'a.nsp', 'updates': [], 'dlc': []}, work, app=True)
+            self.assertIsNone(self.space_fits(p, 2**30 + 2 * 2**20))          # the game's files twice over, plus 1 GB
+            self.assertIsNotNone(self.space_fits(p, 2**30 + 2 * 2**20 - 1))
         finally: shutil.rmtree(d, ignore_errors=True)
 
     def test_space_less_the_build_folder(self):   # what an earlier build left in the build folder is not needed again
@@ -482,7 +521,7 @@ class Dumps(unittest.TestCase):   # porter/dumps.py: NSZ / XCZ → NSP; an NCZ m
         from types import SimpleNamespace as NS
         src = self.nsz(self.solid); size = self.dumps.size(src)
         work = self.d / 'build'
-        p = NS(o=NS(folder=self.d), work=work, fam={'base': src, 'updates': [], 'dlc': []})
+        p = NS(o=NS(folder=self.d, app=False), work=work, fam={'base': src, 'updates': [], 'dlc': []})
         real = shutil.disk_usage
         try:
             shutil.disk_usage = lambda _: NS(free=2**30 + 3 * size)

@@ -40,7 +40,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     text: {name in the pack: its text} (the launcher's lists: languages.txt, drivers.txt); host/icon/drivers: the app's artifacts, named in the manifest. Returns the manifest"""
     package = package or profile.package
     tmp = dst.with_name(dst.name + '.partial')
-    if tmp.exists(): shutil.rmtree(tmp)
+    shutil.rmtree(tmp, ignore_errors=True)   # the half-made pack of a killed port: it may be gone already, and one that vanishes while it is removed must not stop the port
     tmp.mkdir(parents=True)
     n = b = 0
     for what, src, sub in (('the rewritten modules', patched, 'mods'), ('the RomFS', romfs, 'RomFS'), ('the DLC', aoc, 'aoc')):
@@ -66,7 +66,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     if icon: man['icon'] = icon
     if drivers: man['drivers'] = list(drivers)
     (tmp / MANIFEST).write_text(json.dumps(man, indent=2), encoding='utf-8')
-    if dst.exists(): shutil.rmtree(dst)
+    shutil.rmtree(dst, ignore_errors=True)   # the pack of the last port: it may be gone already (the player deleted it), and the files it holds are the build's own (hard links)
     for i in range(20):   # Windows: a folder just removed can stay delete-pending while another process (an indexer, a virus scan) holds it, and the rename is refused meanwhile
         try: tmp.rename(dst); break
         except PermissionError:

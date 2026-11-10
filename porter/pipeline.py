@@ -337,6 +337,7 @@ class Port:
         # cannot be next to the game (Android does not let an app run a program on the shared storage), so
         # NX2A_WORK points at the app's own folder.
         root = Path(os.environ.get('NX2A_WORK', '')).expanduser() if os.environ.get('NX2A_WORK') else o.folder
+        self.work_root = root
         self.work = root / f'{tid}_build'
         g, ap = profiles.by_title(self.app)
         self.provisional = False
@@ -379,6 +380,8 @@ class Port:
         # the work folder may not be there yet: the space is the one of the folder that will hold it
         where = self.work
         while not where.exists() and where.parent != where: where = where.parent
+        # the pack is a copy of the game's files: the app may not hard link them (Android's SELinux never allows an app to link),
+        # so the port needs room for the build's files and for the pack
         need, free = max(0, 2 * game + temp - built) + 2**30, shutil.disk_usage(where).free
         if free < need: raise BuildError(f'not enough disk space on {where.anchor}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
 
@@ -796,8 +799,12 @@ class Port:
         return [f] if f.is_file() else []
 
     def data_dir(self):
-        """Where the data pack goes (and where the game reads its files from): the pack's own name in the output folder"""
-        return self.o.out / f'{app_stem(self.g, self.app_name)}-data'
+        """Where the data pack goes (and where the game reads its files from): the pack's own name in the output folder.
+        The app's mode: the pack goes to the app's own folder, beside the build folders (the same volume, so the pack hard links the build's files and takes no room of its own).
+        The shared storage cannot link them (another volume), so a pack there is a copy of the whole game: minutes, and it breaks"""
+        stem = f'{app_stem(self.g, self.app_name)}-data'
+        if self.o.app: return self.work_root.parent / 'ports' / stem
+        return self.o.out / stem
 
     def data(self):
         PROG.stage('data pack', step='button-icon font')
