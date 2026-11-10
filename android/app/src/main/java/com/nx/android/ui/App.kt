@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inventory2
@@ -63,13 +64,17 @@ import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.StorageVolumes
+import com.nx.android.domain.EnvCheck
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameConfig
 import com.nx.android.ui.builds.BuildsScreen
 import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.FilePickerScreen
+import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.QuietButton
+import com.nx.android.ui.env.EnvChecklistDialog
+import com.nx.android.ui.env.EnvChip
 import com.nx.android.ui.library.ConfigPanel
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
@@ -131,6 +136,7 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
         var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
         var driversOpen by remember { mutableStateOf(false) }
         var logOpen by remember { mutableStateOf(false) }
+        var envCheckOpen by remember { mutableStateOf(false) }
         var ossNotice by rememberSaveable { mutableStateOf(false) }
         val ctx = androidx.compose.ui.platform.LocalContext.current
         // 开源声明：引导走完的那一刻弹一次，老用户（早已完成引导）升级后第一次启动也弹；记在 prefs 里，只此一次
@@ -146,7 +152,8 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
                 MainScreen(container, actions, startTab,
                     onRequest = { pickerReq = it },
                     onDrivers = { driversOpen = true },
-                    onLog = { logOpen = true })
+                    onLog = { logOpen = true },
+                    onEnvCheck = { envCheckOpen = true })
             }
             val volumes = remember(ctx, container.locale.mode) { StorageVolumes.list(ctx, container.locale) }
             pickerReq?.let { req ->
@@ -190,6 +197,23 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
             // 驱动页：盖住整屏，在页面之外
             if (driversOpen) {
                 DriverScreen(container.drivers, onClose = { driversOpen = false })
+            }
+            // 环境检查清单：顶栏胶囊点开的，盖住整屏
+            if (envCheckOpen) {
+                BackHandler { envCheckOpen = false }
+                EnvChecklistDialog(
+                    state = container.envCheck,
+                    onboarding = container.onboarding,
+                    portRunning = container.port.running,
+                    onPrepareEnv = { container.onboarding.unpack() },
+                    onPickKeys = {
+                        envCheckOpen = false
+                        pickerReq = PickerRequest(PickerMode.FILE, emptySet(), null,
+                            container.locale.str(R.string.onb_choose_prod_keys),
+                            onPicked = { f -> actions.onSetKeys(f.path) })
+                    },
+                    onDismiss = { envCheckOpen = false },
+                )
             }
             // 日志浮层：同样盖住整屏
             if (logOpen) {
@@ -239,7 +263,8 @@ private fun OpenSourceNoticeDialog(onClose: () -> Unit, onRepo: () -> Unit) {
 fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
                onRequest: (PickerRequest) -> Unit,
                onDrivers: () -> Unit,
-               onLog: () -> Unit) {
+               onLog: () -> Unit,
+               onEnvCheck: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     val port = container.port
     val lib = container.library
@@ -257,6 +282,8 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             selected = tab,
             onSelect = { tab = it.ordinal },
             onRefresh = { lib.rescan() },
+            chip = container.envCheck.chip,
+            onChip = onEnvCheck,
         )
         // 有新版本时的提示条：在顶栏下面、内容上面，不挡事，可以关掉
         UpdateBanner(container.update)
@@ -287,9 +314,10 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
     }
 }
 
-/** 一行式顶栏：品牌 + 三个纯文字 tab（选中亮/未选灰）+ 右侧图标与时钟（capyps5 的骨架，我们的颜色） */
+/** 一行式顶栏：品牌 + 三个纯文字 tab（选中亮/未选灰）+ 环境状态胶囊 + 右侧图标与时钟（capyps5 的骨架，我们的颜色） */
 @Composable
-private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit) {
+private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit,
+                   chip: EnvCheck.Chip, onChip: () -> Unit) {
     val time by produceState(initialValue = "") {
         val format = SimpleDateFormat("HH:mm", Locale.getDefault())
         while (true) {
@@ -322,6 +350,8 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit
         }
         Spacer(Modifier.weight(1f))
         TopIcon(Icons.Filled.Refresh, stringResource(R.string.app_refresh_library), onRefresh)
+        Spacer(Modifier.width(6.dp))
+        EnvChip(chip, onChip)
         Text(time, style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
     }

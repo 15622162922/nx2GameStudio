@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -50,7 +49,6 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.Drivers
 import com.nx.android.data.Env
 import com.nx.android.data.LosslessDll
-import com.nx.android.data.PortRunner
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
@@ -89,8 +87,7 @@ fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: Dr
         // 关于（含版本与检查更新）在最上面：版本与更新是玩家最先要找的两样东西
         AboutSection(ob, update, actions)
         LanguageSection()
-        EnvSection(ob, actions)
-        DoctorSection(env, actions, onRequest)
+        EnvSection(ob, actions, onRequest)
         PathsSection(lib, env, actions, onRequest)
         DriversSection(drivers, actions, onRequest, onDrivers)
         FrameGenSection(actions, onRequest)
@@ -212,7 +209,7 @@ private fun FrameGenSection(actions: AppActions, onRequest: (PickerRequest) -> U
 }
 
 @Composable
-private fun EnvSection(ob: OnboardingState, actions: AppActions) {
+private fun EnvSection(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val locale = LocalAppLocale.current
     var confirmReset by remember { mutableStateOf(false) }
     Section(stringResource(R.string.env_section)) {
@@ -236,6 +233,8 @@ private fun EnvSection(ob: OnboardingState, actions: AppActions) {
             CapsuleButton(stringResource(R.string.onb_prepare_env), { ob.unpack() }, enabled = !ob.unpacking, modifier = Modifier.weight(1f))
             QuietButton(stringResource(R.string.env_reset), { confirmReset = true }, enabled = !ob.unpacking, modifier = Modifier.weight(1f))
         }
+        // 钥匙的行住在这里：环境检查的入口是顶栏的胶囊，这行是设置页里改路径的地方
+        KeysRow(actions, onRequest)
     }
     if (confirmReset) {
         AlertDialog(
@@ -251,46 +250,6 @@ private fun EnvSection(ob: OnboardingState, actions: AppActions) {
             },
             dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(locale.str(R.string.common_cancel)) } },
         )
-    }
-}
-
-@Composable
-private fun DoctorSection(env: Env, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    val locale = LocalAppLocale.current
-    var running by remember { mutableStateOf(false) }
-    var out by remember { mutableStateOf(listOf<String>()) }
-    Section(stringResource(R.string.doctor_section)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                stringResource(R.string.doctor_what),
-                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
-            )
-            if (running) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
-            else QuietButton(stringResource(R.string.doctor_run), {
-                running = true
-                out = listOf()
-                PortRunner(env, locale) { line -> out = (out + line).takeLast(60) }
-                    .doctor(actions.keys(), json = false) { running = false }
-            })
-        }
-        KeysRow(actions, onRequest)
-        if (out.isNotEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState())
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                    .padding(10.dp),
-            ) {
-                for (line in out) {
-                    Text(
-                        line,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = if (line.startsWith("!!") || line.startsWith("[RED]")) NxPalette.Danger
-                        else MaterialTheme.colorScheme.onSurface,
-                        fontSize = 11.sp,
-                    )
-                }
-            }
-        }
     }
 }
 

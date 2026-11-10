@@ -1,0 +1,74 @@
+package com.nx.android.domain
+
+import org.json.JSONArray
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The environment's checks: the chip's verdict (the two cheap facts) and the doctor's rows (the expensive ones).
+ */
+class EnvCheckTest {
+
+    private fun rows(json: String): List<EnvCheck.Row> = EnvCheck.rows(JSONArray(json))
+
+    @Test
+    fun `the chip is ready when the environment and the keys are there`() {
+        assertEquals(EnvCheck.Chip.READY, EnvCheck.chip(envReady = true, keysOk = true))
+    }
+
+    @Test
+    fun `the chip is not ready when the environment is not there`() {
+        assertEquals(EnvCheck.Chip.NOT_READY, EnvCheck.chip(envReady = false, keysOk = true))
+    }
+
+    @Test
+    fun `the chip is not ready when the keys are not there`() {
+        assertEquals(EnvCheck.Chip.NOT_READY, EnvCheck.chip(envReady = true, keysOk = false))
+    }
+
+    @Test
+    fun `a row that passed is ok`() {
+        val r = rows("""[{"name": "Python", "ok": true, "detail": "3.13.5", "required": true}]""").first()
+        assertEquals(EnvCheck.Level.OK, r.level)
+        assertEquals("Python", r.name)
+        assertEquals("3.13.5", r.detail)
+    }
+
+    @Test
+    fun `a required row that failed is bad`() {
+        val r = rows("""[{"name": "Android NDK", "ok": false, "detail": "not found", "required": true, "fix": "install it"}]""").first()
+        assertEquals(EnvCheck.Level.BAD, r.level)
+        assertEquals("install it", r.fix)
+    }
+
+    @Test
+    fun `a row that is not required and failed is a hint`() {
+        val r = rows("""[{"name": "adb", "ok": false, "detail": "not found", "required": false}]""").first()
+        assertEquals(EnvCheck.Level.HINT, r.level)
+    }
+
+    @Test
+    fun `a row without the required flag is a required one`() {
+        val r = rows("""[{"name": "Python", "ok": false, "detail": "3.10"}]""").first()
+        assertEquals(EnvCheck.Level.BAD, r.level)
+    }
+
+    @Test
+    fun `the keys row is left out - the checklist has its own`() {
+        val r = rows("""[{"name": "prod.keys", "ok": true, "detail": "/sdcard/switch/prod.keys"}, {"name": "Python", "ok": true, "detail": "3.13.5"}]""")
+        assertEquals(1, r.size)
+        assertEquals("Python", r[0].name)
+    }
+
+    @Test
+    fun `the rows keep the order the doctor printed them in`() {
+        val r = rows("""[{"name": "Python", "ok": true}, {"name": "Pillow", "ok": true}, {"name": ".NET", "ok": true}]""")
+        assertEquals(listOf("Python", "Pillow", ".NET"), r.map { it.name })
+    }
+
+    @Test
+    fun `a row without a name is not a row`() {
+        assertTrue(rows("""[{"ok": true, "detail": "x"}, {"name": "Python", "ok": true}]""").size == 1)
+    }
+}

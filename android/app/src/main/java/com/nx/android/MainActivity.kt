@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
     private val actions = AppActions(
         onAskStorage = { askStorage() },
         storageOk = { container.storageOk },
-        onSetKeys = { container.prefs.writeKeys(it) },
+        onSetKeys = { container.prefs.writeKeys(it); container.envCheck.refresh() },
         onStartPort = { file, cfg ->
             // 没有「所有文件访问」权限就读不到游戏文件（重装 App 后会掉）：移植会死在半个 Python 栈里，先说清楚
             if (file.canRead()) {
@@ -136,6 +136,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         container.storageOk = storageGranted()   // the permission may have been given in the background
+        // 回到前台：顶栏胶囊的两个事实重读一遍（玩家可能在后台改了文件）
+        container.envCheck.refresh()
     }
 
     /**

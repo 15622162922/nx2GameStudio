@@ -14,6 +14,7 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
+import com.nx.android.ui.env.EnvCheckState
 
 /**
  * The app's own wiring: every long-lived object is built here, once, and flows one way from here — the UI
@@ -40,7 +41,12 @@ class AppContainer(app: NxApp) {
     var storageOk by mutableStateOf(false)
 
     val port = PortState(prefs, locale)
-    val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk })
+
+    /** 顶栏的环境状态胶囊：两个便宜的事实，加上按需跑的工具自检 */
+    val envCheck = EnvCheckState(env, prefs, locale)
+
+    val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk },
+        onEnvChanged = { envCheck.refresh() })
     val library = LibraryState(prefs, port)
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */

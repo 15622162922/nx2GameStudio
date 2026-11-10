@@ -26,7 +26,9 @@ import java.io.File
  * restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
  */
 class OnboardingState(private val prefs: PrefsStore, private val env: Env, private val locale: AppLocale,
-                      private val storageOk: () -> Boolean) {
+                      private val storageOk: () -> Boolean,
+                      /** The environment changed: the top bar's chip reads the facts again */
+                      private val onEnvChanged: () -> Unit = {}) {
 
     companion object {
         /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
@@ -122,6 +124,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         Thread {
             env.reset()
             refreshEnv()
+            onEnvChanged()
         }.start()
     }
 
@@ -158,6 +161,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
                 AppLog.line(locale.str(R.string.onb_prepare_failed, e.message))
             }
             refreshEnv()
+            onEnvChanged()
         }.start()
     }
 
