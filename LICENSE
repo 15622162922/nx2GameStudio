@@ -1,27 +1,3 @@
-nx2androidX — the phone port of Nintendo Switch games
-Copyright (C) 2026 zFitness
-Copyright (C) 2026 seedds (the vendored upstream engine tree under nxnative/)
-
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE.  See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program.  If not, see <https://www.gnu.org/licenses/>.
-
-The code this repository owns and maintains — the porter, the desktop GUI, the
-phone app, the packaging scripts, the documentation and the vendored upstream
-engine tree — is offered under these terms. The code vendored from other
-projects keeps its own license; the table below lists those parts. The upstream
-engine tree under nxnative/ was MIT licensed when it was vendored and was
-relicensed under these terms with the sublicense clause of that MIT license;
-the upstream author's copyright notice is kept in nxnative/LICENSE.
-
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
@@ -696,42 +672,3 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
-
----
-
-## Components and exceptions
-
-This license covers the code this repository owns and maintains: the porter
-(`porter/`), the desktop GUI (`gui/`), the phone app (`android/`), the packaging
-scripts (`packaging/`), the documentation (`docs/`, `README.md`) and the
-vendored upstream engine tree (`nxnative/`).
-
-Parts of the tree are written by others and are NOT covered by the terms above.
-They keep the license file in their own directory, and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists all of them:
-
-| Path | License | License file |
-|---|---|---|
-| `nxnative/` | GPL-3.0-or-later, Copyright (c) 2026 seedds (relicensed from MIT under that license's sublicense clause) | [`nxnative/LICENSE`](nxnative/LICENSE) |
-| `nxnative/dm/android/lsfg/` | GPL-3.0-or-later (from Eden / lsfg-vk) | [`nxnative/dm/android/lsfg/LICENSE.md`](nxnative/dm/android/lsfg/LICENSE.md), full text in `nxnative/dm/android/lsfg/COPYING` |
-| `nxnative/dm/third_party/*` | each its own (MIT, BSD, Apache-2.0, zlib) | in each directory, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
-| `nxnative/dm/gfx/tools/dmsh_xlate_bin/` | the prebuilt binaries carry the licenses of the components they are built from | [`nxnative/dm/gfx/tools/dmsh_xlate_bin/NOTICE.md`](nxnative/dm/gfx/tools/dmsh_xlate_bin/NOTICE.md) |
-| `nxnative/dm/tools/nx_extract/` | GPL-3.0-or-later (its own code); LibHac is MIT | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
-
-Every binary built from this repository — the phone APK, the desktop zip, the
-host and the per-game APK — is distributed under GPL-3.0-or-later. The frame
-generation can be left out of a build, but that does not change the license of
-the code the build came from. What that means for the APK is in
-[android/NOTICE.md](android/NOTICE.md).
-
-## Game files and trademarks
-
-This repository contains no game files, no keys, no firmware and nothing
-extracted from them, and the tool never downloads any of those. The game
-profiles hold interoperation metadata only (shader key hashes, offsets inside
-a module and small patch stubs), which the README explains in full.
-
-Nintendo Switch, the game names and the trademarks and game artwork shown in
-this repository identify the games this tool is compatible with. They belong to
-Nintendo and to the respective publishers and developers. This project is not
-affiliated with or endorsed by them.

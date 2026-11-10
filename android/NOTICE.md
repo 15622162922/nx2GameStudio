@@ -2,7 +2,9 @@
 
 The nx2android phone app (the APK) is a combination of this project's own
 code and of third-party components. This notice says which, and what the
-app's license is.
+app's license is. The repository's [NOTICE.md](../NOTICE.md) has the full
+statement: the copyright holders, what the license covers, and the upstream
+code this project continues.
 
 ## The license: GPL-3.0-or-later
 

@@ -144,7 +144,7 @@ nx2android 移植时读取你的游戏文件，需要你自己的 `prod.keys` �
 
 ## 许可
 
-本仓库自己拥有并维护的代码 —— 移植器、桌面工具、手机 App、打包、文档，以及本 fork 维护的 nxnative 引擎树 —— 是 GPL-3.0-or-later：[LICENSE](LICENSE)。树里的第三方代码保留各自的许可，每个组件都列在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库自己拥有并维护的代码 —— 移植器、桌面工具、手机 App、打包、文档，以及本 fork 维护的 nxnative 引擎树 —— 是 GPL-3.0-or-later：[LICENSE](LICENSE)。[NOTICE.md](NOTICE.md) 说明这些条款覆盖什么、各项的版权归谁、以及本仓库延续了哪些上游代码。树里的第三方代码保留各自的许可，每个组件都列在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 手机 App 的帧生成（[nxnative/dm/android/lsfg/](nxnative/dm/android/lsfg/)）同样是 GPL-3.0-or-later，与整棵树一致。构建时可以不带上它，但那不会改变构建所用代码的协议。这对 App 意味着什么，见 [android/NOTICE.md](android/NOTICE.md)。
 

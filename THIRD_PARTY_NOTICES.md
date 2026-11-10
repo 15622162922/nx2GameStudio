@@ -7,7 +7,8 @@ gives the license, the version, where it came from and where the full license
 text is.
 
 The license of this repository's own code is GPL-3.0-or-later, in
-[LICENSE](LICENSE). What is *not* covered by it is listed here.
+[LICENSE](LICENSE); [NOTICE.md](NOTICE.md) says what it covers and who holds the
+copyright on what. What is *not* covered by it is listed here.
 
 ## In the source tree (`nxnative/dm/third_party/`)
 

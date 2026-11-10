@@ -137,7 +137,7 @@
     <string name="set_rerun_onboarding_hint">已完成的部分（权限、环境、keys）会被认出来，直接呈现为完成</string>
     <string name="set_run_onboarding">运行</string>
     <string name="oss_notice_title">免费开源声明</string>
-    <string name="oss_notice_body">本应用（nx2androidX）是免费的开源软件，源码公开在 GitHub 上。\n\n禁止盗卖：本应用免费，任何人不得收费出售。\n\n如果你是花钱购买的，请立即联系卖家退款退货。</string>
+    <string name="oss_notice_body">本应用（nx2androidX）是 GPL-3.0-or-later 协议下的自由软件，源码公开在 GitHub 上。\n\n任何人都可以在遵守该协议（并附源码）的前提下转发它；从仓库下载不需要任何费用。\n\n如果你是花钱购买的，请立即联系卖家退款退货。</string>
     <string name="oss_notice_ok">我知道了</string>
     <string name="oss_notice_repo">查看仓库</string>
     <string name="driver_section">Vulkan 驱动</string>
