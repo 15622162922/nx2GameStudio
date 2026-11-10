@@ -56,8 +56,11 @@ data class ForkVersion(
 
 object UpdateVersion {
 
+    /** The fork's own page on GitHub: the source, the issues and the releases all live there */
+    const val REPO_URL = "https://github.com/zFitness/nx2androidX"
+
     /** The release page of the fork: it redirects to the newest release's tag */
-    const val RELEASES_LATEST_URL = "https://github.com/zFitness/nx2androidX/releases/latest"
+    const val RELEASES_LATEST_URL = "$REPO_URL/releases/latest"
 
     /** The fork's own shape: the base with a stage on it (v0.3.0-alpha02), or the base alone (v0.3.0) */
     private val TAG = Regex("^v?(\\d+)\\.(\\d+)\\.(\\d+)(?:-([a-z]+)(\\d+))?$", RegexOption.IGNORE_CASE)

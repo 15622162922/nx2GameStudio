@@ -1,6 +1,8 @@
 package com.nx.android.ui.settings
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,9 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
@@ -49,6 +53,7 @@ import com.nx.android.data.Drivers
 import com.nx.android.data.Env
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PortRunner
+import com.nx.android.domain.UpdateVersion
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
@@ -379,11 +384,18 @@ internal fun LogOverlay(onClose: () -> Unit, text: String) {
 
 @Composable
 private fun AboutSection(ob: OnboardingState, update: UpdateState, actions: AppActions) {
+    val ctx = LocalContext.current
     Section(stringResource(R.string.set_section_about)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // 版本号点一下去 GitHub 仓库：下划线告诉玩家这一行能点
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth().clickable { openRepo(ctx) },
+        ) {
             Text(stringResource(R.string.set_version), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text(actions.version(), style = MaterialTheme.typography.bodyMedium,
-                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                 textDecoration = TextDecoration.Underline)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         // 有没有新版本：玩家自己查一次，结果当场摆出来
@@ -396,5 +408,16 @@ private fun AboutSection(ob: OnboardingState, update: UpdateState, actions: AppA
             }
             QuietButton(stringResource(R.string.set_run_onboarding), { ob.open() })
         }
+    }
+}
+
+/**
+ * 打开 GitHub 仓库页面。设备上没有浏览器时没有第二条路，安静地过去。
+ */
+private fun openRepo(context: Context) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateVersion.REPO_URL)))
+    } catch (e: Exception) {
+        // 没有浏览器：App 里没有别的路可以走到那里，安静地过去
     }
 }
