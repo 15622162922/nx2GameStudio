@@ -60,6 +60,7 @@ char *dm_pad_layout_json(void);              // the layout: the controls' places
 // The front end's capabilities (the player front, front_player.c): what the host in this .so can do. The app asks right after loading it: a host built
 // with an older front has no such entry at all (the call raises UnsatisfiedLinkError), and the app then says the pack has to be ported again.
 #define DM_FRONT_CAPS_PLAYER 1   // the player front end: the app draws the gamepad, the host draws no panel of its own
+#define DM_FRONT_CAPS_PERF 2    // the host counts the frames for the app's performance HUD (and draws no frame rate counter of its own any more)
 int dm_front_caps(void);
 
 #endif

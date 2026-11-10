@@ -47,7 +47,7 @@ static int g_dpi;       // the display's density (the start call's argument), 0 
 static ALooper *g_ilooper;   // the input thread's looper (the accelerometer's queue)
 
 // ---- the front end's capabilities: what this host can do (the app asks right after loading it) ----
-int dm_front_caps(void) { return DM_FRONT_CAPS_PLAYER; }   // the player front: the app draws the gamepad, the host draws no panel of its own
+int dm_front_caps(void) { return DM_FRONT_CAPS_PLAYER | DM_FRONT_CAPS_PERF; }   // the player front: the app draws the gamepad, the host draws no panel of its own; the host counts the frames for the app's HUD
 
 // ---- the window: the app's Surface, passed over from Java (jni_android.h) ----
 static pthread_mutex_t g_win_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -73,7 +73,7 @@ const char *dm_front_root(void) { return g_root; }   // overlay_theme.c: the gam
 // ---- settings, kept in the pack's own folder as KEY=VALUE lines ----
 // The gamepad's own two values (shown, opacity) are the app's business now: the app's preferences are the only
 // truth about them, the host keeps them as runtime state (dm_pad_prefs) and does not save them here.
-static _Atomic int g_set_overlay = 1, g_set_rumble = 1, g_set_fps;   // the gamepad shown (the app's); rumble and tap vibration; the frame rate counter
+static _Atomic int g_set_overlay = 1, g_set_rumble = 1;   // the gamepad shown (the app's); rumble and tap vibration
 static _Atomic int g_set_opacity = 60;   // the gamepad's opacity, percent (OV_OPACITY_MIN..MAX) — the app's
 static _Atomic int g_cust[2][2][DM_AOV_N][3], g_cust_ver;   // the player's own layout: [the editor's copy][the layout][the control][x, y, size]
 static const char *const LAYOUT_NAMES[2] = {"tablet", "phone"};
@@ -84,7 +84,6 @@ static void settings_load(void) {
     char p[600]; snprintf(p, sizeof p, "%s/settings.txt", g_root); FILE *f = fopen(p, "r"); char line[128];
     if (!f) return;
     while (fgets(line, sizeof line, f)) { int v; if (sscanf(line, "rumble=%d", &v) == 1) atomic_store(&g_set_rumble, v != 0);
-        else if (sscanf(line, "fps=%d", &v) == 1) atomic_store(&g_set_fps, v != 0);
         else if (sscanf(line, "docked=%d", &v) == 1) setenv("DM_OPMODE", v ? "1" : "0", 1);   // over env.txt's: the host reads it once, at its first query
         else if (!strncmp(line, "ui=", 3)) {   // ui=<layout>,<control>,<x>,<y>,<size>: x, y in 1/10000 of the window (-1 the layout's place), size in 1/1000
             char lay[16], name[32]; int x, y, z, l, i;
@@ -101,7 +100,7 @@ static void settings_load(void) {
 static void settings_save(void) {
     char p[600], tmp[610]; snprintf(p, sizeof p, "%s/settings.txt", g_root); snprintf(tmp, sizeof tmp, "%s.new", p);
     FILE *f = fopen(tmp, "w"); if (!f) { LOG("[RED] cannot write %s", tmp); return; }
-    fprintf(f, "rumble=%d\ndocked=%d\nfps=%d\n", atomic_load(&g_set_rumble), dm_opmode() != 0, atomic_load(&g_set_fps));
+    fprintf(f, "rumble=%d\ndocked=%d\n", atomic_load(&g_set_rumble), dm_opmode() != 0);
     for (int l = 0; l < 2; l++) for (int i = 0; i < OV_N; i++) {
         _Atomic int *c = g_cust[0][l][i]; int x = atomic_load(&c[0]), y = atomic_load(&c[1]), z = atomic_load(&c[2]);
         if ((x && y) || z) fprintf(f, "ui=%s,%s,%d,%d,%d\n", LAYOUT_NAMES[l], OV_LAYOUTS[0][i].name, x && y ? x - 1 : -1, x && y ? y - 1 : -1, z ? z : 1000);
@@ -172,7 +171,6 @@ static void pad_publish(void) {
 static _Atomic int g_pads;          // the controllers in use (the app counts them, dm_pad_devices): while there is one, the app hides the gamepad
 static _Atomic int g_pad_in = -1;   // the device that last sent a controller's input (the haptics' motor belongs to it)
 int dm_overlay_visible(void) { return 0; }   // the render side: the app draws the gamepad in the player, so the host draws none of it
-int dm_overlay_fps(void) { return atomic_load(&g_set_fps); }   // the frame rate counter: the one thing the host still draws over the picture
 int dm_overlay_layout(void) {   // the phone's layout in a window at least OV_PHONE_ASPECT wide for its height (overlay_layout.h)
     static int last_w = -1, last_h = -1, phone;
     ANativeWindow *w = dm_front_window(); int ww = w ? ANativeWindow_getWidth(w) : 0, wh = w ? ANativeWindow_getHeight(w) : 0;
@@ -268,14 +266,13 @@ char *dm_pad_layout_json(void) {
 // ---- the drawer's rows: the host's own settings, driven from the app ----
 // The state lives in the g_set_* atomics and the save manager; the drawer reads and sets them through these.
 // The gamepad's own two values (shown, opacity) are the app's: they are runtime state only, and the app pushes
-// them with dm_pad_prefs; the rest (rumble, the frame rate counter, handheld or docked) is saved in settings.txt.
+// them with dm_pad_prefs; the rest (rumble, handheld or docked) is saved in settings.txt.
 static _Atomic int g_sv_st, g_sv_n;   // the export's outcome (OVX_*), the exports made
 int dm_menu_get(int what) {
     switch (what) {
     case 0: return atomic_load(&g_set_overlay);
     case 1: return atomic_load(&g_set_opacity);
     case 2: return atomic_load(&g_set_rumble);
-    case 3: return atomic_load(&g_set_fps);
     case 4: return dm_opmode() != 0;
     }
     return 0;
@@ -286,8 +283,6 @@ void dm_menu_opacity_set(int v) { int c = v < OV_OPACITY_MIN ? OV_OPACITY_MIN : 
 int dm_menu_opacity_get(void) { return atomic_load(&g_set_opacity); }
 void dm_menu_rumble_set(int on) { atomic_store(&g_set_rumble, on != 0); dm_haptics_android_set(on); settings_save(); }
 int dm_menu_rumble_get(void) { return atomic_load(&g_set_rumble); }
-void dm_menu_fps_set(int on) { atomic_store(&g_set_fps, on != 0); settings_save(); }
-int dm_menu_fps_get(void) { return atomic_load(&g_set_fps); }
 void dm_menu_mode_set(int docked) { dm_set_opmode(docked ? 1 : 0); settings_save(); }
 int dm_menu_mode_get(void) { return dm_opmode() != 0; }
 void dm_menu_edit_open(void) { LOG("[RED] [overlay] the layout editor is the app's now: the host has no editor to open"); }

@@ -41,6 +41,11 @@ class PrefsStore(ctx: Context) {
         const val PORT_HISTORY = "port.history"
         // the update check: the version the player closed the notice for (empty = none)
         const val UPDATE_IGNORED = "update.ignored"
+        // the performance HUD: the two lines and what the performance one shows
+        const val HUD_STATS = "hud.stats"
+        const val HUD_DEVICE = "hud.device"
+        const val HUD_FIELDS = "hud.fields"
+        const val HUD_TEMP_F = "hud.temp.f"
     }
 
     val prefs: SharedPreferences = ctx.getSharedPreferences("nx2a", Context.MODE_PRIVATE)

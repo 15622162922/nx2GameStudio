@@ -24,15 +24,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -42,8 +46,10 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PrefsStore
+import com.nx.android.game.HudField
 import com.nx.android.ui.ProvideAppLocale
 import com.nx.android.ui.game.GameDrawer
+import com.nx.android.ui.game.HudOverlay
 import com.nx.android.ui.game.PadEditor
 import com.nx.android.ui.game.PadView
 import com.nx.android.ui.game.TextPrompt
@@ -109,6 +115,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var fgSettings: FrameGenSettings? = null
     private var packPath: String? = null
     private lateinit var padView: PadView
+
+    // 性能 HUD：两条线与它显示哪些字段（App 的偏好，重启后仍在）
+    private var hudStats by mutableStateOf(false)
+    private var hudDevice by mutableStateOf(false)
+    private var hudFields by mutableStateOf(HudField.DEFAULT)
+    private var hudFahrenheit by mutableStateOf(false)
 
     /** 游戏要文字时（宿主的通知 3）：App 用系统输入法问玩家 */
     private data class TextReq(val title: String, val text: String, val max: Int)
@@ -202,13 +214,21 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         // 旧版宿主编的包：老的前端没有 frontCaps 这个入口（调用即抛），这个包要用当前版本重新移植
         val caps = runCatching { Native.frontCaps() }.getOrNull()
-        if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0) {
+        // 性能 HUD 的计数也要新宿主：老宿主还在画面上自己画帧率计数器，两处帧率不是一回事
+        if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0 || caps and Native.FRONT_CAPS_PERF == 0) {
             toast(locale.str(R.string.game_needs_report))
             finish()
             return
         }
         // the title id keeps this game's saves, temp and log apart from the others' (host_start_common)
         fgSettings = titleId?.let { FrameGenSettings(PrefsStore(this), it) }
+        // the performance HUD's own preferences: the two lines, the fields, the temperature's unit
+        val prefs = PrefsStore(this)
+        hudStats = prefs.bool(PrefsStore.HUD_STATS, false)
+        hudDevice = prefs.bool(PrefsStore.HUD_DEVICE, false)
+        hudFields = HudField.of(prefs.str(PrefsStore.HUD_FIELDS, "").split(",").filter { it.isNotBlank() })
+            .ifEmpty { HudField.DEFAULT }
+        hudFahrenheit = prefs.bool(PrefsStore.HUD_TEMP_F, false)
         val env = fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()
         if (!Native.start(pack, filesDir.path, titleId, resources.displayMetrics.densityDpi, env, this)) {
             finish()   // the save import asked to end: it happens at the next start
@@ -221,6 +241,16 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    // ---- 性能 HUD 的开关与字段（App 的偏好，唯一真值）----
+
+    private fun saveHudStats(on: Boolean) { hudStats = on; PrefsStore(this).put(PrefsStore.HUD_STATS, on) }
+    private fun saveHudDevice(on: Boolean) { hudDevice = on; PrefsStore(this).put(PrefsStore.HUD_DEVICE, on) }
+    private fun saveHudFields(fields: Set<HudField>) {
+        hudFields = fields
+        PrefsStore(this).put(PrefsStore.HUD_FIELDS, HudField.keys(fields))
+    }
+    private fun saveHudFahrenheit(on: Boolean) { hudFahrenheit = on; PrefsStore(this).put(PrefsStore.HUD_TEMP_F, on) }
 
     /**
      * 宿主的上行通知（front_player.c 的 dm_app_notice）：宿主不知道抽屉，它只说发生了什么。
@@ -292,6 +322,14 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onPadShown = { padView.shown = it },
                 padOpacity = { padView.opacity },
                 onPadOpacity = { padView.opacity = it },
+                hudStats = { hudStats },
+                onHudStats = { saveHudStats(it) },
+                hudDevice = { hudDevice },
+                onHudDevice = { saveHudDevice(it) },
+                hudFields = { hudFields },
+                onHudFields = { saveHudFields(it) },
+                hudFahrenheit = { hudFahrenheit },
+                onHudFahrenheit = { saveHudFahrenheit(it) },
                 onLayoutEditor = { openEditor() },
                 onResetPadLayout = { resetPadLayout() },
                 onPauseResume = {
@@ -302,6 +340,17 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                     drawerOpen = false
                     endGame()
                 },
+            )
+            // 性能 HUD：画在游戏画面之上（App 自己画，宿主不再往画面里画东西）；顶中，避开刘海与挖孔
+            HudOverlay(
+                enabled = hudStats,
+                deviceLine = hudDevice,
+                fields = hudFields,
+                fahrenheit = hudFahrenheit,
+                engineLabel = { fgSettings?.load()?.let { "LSFG ${it.mult}x" } },
+                chargingText = locale.str(R.string.hud_charging),
+                packPath = packPath,
+                modifier = Modifier.align(Alignment.TopCenter).displayCutoutPadding().padding(top = 8.dp),
             )
             // 布局编辑器：App 自己的面板，画在游戏画面上（游戏先等着）
             if (editorOpen) {

@@ -10,9 +10,10 @@
 #include "dm_framegen.h"
 #include <android/input.h>
 
-int dm_menu_get(int what);   // front_player.c: the menu rows' current values (0 overlay, 1 opacity, 2 rumble, 3 fps, 4 docked)
+int dm_menu_get(int what);   // front_player.c: the menu rows' current values (0 overlay, 1 opacity, 2 rumble, 4 docked)
 void dm_menu_overlay_set(int); void dm_menu_opacity_set(int); void dm_menu_rumble_set(int);
-void dm_menu_fps_set(int); void dm_menu_mode_set(int); void dm_menu_edit_open(void);
+void dm_menu_mode_set(int); void dm_menu_edit_open(void);
+void dm_present_sample(uint64_t out[5]);   // gfx_vk_present.c: the performance HUD's counters
 char *dm_menu_saves(void); void dm_menu_export(void); int dm_menu_import(const char *name);
 int dm_menu_export_note(char *out, int cap); int dm_menu_state(void);
 char *dm_pad_layout_json(void); char *dm_pad_state_json(void);
@@ -112,7 +113,6 @@ Java_com_nx_android_game_Native_menuSet(JNIEnv *E, jclass c, jint what, jdouble 
     case 0: dm_menu_overlay_set((int)v); break;
     case 1: dm_menu_opacity_set((int)v); break;
     case 2: dm_menu_rumble_set((int)v); break;
-    case 3: dm_menu_fps_set((int)v); break;
     case 4: dm_menu_mode_set((int)v); break;
     }
 }
@@ -201,6 +201,21 @@ Java_com_nx_android_game_Native_padLayoutSave(JNIEnv *E, jclass c) { (void)E; (v
 // The app's own panel is up (the layout editor): the game waits.
 JNIEXPORT void JNICALL
 Java_com_nx_android_game_Native_hold(JNIEnv *E, jclass c, jboolean on) { (void)E; (void)c; dm_app_hold(on ? 1 : 0); }
+
+// The performance HUD's counters: the game's frames presented, the frame generation's frames presented, the intervals between the game's frames
+// (their sum and their count) and the display's refresh cycle. The app reads two of these a second apart and does the arithmetic.
+JNIEXPORT jlongArray JNICALL
+Java_com_nx_android_game_Native_perfSample(JNIEnv *E, jclass c) {
+    (void)c;
+    uint64_t s[5] = {0, 0, 0, 0, 0};
+    dm_present_sample(s);
+    jlong v[5];
+    for (int i = 0; i < 5; i++) v[i] = (jlong)s[i];
+    jlongArray out = (*E)->NewLongArray(E, 5);
+    if (!out) return NULL;
+    (*E)->SetLongArrayRegion(E, out, 0, 5, v);
+    return out;
+}
 
 // The game's text request (the game waits): the app shows the system's input method over the game.
 JNIEXPORT jstring JNICALL

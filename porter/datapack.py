@@ -14,7 +14,8 @@ from pathlib import Path
 MANIFEST = 'nx2a-data.json'
 KEEP_ON_DEVICE = ('settings.txt',)          # the player's choices win over the pack's defaults
 OWNED = ('mods', 'RomFS', 'aoc')            # folders the pack owns on the device: files there that the pack lacks are stale (an older version's) and removed
-HOST_FRONT = 'player'                       # the front end the pack's host was built with (the player front: the app draws the gamepad, the host draws no panel).
+HOST_FRONT = 'player-hud'                   # the front end the pack's host was built with (the player front: the app draws the gamepad, the host draws no panel;
+                                          # and the host counts the frames for the app's performance HUD instead of drawing a counter of its own).
                                           # The app compares it with the front its own build needs: a pack built with another front has to be ported again
 
 

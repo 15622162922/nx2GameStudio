@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.data.FrameGenKnobs
 import com.nx.android.data.FrameGenSettings
+import com.nx.android.game.HudField
 import com.nx.android.game.Native
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.theme.GlassSheet
@@ -78,6 +79,14 @@ fun GameDrawer(
     onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int,
     onPadOpacity: (Int) -> Unit,
+    hudStats: () -> Boolean,
+    onHudStats: (Boolean) -> Unit,
+    hudDevice: () -> Boolean,
+    onHudDevice: (Boolean) -> Unit,
+    hudFields: () -> Set<HudField>,
+    onHudFields: (Set<HudField>) -> Unit,
+    hudFahrenheit: () -> Boolean,
+    onHudFahrenheit: (Boolean) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
     onPauseResume: () -> Unit,
@@ -133,7 +142,9 @@ fun GameDrawer(
                                 when (DrawerTab.entries[tab]) {
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
-                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity, onLayoutEditor, onResetPadLayout)
+                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity,
+                                        hudStats, onHudStats, hudDevice, onHudDevice, hudFields, onHudFields, hudFahrenheit, onHudFahrenheit,
+                                        onLayoutEditor, onResetPadLayout)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -210,19 +221,26 @@ private fun FrameGenRows(settings: FrameGenSettings, status: String) {
     }
 }
 
-/** 画面与操作页：手柄的显示与浓淡（App 的偏好，唯一真值），其余是宿主的设置（即改即生效并存进包的 settings.txt） */
+/** 画面与操作页：手柄的显示与浓淡（App 的偏好，唯一真值）与性能 HUD（App 画的，宿主不再往画面里画东西）；其余是宿主的设置（即改即生效并存进包的 settings.txt） */
 @Composable
 private fun DisplayRows(
     padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+    hudStats: () -> Boolean, onHudStats: (Boolean) -> Unit,
+    hudDevice: () -> Boolean, onHudDevice: (Boolean) -> Unit,
+    hudFields: () -> Set<HudField>, onHudFields: (Set<HudField>) -> Unit,
+    hudFahrenheit: () -> Boolean, onHudFahrenheit: (Boolean) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
     var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
-    var fps by remember { mutableStateOf(Native.menuGet(3) != 0) }
     var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
+    var stats by remember { mutableStateOf(hudStats()) }
+    var device by remember { mutableStateOf(hudDevice()) }
+    var fields by remember { mutableStateOf(hudFields()) }
+    var fahrenheit by remember { mutableStateOf(hudFahrenheit()) }
 
     SwitchRow(stringResource(R.string.drawer_virtual_pad), shown) { shown = it; onPadShown(it) }
     Column {
@@ -234,8 +252,34 @@ private fun DisplayRows(
                onValueChange = { opacity = it.toInt(); onPadOpacity(opacity) })
     }
     SwitchRow(stringResource(R.string.drawer_rumble), rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
-    SwitchRow(stringResource(R.string.drawer_fps_counter), fps) { fps = it; Native.menuSet(3, if (it) 1.0 else 0.0) }
     SwitchRow(stringResource(R.string.drawer_docked), docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
+    // 性能 HUD：App 画在游戏画面顶上的两行（性能与设备信息）
+    SwitchRow(stringResource(R.string.hud_stats), stats) { stats = it; onHudStats(it) }
+    SwitchRow(stringResource(R.string.hud_device), device) { device = it; onHudDevice(it) }
+    if (stats) {
+        Text(stringResource(R.string.hud_fields), style = MaterialTheme.typography.bodyMedium)
+        // 字段：chips（勾上的显示，没勾上的不采样）
+        for (row in HUD_FIELD_ROWS) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                for ((f, label) in row) {
+                    val on = f in fields
+                    Box(
+                        Modifier.clip(RoundedCornerShape(50))
+                            .background(if (on) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
+                            .clickable {
+                                fields = if (on) fields - f else fields + f
+                                onHudFields(fields)
+                            }.padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) { Text(stringResource(label), fontSize = 12.sp, color = if (on) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+        if (HudField.TEMP in fields) {
+            OptionRow(stringResource(R.string.hud_temp_unit), listOf("°C", "°F"), if (fahrenheit) "°F" else "°C") {
+                fahrenheit = it == "°F"; onHudFahrenheit(fahrenheit)
+            }
+        }
+    }
     // 布局编辑器：App 自己的面板（画在游戏画面上，游戏先等着）
     QuietButton(stringResource(R.string.drawer_layout_editor), onClick = onLayoutEditor, modifier = Modifier.fillMaxWidth())
     // 恢复默认布局：控件回到布局自己放的地方与大小（存进数据包的 settings.txt）
@@ -254,6 +298,22 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
 }
 
 private val TARGET_LABELS = listOf("60", "90", "120")
+
+/** 性能 HUD 的字段：chips 的两行（每行四个） */
+private val HUD_FIELD_ROWS = listOf(
+    listOf(
+        HudField.FPS to R.string.hud_field_fps,
+        HudField.FRAME_TIME to R.string.hud_field_ft,
+        HudField.CPU to R.string.hud_field_cpu,
+        HudField.GPU to R.string.hud_field_gpu,
+    ),
+    listOf(
+        HudField.APP_RAM to R.string.hud_field_ram,
+        HudField.SYS_RAM to R.string.hud_field_mem,
+        HudField.TEMP to R.string.hud_field_temp,
+        HudField.POWER to R.string.hud_field_power,
+    ),
+)
 
 @Composable
 private fun targetLabels() = listOf(stringResource(R.string.drawer_follow_game)) + TARGET_LABELS

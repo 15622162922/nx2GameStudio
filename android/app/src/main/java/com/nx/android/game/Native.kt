@@ -12,6 +12,8 @@ import android.view.Surface
 object Native {
     /** 能力位：玩家前端（App 画虚拟手柄，宿主不画自己的面板） */
     const val FRONT_CAPS_PLAYER = 1
+    /** 能力位：宿主为 App 的性能 HUD 数帧（老宿主还在画面上自己画帧率计数器） */
+    const val FRONT_CAPS_PERF = 2
 
     @JvmStatic external fun start(pack: String, internal: String, titleId: String?, dpi: Int, env: Array<String>, ctx: Context): Boolean
     @JvmStatic external fun setSurface(surface: Surface?)
@@ -23,7 +25,7 @@ object Native {
     @JvmStatic external fun frameGenSet(on: Boolean, mult: Int, target: Int, flow: Int)
     @JvmStatic external fun frameGenStatus(): String
 
-    /** 运行中抽屉的宿主菜单行（画面与操作/存档）：what 0 overlay 1 opacity 2 rumble 3 fps 4 docked */
+    /** 运行中抽屉的宿主菜单行（画面与操作/存档）：what 0 overlay 1 opacity 2 rumble 4 docked */
     @JvmStatic external fun menuGet(what: Int): Int
     @JvmStatic external fun menuSet(what: Int, v: Double)
     @JvmStatic external fun menuState(): String
@@ -32,6 +34,12 @@ object Native {
     @JvmStatic external fun menuExport()
     @JvmStatic external fun menuImport(name: String): Boolean
     @JvmStatic external fun menuExportNote(): String
+
+    /**
+     * 性能 HUD 的计数（gfx_vk_present.c 的 dm_present_sample）：0 游戏帧数、1 帧生成帧数、2 帧间隔之和(纳秒)、
+     * 3 帧间隔的个数、4 屏幕的刷新周期(纳秒)。App 隔一秒读两次，自己算帧率与帧时间。
+     */
+    @JvmStatic external fun perfSample(): LongArray
 
     /** 虚拟手柄（App 绘制层）：布局（JSON，见 front_player.c 的 dm_pad_layout_json）：控件的位置与大小 */
     @JvmStatic external fun padLayout(): String
