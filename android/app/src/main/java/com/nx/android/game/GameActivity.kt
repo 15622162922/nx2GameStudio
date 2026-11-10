@@ -301,7 +301,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         padView.resetControls()
     }
 
-    /** the drawer's tree: handle, panel, and the paused overlay (the surface keeps presenting through it) */
+    /** the drawer's tree: the HUD, the panel, and the paused overlay (the surface keeps presenting through it) */
     @androidx.compose.runtime.Composable
     private fun DrawerRoot() {
         Box(Modifier.fillMaxSize()) {
@@ -313,6 +313,18 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 ) { androidx.compose.material3.Text(locale.str(R.string.drawer_paused_overlay), color = Color.White,
                     style = androidx.compose.material3.MaterialTheme.typography.titleLarge) }
             }
+            // 性能 HUD：画在游戏画面之上（App 自己画，宿主不再往画面里画东西）；顶中，避开刘海与挖孔。
+            // 它排在抽屉之前：抽屉是前景的面板，HUD 该在它下面——否则读数会压在抽屉的顶上。
+            HudOverlay(
+                enabled = hudStats,
+                deviceLine = hudDevice,
+                fields = hudFields,
+                fahrenheit = hudFahrenheit,
+                engineLabel = { fgSettings?.load()?.let { "LSFG ${it.mult}x" } },
+                chargingText = locale.str(R.string.hud_charging),
+                packPath = packPath,
+                modifier = Modifier.align(Alignment.TopCenter).displayCutoutPadding().padding(top = 8.dp),
+            )
             GameDrawer(
                 paused = paused,
                 open = drawerOpen,
@@ -332,25 +344,19 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onHudFahrenheit = { saveHudFahrenheit(it) },
                 onLayoutEditor = { openEditor() },
                 onResetPadLayout = { resetPadLayout() },
-                onPauseResume = {
-                    paused = !paused
-                    Native.lifecycle(if (paused) 0 else 1)
+                // 暂停/继续：游戏原地停/起，抽屉不收——玩家可以一边停着一边调设置
+                onPauseGame = {
+                    paused = true
+                    Native.lifecycle(0)
+                },
+                onResumeGame = {
+                    paused = false
+                    Native.lifecycle(1)
                 },
                 onExit = {
                     drawerOpen = false
                     endGame()
                 },
-            )
-            // 性能 HUD：画在游戏画面之上（App 自己画，宿主不再往画面里画东西）；顶中，避开刘海与挖孔
-            HudOverlay(
-                enabled = hudStats,
-                deviceLine = hudDevice,
-                fields = hudFields,
-                fahrenheit = hudFahrenheit,
-                engineLabel = { fgSettings?.load()?.let { "LSFG ${it.mult}x" } },
-                chargingText = locale.str(R.string.hud_charging),
-                packPath = packPath,
-                modifier = Modifier.align(Alignment.TopCenter).displayCutoutPadding().padding(top = 8.dp),
             )
             // 布局编辑器：App 自己的面板，画在游戏画面上（游戏先等着）
             if (editorOpen) {
@@ -404,10 +410,11 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
      * Back goes to the frontmost thing:
      * the drawer closes it, the host's own panel (text entry, layout editor, save picker) steps back in it
      * (dm_menu_state: -1 closed, else a panel is up), and with nothing up Back opens the drawer.
+     * 游戏暂停时也一样：暂停遮罩吃掉了所有触摸（菜单按钮点不到），Back 是那时唯一能叫出抽屉的入口。
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (!forwardsKeyToGame(e.keyCode)) return false   // 音量键：系统的事，游戏与宿主都不沾
-        if (e.keyCode == KeyEvent.KEYCODE_BACK && !paused) {
+        if (e.keyCode == KeyEvent.KEYCODE_BACK) {
             if (e.action == KeyEvent.ACTION_DOWN) {
                 val hostPanel = !drawerOpen && hostPanelUp()   // 抽屉在前面时，Back 归抽屉
                 when {

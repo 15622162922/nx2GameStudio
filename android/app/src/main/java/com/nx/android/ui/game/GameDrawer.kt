@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,10 +26,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.QueryStats
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,8 +68,11 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.data.FrameGenKnobs
 import com.nx.android.data.FrameGenSettings
+import com.nx.android.data.LosslessDll
 import com.nx.android.game.HudField
 import com.nx.android.game.Native
+import com.nx.android.ui.components.CapsuleButton
+import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
@@ -58,14 +80,20 @@ import kotlinx.coroutines.delay
 
 /** 抽屉的两个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
 enum class DrawerTab(@StringRes val label: Int) {
-    FRAMEGEN(R.string.drawer_tab_framegen), DISPLAY(R.string.drawer_tab_display)
+    DISPLAY(R.string.drawer_tab_display), CONTROLS(R.string.drawer_tab_controls)
 }
 
 /**
- * 游戏内抽屉（:play 进程自己的 UI）：右缘把手或返回唤出，玻璃卡样式与应用一致，两个标签页 + 底部动作行。
+ * 游戏内抽屉（:play 进程自己的 UI）：虚拟手柄的菜单按钮、物理手柄菜单键或系统返回手势唤出，
+ * 玻璃卡样式与应用一致，两个标签页（显示 / 操作）+ 底部动作行。
+ *
  * 帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
- * （震动、FPS 计数、掌机/底座，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
+ * （震动、底座模式，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
  * 没有布局编辑器、没有存档选择器、没有软键盘——游戏的文本输入走系统输入法（App 弹自己的对话框）。
+ *
+ * 动作行只有两个：主按钮关抽屉（游戏在暂停时顺带恢复），退出的按钮是红的。暂停游戏本身在顶部
+ * 的一条动作里，点了即暂停并收起抽屉——玩家看到画面上的暂停遮罩。
+ *
  * 存档不在这里——导出与导入都在库页选中游戏后的抽屉里（下次启动游戏时生效）。
  * Back 不经过这里（GameActivity 分流）。
  */
@@ -89,22 +117,15 @@ fun GameDrawer(
     onHudFahrenheit: (Boolean) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
-    onPauseResume: () -> Unit,
+    onPauseGame: () -> Unit,
+    onResumeGame: () -> Unit,
     onExit: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-        // 右缘把手：半透明，往下一个屏幕高度的四分之一
-        Box(
-            Modifier.align(Alignment.CenterEnd).padding(top = 120.dp)
-                .clip(RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp))
-                .background(Color.White.copy(alpha = 0.28f))
-                .clickable { onOpenChange(true) }.padding(horizontal = 7.dp, vertical = 34.dp)
-        ) { Text("‹", color = Color.Black.copy(alpha = 0.7f), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
-
+    Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = open,
-            enter = slideInHorizontally { it } + fadeIn(),
-            exit = slideOutHorizontally { it } + fadeOut(),
+            enter = slideInHorizontally { -it } + fadeIn(),
+            exit = slideOutHorizontally { -it } + fadeOut(),
         ) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable { onOpenChange(false) }) {
                 var status by remember { mutableStateOf("-1 not tried") }
@@ -115,7 +136,7 @@ fun GameDrawer(
                     }
                 }
                 Column(
-                    Modifier.align(Alignment.CenterEnd).width(420.dp).fillMaxHeight().padding(vertical = 16.dp)
+                    Modifier.align(Alignment.CenterStart).width(420.dp).fillMaxHeight().padding(vertical = 16.dp)
                         // 面板自己消费点击：点在行与行之间（或纯文本上）不至于冒泡到遮罩把抽屉关掉
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
                 ) {
@@ -137,26 +158,30 @@ fun GameDrawer(
                             // 内容页：滚动，占据动作行之上的全部空间（动作行在本列底部，不可能被挤出）
                             Column(
                                 Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 when (DrawerTab.entries[tab]) {
-                                    DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
-                                        else FrameGenRows(settings, status)
-                                    DrawerTab.DISPLAY -> DisplayRows(padShown, onPadShown, padOpacity, onPadOpacity,
-                                        hudStats, onHudStats, hudDevice, onHudDevice, hudFields, onHudFields, hudFahrenheit, onHudFahrenheit,
+                                    DrawerTab.DISPLAY -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
+                                        else DisplayRows(settings, status,
+                                            hudStats, onHudStats, hudDevice, onHudDevice, hudFields, onHudFields, hudFahrenheit, onHudFahrenheit)
+                                    DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
                                         onLayoutEditor, onResetPadLayout)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                            // 底部动作行：三个标签页共用
+                            // 动作行：暂停/继续（同一个按钮，词随状态翻转）与退出。
+                            // 抽屉没有自己的关闭按钮——关它靠点遮罩或系统返回手势；
+                            // 暂停也不收抽屉：玩家可以一边停着一边调设置。
                             Row(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                QuietButton(if (paused) stringResource(R.string.drawer_resume) else stringResource(R.string.drawer_resume), onClick = onPauseResume, modifier = Modifier.weight(1f))
-                                QuietButton(stringResource(R.string.drawer_exit), onClick = onExit, modifier = Modifier.weight(1f))
-                                QuietButton(stringResource(R.string.drawer_back_to_game), onClick = { onOpenChange(false) }, modifier = Modifier.weight(1f))
+                                CapsuleButton(
+                                    if (paused) stringResource(R.string.drawer_resume_game) else stringResource(R.string.drawer_pause_game),
+                                    onClick = if (paused) onResumeGame else onPauseGame,
+                                    modifier = Modifier.weight(1f))
+                                ExitButton(stringResource(R.string.drawer_exit), onClick = onExit, modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -166,96 +191,119 @@ fun GameDrawer(
     }
 }
 
+/** 退出：红色描边，和主按钮一眼分得开（误触的代价不对称） */
+@Composable
+private fun ExitButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = NxPalette.Danger),
+        border = BorderStroke(1.dp, NxPalette.Danger.copy(alpha = 0.6f)),
+        modifier = modifier.height(46.dp),
+    ) { Text(text, fontSize = 14.sp) }
+}
+
 @Composable
 private fun HintRow(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-private fun pushGen(settings: FrameGenSettings, knobs: FrameGenKnobs) {
-    settings.save(knobs)
-    if (knobs.on) Native.frameGenSet(true, knobs.mult, knobs.target, knobs.flow)
-}
-
-/** 帧生成页：开关、倍率、目标帧率、光流质量、DLL 与实时状态（即改即生效） */
+/** 分组的小标题：页里的东西按组走，一眼能扫 */
 @Composable
-private fun FrameGenRows(settings: FrameGenSettings, status: String) {
-    var knobs by remember { mutableStateOf(settings.load()) }
-    val state = status.substringBefore(' ').toIntOrNull() ?: -1
-    val reason = status.substringAfter(' ', "")
+private fun GroupLabel(text: String) {
+    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+         fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+}
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(stringResource(R.string.drawer_tab_framegen), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Box(
-            Modifier.clip(RoundedCornerShape(50)).background(if (knobs.on) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
-                .clickable { knobs = knobs.copy(on = !knobs.on); pushGen(settings, knobs) }
-                .padding(horizontal = 16.dp, vertical = 7.dp),
-        ) { Text(if (knobs.on) stringResource(R.string.common_on) else stringResource(R.string.common_off), color = if (knobs.on) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
-    }
-    // 状态行：宿主的判定是唯一真源（设备能力、DLL、显示节奏都在它那边）
-    Text(
-        when (state) {
-            1 -> stringResource(R.string.drawer_generating)
-            2 -> reason.ifEmpty { stringResource(R.string.drawer_waiting_stable) }
-            0 -> stringResource(R.string.drawer_off)
-            -1 -> reason.ifEmpty { stringResource(R.string.drawer_device_unsupported) }
-            else -> stringResource(R.string.drawer_build_without_fg)
-        } + if (state == -1 && reason.contains("Lossless.dll")) stringResource(R.string.drawer_choose_dll_hint) else "",
-        style = MaterialTheme.typography.bodySmall,
-        color = when (state) { 1 -> NxPalette.Ready; 2 -> NxPalette.Building; -1 -> NxPalette.Danger; else -> MaterialTheme.colorScheme.onSurfaceVariant },
-    )
-    if (state >= 0) {
-        // 选项的词先取好：回调里不能取词
-        val targets = targetLabels()
-        val auto = stringResource(R.string.drawer_auto)
-        OptionRow(stringResource(R.string.drawer_multiplier), listOf("2x", "3x", "4x"), "${knobs.mult}x") { name ->
-            knobs = knobs.copy(mult = name.removeSuffix("x").toIntOrNull() ?: 2); pushGen(settings, knobs)
+/** 一行：图标 + 标题 + 小字提示 + 控件 */
+@Composable
+private fun DrawerRow(
+    icon: ImageVector,
+    title: String,
+    hint: String? = null,
+    control: @Composable () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            if (hint != null) {
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        OptionRow(stringResource(R.string.drawer_target_fps), targets, targetLabel(knobs.target)) { name ->
-            knobs = knobs.copy(target = targets.indexOf(name).let { if (it >= 0) FrameGenKnobs.TARGETS[it] else 0 }); pushGen(settings, knobs)
-        }
-        OptionRow(stringResource(R.string.drawer_flow_quality), listOf(auto, "25%", "50%", "75%", "100%"), flowLabel(knobs.flow)) { name ->
-            knobs = knobs.copy(flow = if (name == auto) 0 else name.removeSuffix("%").toIntOrNull() ?: 0); pushGen(settings, knobs)
-        }
-        Text(stringResource(R.string.drawer_fg_hint),
-             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(10.dp))
+        control()
     }
 }
 
-/** 画面与操作页：手柄的显示与浓淡（App 的偏好，唯一真值）与性能 HUD（App 画的，宿主不再往画面里画东西）；其余是宿主的设置（即改即生效并存进包的 settings.txt） */
+/** 一行：图标 + 标题 + 小字提示 + 药丸开关（App 自己的那套）。enabled=false 时开关灰着，按不动 */
+@Composable
+private fun ToggleRow(
+    icon: ImageVector, title: String, hint: String? = null,
+    checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit,
+) {
+    DrawerRow(icon, title, hint) {
+        Box(
+            Modifier.clip(RoundedCornerShape(50))
+                .background(if (!enabled) Color.White.copy(alpha = 0.08f)
+                           else if (checked) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
+                .clickable(enabled = enabled) { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 5.dp),
+        ) { Text(if (checked) stringResource(R.string.common_on) else stringResource(R.string.common_off), fontSize = 12.sp,
+                color = when {
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    checked -> NxPalette.Ready
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }, fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** 一行：图标 + 标题 + 小字提示 + 展开的箭头（点了去某个地方） */
+@Composable
+private fun ActionRow(
+    icon: ImageVector, title: String, hint: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            if (hint != null) {
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** 显示页：帧生成（即改即生效）+ 画面上的信息（性能 HUD 与设备信息线） */
 @Composable
 private fun DisplayRows(
-    padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
-    padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+    settings: FrameGenSettings, status: String,
     hudStats: () -> Boolean, onHudStats: (Boolean) -> Unit,
     hudDevice: () -> Boolean, onHudDevice: (Boolean) -> Unit,
     hudFields: () -> Set<HudField>, onHudFields: (Set<HudField>) -> Unit,
     hudFahrenheit: () -> Boolean, onHudFahrenheit: (Boolean) -> Unit,
-    onLayoutEditor: () -> Unit,
-    onResetPadLayout: () -> Unit,
 ) {
-    var shown by remember { mutableStateOf(padShown()) }
-    var opacity by remember { mutableStateOf(padOpacity()) }
-    var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
-    var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
+    FrameGenRows(settings, status)
+    Spacer(Modifier.height(4.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    GroupLabel(stringResource(R.string.drawer_group_info))
     var stats by remember { mutableStateOf(hudStats()) }
     var device by remember { mutableStateOf(hudDevice()) }
     var fields by remember { mutableStateOf(hudFields()) }
     var fahrenheit by remember { mutableStateOf(hudFahrenheit()) }
 
-    SwitchRow(stringResource(R.string.drawer_virtual_pad), shown) { shown = it; onPadShown(it) }
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.drawer_pad_opacity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text("$opacity%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Slider(value = opacity.toFloat(), valueRange = 10f..100f,
-               onValueChange = { opacity = it.toInt(); onPadOpacity(opacity) })
+    ToggleRow(Icons.Filled.QueryStats, stringResource(R.string.hud_stats), stringResource(R.string.drawer_hud_stats_hint), stats) {
+        stats = it; onHudStats(it)
     }
-    SwitchRow(stringResource(R.string.drawer_rumble), rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
-    SwitchRow(stringResource(R.string.drawer_docked), docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
-    // 性能 HUD：App 画在游戏画面顶上的两行（性能与设备信息）
-    SwitchRow(stringResource(R.string.hud_stats), stats) { stats = it; onHudStats(it) }
-    SwitchRow(stringResource(R.string.hud_device), device) { device = it; onHudDevice(it) }
+    ToggleRow(Icons.Filled.Info, stringResource(R.string.hud_device), stringResource(R.string.drawer_hud_device_hint), device) {
+        device = it; onHudDevice(it)
+    }
     if (stats) {
         Text(stringResource(R.string.hud_fields), style = MaterialTheme.typography.bodyMedium)
         // 字段：chips（勾上的显示，没勾上的不采样）
@@ -275,29 +323,104 @@ private fun DisplayRows(
             }
         }
         if (HudField.TEMP in fields) {
-            OptionRow(stringResource(R.string.hud_temp_unit), listOf("°C", "°F"), if (fahrenheit) "°F" else "°C") {
+            OptionRow(Icons.Filled.Thermostat, stringResource(R.string.hud_temp_unit), listOf("°C", "°F"), if (fahrenheit) "°F" else "°C") {
                 fahrenheit = it == "°F"; onHudFahrenheit(fahrenheit)
             }
         }
     }
-    // 布局编辑器：App 自己的面板（画在游戏画面上，游戏先等着）
-    QuietButton(stringResource(R.string.drawer_layout_editor), onClick = onLayoutEditor, modifier = Modifier.fillMaxWidth())
-    // 恢复默认布局：控件回到布局自己放的地方与大小（存进数据包的 settings.txt）
-    QuietButton(stringResource(R.string.drawer_pad_reset_layout), onClick = onResetPadLayout, modifier = Modifier.fillMaxWidth())
 }
 
+/** 操作页：手柄（显示、浓淡、布局）与宿主的震动、底座模式 */
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Box(
-            Modifier.clip(RoundedCornerShape(50)).background(if (checked) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
-                .clickable { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 5.dp),
-        ) { Text(if (checked) stringResource(R.string.common_on) else stringResource(R.string.common_off), fontSize = 12.sp, color = if (checked) NxPalette.Ready else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
+private fun ControlRows(
+    padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
+    padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+    onLayoutEditor: () -> Unit,
+    onResetPadLayout: () -> Unit,
+) {
+    var shown by remember { mutableStateOf(padShown()) }
+    var opacity by remember { mutableStateOf(padOpacity()) }
+    var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
+    var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
+
+    GroupLabel(stringResource(R.string.drawer_group_pad))
+    ToggleRow(Icons.Filled.SportsEsports, stringResource(R.string.drawer_virtual_pad), null, shown) { shown = it; onPadShown(it) }
+    OpacityRow(opacity) { opacity = it; onPadOpacity(it) }
+    ActionRow(Icons.Filled.Tune, stringResource(R.string.drawer_layout_editor), onClick = onLayoutEditor)
+    ActionRow(Icons.Filled.RestartAlt, stringResource(R.string.drawer_pad_reset_layout), onClick = onResetPadLayout)
+    Spacer(Modifier.height(4.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ToggleRow(Icons.Filled.Vibration, stringResource(R.string.drawer_rumble), null, rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
+    ToggleRow(Icons.Filled.Tv, stringResource(R.string.drawer_docked), null, docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
+}
+
+/** 手柄浓淡：标题行带当前值，滑杆占一整行（与上面那些行一样从文字列开始） */
+@Composable
+private fun OpacityRow(opacity: Int, onChange: (Int) -> Unit) {
+    Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Opacity, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.drawer_pad_opacity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("$opacity%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Slider(value = opacity.toFloat(), valueRange = 10f..100f,
+               onValueChange = { onChange(it.toInt()) },
+               modifier = Modifier.padding(start = 30.dp))
     }
 }
 
-private val TARGET_LABELS = listOf("60", "90", "120")
+private fun pushGen(settings: FrameGenSettings, knobs: FrameGenKnobs) {
+    settings.save(knobs)
+    if (knobs.on) Native.frameGenSet(true, knobs.mult, knobs.target, knobs.flow)
+}
+
+/** 帧生成组：开关、状态、倍率、目标帧率、光流质量（即改即生效） */
+@Composable
+private fun FrameGenRows(settings: FrameGenSettings, status: String) {
+    var knobs by remember { mutableStateOf(settings.load()) }
+    val state = status.substringBefore(' ').toIntOrNull() ?: -1
+    val reason = status.substringAfter(' ', "")
+    val ctx = LocalContext.current
+    // 没有 Lossless.dll 就根本跑不起来：别让玩家对着一个用不了的开关和一堆用不上的选项发呆
+    val dllReady = remember { LosslessDll.ensure(ctx) != null }
+
+    GroupLabel(stringResource(R.string.drawer_tab_framegen))
+    ToggleRow(Icons.Filled.Bolt, stringResource(R.string.drawer_tab_framegen), null, knobs.on, enabled = dllReady) {
+        knobs = knobs.copy(on = it); pushGen(settings, knobs)
+    }
+    if (!dllReady) {
+        Text(stringResource(R.string.drawer_no_dll), style = MaterialTheme.typography.bodySmall, color = NxPalette.Danger)
+        return
+    }
+    // 状态行：宿主的判定是唯一真源（设备能力、DLL、显示节奏都在它那边）
+    Text(
+        when (state) {
+            1 -> stringResource(R.string.drawer_generating)
+            2 -> reason.ifEmpty { stringResource(R.string.drawer_waiting_stable) }
+            0 -> stringResource(R.string.drawer_off)
+            -1 -> reason.ifEmpty { stringResource(R.string.drawer_device_unsupported) }
+            else -> stringResource(R.string.drawer_build_without_fg)
+        } + if (state == -1 && reason.contains("Lossless.dll")) stringResource(R.string.drawer_choose_dll_hint) else "",
+        style = MaterialTheme.typography.bodySmall,
+        color = when (state) { 1 -> NxPalette.Ready; 2 -> NxPalette.Building; -1 -> NxPalette.Danger; else -> MaterialTheme.colorScheme.onSurfaceVariant },
+    )
+    if (state >= 0) {
+        // 选项的词先取好：回调里不能取词
+        val targets = targetLabels()
+        val auto = stringResource(R.string.drawer_auto)
+        OptionRow(Icons.Filled.Layers, stringResource(R.string.drawer_multiplier), listOf("2x", "3x", "4x"), "${knobs.mult}x") { name ->
+            knobs = knobs.copy(mult = name.removeSuffix("x").toIntOrNull() ?: 2); pushGen(settings, knobs)
+        }
+        OptionRow(Icons.Filled.Speed, stringResource(R.string.drawer_target_fps), targets, targetLabel(knobs.target)) { name ->
+            knobs = knobs.copy(target = targets.indexOf(name).let { if (it >= 0) FrameGenKnobs.TARGETS[it] else 0 }); pushGen(settings, knobs)
+        }
+        OptionRow(Icons.Filled.Waves, stringResource(R.string.drawer_flow_quality), listOf(auto, "25%", "50%", "75%", "100%"), flowLabel(knobs.flow)) { name ->
+            knobs = knobs.copy(flow = if (name == auto) 0 else name.removeSuffix("%").toIntOrNull() ?: 0); pushGen(settings, knobs)
+        }
+        Hint(stringResource(R.string.drawer_fg_hint))
+    }
+}
 
 /** 性能 HUD 的字段：chips 的两行（每行四个） */
 private val HUD_FIELD_ROWS = listOf(
@@ -326,10 +449,9 @@ private fun targetLabel(t: Int) =
 private fun flowLabel(f: Int) = if (f == 0) stringResource(R.string.drawer_auto) else "$f%"
 
 @Composable
-private fun OptionRow(label: String, options: List<String>, current: String, onPick: (String) -> Unit) {
+private fun OptionRow(icon: ImageVector, label: String, options: List<String>, current: String, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    DrawerRow(icon, label) {
         Box {
             // 与库页的字段同一做法：按钮定宽，箭头钉在右端，几行的箭头排成一列
             QuietButton(current, onClick = { open = !open },
@@ -350,3 +472,5 @@ private fun OptionRow(label: String, options: List<String>, current: String, onP
         }
     }
 }
+
+private val TARGET_LABELS = listOf("60", "90", "120")
