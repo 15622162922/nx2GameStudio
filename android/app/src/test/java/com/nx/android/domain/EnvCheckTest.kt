@@ -36,6 +36,15 @@ class EnvCheckTest {
     }
 
     @Test
+    fun `a row that passed says no fix`() {
+        // the tool keeps the fix in the row even when the check passed ("pip install pillow"): the CLI prints
+        // it only for a row that failed, and so does the checklist
+        val r = rows("""[{"name": "Pillow", "ok": true, "detail": "the app icon", "required": false, "fix": "pip install pillow"}]""").first()
+        assertEquals(EnvCheck.Level.OK, r.level)
+        assertEquals("", r.fix)
+    }
+
+    @Test
     fun `a required row that failed is bad`() {
         val r = rows("""[{"name": "Android NDK", "ok": false, "detail": "not found", "required": true, "fix": "install it"}]""").first()
         assertEquals(EnvCheck.Level.BAD, r.level)
@@ -44,7 +53,7 @@ class EnvCheckTest {
 
     @Test
     fun `a row that is not required and failed is a hint`() {
-        val r = rows("""[{"name": "adb", "ok": false, "detail": "not found", "required": false}]""").first()
+        val r = rows("""[{"name": "Pillow", "ok": false, "detail": "missing", "required": false}]""").first()
         assertEquals(EnvCheck.Level.HINT, r.level)
     }
 
@@ -57,6 +66,13 @@ class EnvCheckTest {
     @Test
     fun `the keys row is left out - the checklist has its own`() {
         val r = rows("""[{"name": "prod.keys", "ok": true, "detail": "/sdcard/switch/prod.keys"}, {"name": "Python", "ok": true, "detail": "3.13.5"}]""")
+        assertEquals(1, r.size)
+        assertEquals("Python", r[0].name)
+    }
+
+    @Test
+    fun `the adb row is left out - the phone cannot run it`() {
+        val r = rows("""[{"name": "adb", "ok": false, "detail": "not found"}, {"name": "Python", "ok": true, "detail": "3.13.5"}]""")
         assertEquals(1, r.size)
         assertEquals("Python", r[0].name)
     }

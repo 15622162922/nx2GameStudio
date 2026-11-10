@@ -160,10 +160,12 @@ def checks(cfg=None, keys=None):
     out.append(Check('.NET', ok, detail, path=str(dn or ''), fix=fix))
     adb = find_adb(cfg)
     if adb: out.append(Check('adb', True, str(adb), required=False, path=str(adb)))
-    elif _adb_host_unsupported(): out.append(Check('adb', False, 'not available on this ARM64 Linux host: Google ships platform-tools for Linux as x86-64 only', required=False,
-                                                    fix='the APK and the data pack are still made; install them from the phone\'s file manager'))
-    else: out.append(Check('adb', False, 'not found: the tool cannot install on a device (the APK and data pack are still made)', required=False, path='',
-                           fix='Download missing tools, or install Android platform-tools'))
+    elif not _adb_host_unsupported():
+        # an ARM64 Linux host (the phone app's own porter) cannot run adb at all, and there is nothing to fix:
+        # Google ships platform-tools for Linux as x86-64 only. No row at all - the phone makes the APK and the
+        # data pack itself, so a row about a tool it cannot use is only noise.
+        out.append(Check('adb', False, 'not found: the tool cannot install on a device (the APK and data pack are still made)', required=False, path='',
+                         fix='Download missing tools, or install Android platform-tools'))
     k = keys or cfg.get('keys')
     out.append(Check('prod.keys', bool(k) and Path(k).is_file(), k if k and Path(k).is_file() else (f'no such file: {k}' if k else 'not set'), path=k or '',
                      fix='' if k and Path(k).is_file() else 'dump prod.keys from your own Switch and set its path'))
@@ -181,4 +183,5 @@ def require(cfg=None, keys=None, adb=False):
     bad = [r for r in rows if not r.ok and (r.required or (adb and r.name == 'adb'))]
     if bad: raise ToolError('missing requirements: ' + '; '.join(f'{r.name}: {r.detail}' + (f' ({r.fix})' if r.fix else '') for r in bad))
     by = {r.name: r for r in rows}
-    return {'ndk': Path(by['Android NDK'].path), 'dotnet': Path(by['.NET'].path), 'adb': Path(by['adb'].path) if by['adb'].ok else None}
+    adb_row = by.get('adb')      # no row at all on a host that cannot run adb (the phone)
+    return {'ndk': Path(by['Android NDK'].path), 'dotnet': Path(by['.NET'].path), 'adb': Path(adb_row.path) if adb_row and adb_row.ok else None}

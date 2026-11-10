@@ -14,6 +14,9 @@ object EnvCheck {
     /** The doctor's row about the keys: the checklist has its own, cheaper row for them */
     const val KEYS_ROW = "prod.keys"
 
+    /** The doctor's row about adb: the phone cannot run it (Google ships platform-tools for Linux as x86-64 only) */
+    const val ADB_ROW = "adb"
+
     /** What a check says */
     enum class Level { OK, HINT, BAD }
 
@@ -33,14 +36,15 @@ object EnvCheck {
      * The doctor's rows, in the order it printed them.
      *
      * A row that is not required and did not pass is a hint, not a failure: the doctor itself only fails for
-     * the required ones. The keys row is left out - the checklist shows its own, cheaper row for them.
+     * the required ones. Two rows are left out: the keys (the checklist has its own, cheaper row for them) and
+     * adb (the phone cannot run it, so the row tells the player nothing they can act on).
      */
     fun rows(json: JSONArray): List<Row> {
         val out = mutableListOf<Row>()
         for (i in 0 until json.length()) {
             val r = json.optJSONObject(i) ?: continue
             val name = r.optString("name")
-            if (name.isEmpty() || name == KEYS_ROW) continue
+            if (name.isEmpty() || name == KEYS_ROW || name == ADB_ROW) continue
             val ok = r.optBoolean("ok")
             val required = r.optBoolean("required", true)
             out += Row(
@@ -51,7 +55,9 @@ object EnvCheck {
                     else -> Level.HINT
                 },
                 r.optString("detail"),
-                r.optString("fix"),
+                // the tool's fix belongs to a row that did not pass: the CLI prints it only then, and a row
+                // that is fine must not say "pip install ..." (the phone has no pip: the modules are in the payload)
+                if (ok) "" else r.optString("fix"),
             )
         }
         return out
