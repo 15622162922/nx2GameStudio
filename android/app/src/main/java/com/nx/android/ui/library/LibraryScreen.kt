@@ -86,6 +86,7 @@ import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.components.PickRow
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
@@ -568,7 +569,7 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
         onSelect = { code ->
             PackEnv.set(ported.pack, code, current.second)
             current = PackEnv.current(ported.pack)
-        })
+        }, fallback = stringResource(R.string.driver_system_default))
     // 设备自己的驱动在 domain 层没有名字：这里用 App 自己的词给它起一个
     val systemDriver = stringResource(R.string.driver_system_default)
     PickRow(stringResource(R.string.driver_section),
@@ -577,7 +578,7 @@ private fun RunOptions(ported: com.nx.android.domain.Ported) {
         onSelect = { value ->
             PackEnv.set(ported.pack, current.first, value.takeIf { it.isNotEmpty() })
             current = PackEnv.current(ported.pack)
-        })
+        }, fallback = systemDriver)
 }
 
 /**
@@ -846,38 +847,4 @@ private fun sizeText(bytes: Long): String = when {
     bytes >= 1024L * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024)
     bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
     else -> "$bytes B"
-}
-
-/**
- * 一个选项行：左边是名字，右边是一个按钮，点了展开选项。每一项是一对：值（写进 env.txt 的）和
- * 名字（玩家看到的）——两者不一样的时候（装在 App 目录里的驱动，值是它的路径），按钮上显示的是名字。
- */
-@Composable
-private fun PickRow(label: String, options: List<Pair<String, String>>, current: String?, onSelect: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    // 现在的值不在选项里（驱动被删了、包里的文件没了）：显示它最后的名字，别把整条路径摊出来
-    val shown = options.firstOrNull { it.first == current }?.second
-        ?: current?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
-        ?: stringResource(R.string.driver_system_default)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
-        Box {
-            // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
-            QuietButton(shown, onClick = { open = !open },
-                modifier = Modifier.width(200.dp),
-                trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
-            androidx.compose.material3.DropdownMenu(
-                expanded = open,
-                onDismissRequest = { open = false },
-                modifier = Modifier.width(200.dp),
-            ) {
-                for ((value, name) in options.distinctBy { it.first }) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(name, fontWeight = if (value == current) FontWeight.Bold else FontWeight.Normal) },
-                        onClick = { open = false; onSelect(value) },
-                    )
-                }
-            }
-        }
-    }
 }

@@ -13,13 +13,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -118,4 +125,43 @@ fun Hint(text: String, modifier: Modifier = Modifier, size: TextUnit = 12.sp) {
 @Composable
 fun rememberPageScroll(): ScrollState =
     rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+
+/**
+ * An option row: the name on the left, a button on the right that opens the options. Each option is a pair:
+ * the value (what gets written) and the name (what the player reads) — they differ for the drivers installed in
+ * the App folder (the value is its path), so the button shows the name.
+ *
+ * `fallback` is what the button shows when the current value is not among the options (a driver was deleted, the
+ * pack's file is gone).
+ */
+@Composable
+fun PickRow(label: String, options: List<Pair<String, String>>, current: String?, onSelect: (String) -> Unit,
+            fallback: String) {
+    var open by remember { mutableStateOf(false) }
+    // 现在的值不在选项里（驱动被删了、包里的文件没了）：显示它最后的名字，别把整条路径摊出来
+    val shown = options.firstOrNull { it.first == current }?.second
+        ?: current?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
+        ?: fallback
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
+        Box {
+            // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
+            QuietButton(shown, onClick = { open = !open },
+                modifier = Modifier.width(200.dp),
+                trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
+            androidx.compose.material3.DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                modifier = Modifier.width(200.dp),
+            ) {
+                for ((value, name) in options.distinctBy { it.first }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(name, fontWeight = if (value == current) FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { open = false; onSelect(value) },
+                    )
+                }
+            }
+        }
+    }
+}
 

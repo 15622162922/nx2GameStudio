@@ -206,6 +206,10 @@
     <string name="builds_touch_game">Touch game (the gamepad starts hidden)</string>
     <string name="builds_60fps">60 fps</string>
     <string name="builds_experimental">Experimental port (a game that is not adapted yet)</string>
+    <string name="builds_alias_headroom">Extra address space</string>
+    <string name="builds_alias_auto">Auto</string>
+    <string name="builds_alias_short">Address space %1$d GB</string>
+    <string name="builds_alias_hint">Only for a game that crashes with \"AllocateAddressRegion refused (0x1803)\". Auto: 8 GB for a game version the profile was not tested with, none for a tested one. It uses no memory and does not change the speed.</string>
     <string name="builds_need_env">Prepare the environment in the settings first</string>
     <string name="builds_need_storage">Grant the storage access first</string>
     <string name="builds_need_keys">Fill in the path of prod.keys in the settings first</string>

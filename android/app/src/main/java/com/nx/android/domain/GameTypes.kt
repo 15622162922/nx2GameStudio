@@ -1,5 +1,6 @@
 package com.nx.android.domain
 
+import org.json.JSONObject
 import java.io.File
 
 /** porter 接受的游戏文件后缀（白名单，小写、不带点） */
@@ -8,7 +9,32 @@ val GAME_FILE_EXTENSIONS = setOf("nsp", "xci", "nsz", "xcz")
 /** A game card's status, and the port options a game carries — pure vocabulary, shared by the layers */
 enum class GameStatus { NOT_PORTED, PORTING, DONE }
 
-data class GameConfig(val touch: Boolean = false, val fps60: Boolean = false, val experimental: Boolean = false)
+/**
+ * 额外地址空间（别名区）：-1 = Auto（不指定，由移植器按自己的规则决定：档案调通过的版本不加，
+ * 没调通过的加 8 GB），0~48 GB 为玩家手动指定。它编译进宿主的内存布局，改了要重新构建。
+ */
+const val ALIAS_AUTO = -1
+
+data class GameConfig(
+    val touch: Boolean = false,
+    val fps60: Boolean = false,
+    val experimental: Boolean = false,
+    val aliasHeadroom: Int = ALIAS_AUTO,
+)
+
+/**
+ * 按游戏配置的存取：JSON 一个游戏一条。纯值，不碰 Android，测试跑在 JVM 上。
+ * 旧版本存下的配置没有 "alias" 这一项，读出来是 Auto，构建行为与那时一致。
+ */
+object GameConfigJson {
+
+    fun encode(c: GameConfig): JSONObject = JSONObject()
+        .put("touch", c.touch).put("fps60", c.fps60).put("exp", c.experimental)
+        .put("alias", c.aliasHeadroom)
+
+    fun decode(o: JSONObject): GameConfig = GameConfig(
+        o.optBoolean("touch"), o.optBoolean("fps60"), o.optBoolean("exp"), o.optInt("alias", ALIAS_AUTO))
+}
 
 /**
  * 一个完成的移植：数据包是唯一产物（手机线不再产出 APK），宿主程序（libdmplay.so）在包里，App 的

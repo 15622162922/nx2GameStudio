@@ -12,6 +12,7 @@ import com.nx.android.data.PrefsStore.Companion.LIB_EXTRA
 import com.nx.android.data.PrefsStore.Companion.LIB_PORTS
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameConfig
+import com.nx.android.domain.GameConfigJson
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.Ported
@@ -94,7 +95,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
             val o = prefs.json(LIB_CONFIGS)
             for (k in o.keys()) {
                 val c = o.getJSONObject(k)
-                configs[k] = GameConfig(c.optBoolean("touch"), c.optBoolean("fps60"), c.optBoolean("exp"))
+                configs[k] = GameConfigJson.decode(c)
             }
         } catch (e: Exception) {
         }
@@ -188,7 +189,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
         configs[f.name] = c
         val o = JSONObject()
         for ((k, v) in configs) {
-            o.put(k, JSONObject().put("touch", v.touch).put("fps60", v.fps60).put("exp", v.experimental))
+            o.put(k, GameConfigJson.encode(v))
         }
         prefs.putJson(LIB_CONFIGS, o)
     }

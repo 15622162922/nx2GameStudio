@@ -205,6 +205,10 @@
     <string name="builds_touch_game">触屏游戏（隐藏手柄）</string>
     <string name="builds_60fps">60 帧</string>
     <string name="builds_experimental">实验性移植（还没适配的游戏）</string>
+    <string name="builds_alias_headroom">额外地址空间</string>
+    <string name="builds_alias_auto">自动</string>
+    <string name="builds_alias_short">地址空间 %1$d GB</string>
+    <string name="builds_alias_hint">只给日志里出现「AllocateAddressRegion refused (0x1803)」崩溃的游戏用。自动：档案没测过的版本给 8 GB，测过的给 0。它不占内存，也不影响速度。</string>
     <string name="builds_need_env">先在设置里准备环境</string>
     <string name="builds_need_storage">先授予存储访问权限</string>
     <string name="builds_need_keys">先在设置里填 prod.keys 的路径</string>

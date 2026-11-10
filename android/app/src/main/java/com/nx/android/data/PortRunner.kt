@@ -16,16 +16,33 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
     fun port(
         gameFile: String, keys: String, out: String,
         touch: Boolean, fps60: Boolean, experimental: Boolean,
+        aliasHeadroom: Int,
         onEnd: () -> Unit,
     ): Thread {
-        val args = mutableListOf("-m", "porter", "port", gameFile, "-k", keys, "-o", out, "--progress", "json", "--app")
-        if (touch) args += "--touch"
-        if (fps60) args += "--fps60"
-        if (experimental) args += "--experimental"
-        // A build without the frame generation (the Gradle property nxLsfg=false): the host the app builds on the
-        // device is then smaller and the frame generation reports that it is not in this build (android/NOTICE.md).
-        if (!BuildConfig.NX_LSFG) args += "--no-lsfg"
+        val args = portArgs(gameFile, keys, out, touch, fps60, experimental, aliasHeadroom, !BuildConfig.NX_LSFG)
         return start(args, onEnd)
+    }
+
+    companion object {
+
+        /**
+         * The porter's command line for a port: pure, so the test can check it on the JVM.
+         *
+         * The extra address space (the alias region): Auto passes nothing, the porter decides by itself
+         * (the version the profile was tested with gets none, another one 8 GB).
+         */
+        fun portArgs(gameFile: String, keys: String, out: String, touch: Boolean, fps60: Boolean,
+                     experimental: Boolean, aliasHeadroom: Int, noLsfg: Boolean): List<String> {
+            val args = mutableListOf("-m", "porter", "port", gameFile, "-k", keys, "-o", out, "--progress", "json", "--app")
+            if (touch) args += "--touch"
+            if (fps60) args += "--fps60"
+            if (experimental) args += "--experimental"
+            if (aliasHeadroom >= 0) args += listOf("--alias-headroom", aliasHeadroom.toString())
+            // A build without the frame generation (the Gradle property nxLsfg=false): the host the app builds on the
+            // device is then smaller and the frame generation reports that it is not in this build (android/NOTICE.md).
+            if (noLsfg) args += "--no-lsfg"
+            return args
+        }
     }
 
     /**

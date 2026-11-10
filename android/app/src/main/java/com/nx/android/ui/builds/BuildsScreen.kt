@@ -42,6 +42,7 @@ import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
+import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameStatus
@@ -51,6 +52,7 @@ import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
+import com.nx.android.ui.components.PickRow
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
@@ -169,6 +171,8 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
         ConfigRow(stringResource(R.string.builds_touch_game), cfg.touch) { cfg = cfg.copy(touch = it); lib.setConfig(f, cfg) }
         ConfigRow(stringResource(R.string.builds_60fps), cfg.fps60) { cfg = cfg.copy(fps60 = it); lib.setConfig(f, cfg) }
         ConfigRow(stringResource(R.string.builds_experimental), cfg.experimental) { cfg = cfg.copy(experimental = it); lib.setConfig(f, cfg) }
+        AliasRow(cfg.aliasHeadroom) { cfg = cfg.copy(aliasHeadroom = it); lib.setConfig(f, cfg) }
+        Hint(stringResource(R.string.builds_alias_hint), size = 11.sp)
 
         if (!canStart && status != GameStatus.DONE) {
             Text(
@@ -208,6 +212,7 @@ private fun ConfigDisclosure(lib: LibraryState, f: File) {
                     if (cfg.touch) stringResource(R.string.builds_touch) else null,
                     if (cfg.fps60) stringResource(R.string.builds_60fps) else null,
                     if (cfg.experimental) stringResource(R.string.builds_experimental_short) else null,
+                    if (cfg.aliasHeadroom >= 0) stringResource(R.string.builds_alias_short, cfg.aliasHeadroom) else null,
                 ).filterNotNull().ifEmpty { listOf(stringResource(R.string.builds_default_options)) }.joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -223,6 +228,7 @@ private fun ConfigDisclosure(lib: LibraryState, f: File) {
             ConfigRow(stringResource(R.string.builds_touch_game), cfg.touch) { lib.setConfig(f, cfg.copy(touch = it)) }
             ConfigRow(stringResource(R.string.builds_60fps), cfg.fps60) { lib.setConfig(f, cfg.copy(fps60 = it)) }
             ConfigRow(stringResource(R.string.builds_experimental), cfg.experimental) { lib.setConfig(f, cfg.copy(experimental = it)) }
+            AliasRow(cfg.aliasHeadroom) { lib.setConfig(f, cfg.copy(aliasHeadroom = it)) }
         }
     }
 }
@@ -388,6 +394,24 @@ private fun ConfigRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
         androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onChange)
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/**
+ * 额外地址空间（别名区）：Auto 或玩家手动指定的 GB 数。Auto 不带数值，移植器自己决定
+ * （档案调通过的版本不加，没调通过的加 8 GB）；它编译进宿主的内存布局，改了要重新构建。
+ */
+private val ALIAS_CHOICES = listOf(ALIAS_AUTO, 0, 8, 16, 24, 32, 48)
+
+@Composable
+private fun AliasRow(headroom: Int, onChange: (Int) -> Unit) {
+    val auto = stringResource(R.string.builds_alias_auto)
+    PickRow(
+        label = stringResource(R.string.builds_alias_headroom),
+        options = ALIAS_CHOICES.map { it.toString() to (if (it < 0) auto else "$it GB") },
+        current = headroom.toString(),
+        onSelect = { onChange(it.toIntOrNull() ?: ALIAS_AUTO) },
+        fallback = auto,
+    )
 }
 
 /** The ports that ran before: the result, how long it took, and the done ones' run button */

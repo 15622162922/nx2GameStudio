@@ -13,6 +13,7 @@ import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
+import com.nx.android.domain.ALIAS_AUTO
 import java.io.File
 
 /**
@@ -28,15 +29,17 @@ class PortService : Service() {
         const val CHANNEL = "nx2a_port"
         const val GAME = "game"; const val KEYS = "keys"; const val OUT = "out"
         const val TOUCH = "touch"; const val FPS60 = "fps60"; const val EXP = "exp"
+        const val ALIAS = "alias"
         private var instance: PortService? = null
 
         /** Starts a port: the state goes up first (the UI turns at once), the service keeps it alive */
         fun start(ctx: Context, game: String, keys: String, out: String,
-                  touch: Boolean, fps60: Boolean, exp: Boolean) {
+                  touch: Boolean, fps60: Boolean, exp: Boolean, aliasHeadroom: Int) {
             (ctx.applicationContext as NxApp).container.port.begin(game)
             val i = Intent(ctx, PortService::class.java)
                 .putExtra(GAME, game).putExtra(KEYS, keys).putExtra(OUT, out)
                 .putExtra(TOUCH, touch).putExtra(FPS60, fps60).putExtra(EXP, exp)
+                .putExtra(ALIAS, aliasHeadroom)
             ctx.startForegroundService(i)
         }
 
@@ -72,7 +75,8 @@ class PortService : Service() {
             nm.notify(1, notification())
         }
         runner!!.port(game, keys, out, intent.getBooleanExtra(TOUCH, false),
-            intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false)) {
+            intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
+            intent.getIntExtra(ALIAS, ALIAS_AUTO)) {
             port.finish()
             nm.notify(1, notification())
             stopShown()   // the notification stays (the result), the service goes
