@@ -617,7 +617,7 @@ class Port:
             else:
                 raise BuildError(f"{self.app_name}'s shaders are in Oodle-compressed archives ({why}): the port decodes them with the game's own decoder on the Android "
                                  f'device, so it needs adb and the device even without installing. {NO_ADB}; then connect the device (USB debugging on) and port again')
-            self.oodle_run = self.oodle_decode
+            self.oodle_run = self.device_oodle
         for k in ('glslc_capture', 'ue_legacy') + (() if self.ue_why else ('ue_decode',)) + (() if self.oodle_why else ('oodle_packs',)):
             if src[k][0]: raise BuildError(f'{self.app_name} needs a step that boots the game in the Mac host ({src[k][1]}), which the Android port cannot run yet')
 
@@ -632,7 +632,7 @@ class Port:
                 + (['--no-lsfg'] if self.o.no_lsfg else []),
                 self.logs / 'android_oodle_host.log', env=self.env)
         return out / 'dmhost'
-    def oodle_decode(self):
+    def device_oodle(self):
         """The game's own Oodle decoder decodes the Oodle entries of the GFPAKs and of the Trinity packs (Pokémon Legends: Arceus, Pokémon Legends: Z-A): on the Android device
         (adb), or on this machine when the porter runs on the phone app (the device is this machine). Every entry goes in one job file (1.6 GB for Pokémon Legends: Arceus,
         4.4 GB for Pokémon Legends: Z-A's 223,018 files), decoded in one run; only the entries that hold a BNSH shader come back (DM_OODLE_JOB_BNSH), written as the split's
@@ -640,16 +640,17 @@ class Port:
         were busy.
         → the split's environment"""
         PROG.set(step="the game's Oodle entries in a job file")
+        where = getattr(self, 'oodle_where', '') or 'on the device'
         tmp = self.work / 'tmp/oodle'; nsp.rmtree(tmp); tmp.mkdir(parents=True)
         recs, job = oodle_job([self.dirs[v] / 'RomFS' for v in self.versions], tmp)
-        PROG.set(step=f"the game's Oodle decoder {self.oodle_where}: {len(recs):,} entries, {job.stat().st_size / 2**30:.1f} GB")
+        PROG.set(step=f"the game's Oodle decoder {where}: {len(recs):,} entries, {job.stat().st_size / 2**30:.1f} GB")
         self.oodle_job(job, tmp / 'job.out', bnsh=True)
-        return {'DM_GFPAK_DECODED': str(oodle_result(tmp, recs, self.oodle_why, self.oodle_where))}
+        return {'DM_GFPAK_DECODED': str(oodle_result(tmp, recs, self.oodle_why, where))}
     def oodle_job(self, job, out, bnsh=False):
         """One Oodle job file (hle_oodle.c: "DMOJ" records) decoded into out ("DMOR"); the job file is removed. On the device the host runs as an executable and the rewritten
         modules go there once a port (device_oodle_end removes them); here it runs on this machine (the phone app's porter IS the device).
         bnsh: only the entries that hold a BNSH shader come back (DM_OODLE_JOB_BNSH)"""
-        if self.oodle_local: return self.local_oodle_job(job, out, bnsh)
+        if getattr(self, 'oodle_local', False): return self.local_oodle_job(job, out, bnsh)
         return self.device_oodle_job(job, out, bnsh)
     def device_oodle_job(self, job, out, bnsh=False):
         """The job, decoded on the device: the host as an executable and the rewritten modules go to the device once a port (device_oodle_end removes them)"""

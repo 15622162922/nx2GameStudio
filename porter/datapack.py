@@ -68,7 +68,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
         f.parent.mkdir(parents=True, exist_ok=True)   # the app's files live in subfolders (host/, drivers/, overlay/)
         shutil.copyfile(src, f); n += 1; b += Path(src).stat().st_size
     for name, body in (text or {}).items(): (tmp / name).write_text(body, encoding='utf-8', newline='\n'); n += 1; b += len(body.encode('utf-8'))
-    base = pack_base or files_folder(package)   # where the pack lives on the device: the app's own folder in the app's mode, else the app's files folder
+    base = pack_base or str(dst)   # where the pack lives on the device: its own folder (the app's mode); the PC tool's install puts it in the app's files folder
     rows = [f'# Written by nx2android\'s porter for {profile.name} ({profile.id}); KEY=VALUE per line, read by the app at launch',
             f'DM_LANG={language}']
     if aoc: rows.append(f'DM_AOC_DIR={base}/aoc')   # the pack's own folder

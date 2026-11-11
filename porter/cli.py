@@ -176,7 +176,7 @@ def cmd_port(a):
         env = os.environ.get('NX2A_VERCODE_OFFSET', '').strip() or '0'
         try: offset = int(env)
         except ValueError: print(f'NX2A_VERCODE_OFFSET is not a number: {env}', file=sys.stderr); return 2
-    if (a.romfs_at is not None or a.romfs_push) and not a.install and not a.app:
+    if (a.romfs_at is not None or a.romfs_push) and not a.install:
         print('--romfs-at and --romfs-push are install options: add --install, or run porter install after the port', file=sys.stderr); return 2
     if a.romfs_at is not None or a.romfs_push:
         from porter import install
