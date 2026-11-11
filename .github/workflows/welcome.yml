@@ -1,0 +1,69 @@
+name: Welcome
+
+# Greet a first-time contributor: on the issue tracker and on a pull request.
+# actions/first-interaction only speaks once per person, so a second issue from the
+# same author gets no comment.
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    name: Greet the author
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Welcome, and thank you for the report!
+
+            Three things make a report easy to act on:
+
+            - **What you did and what you saw.** The steps, and what you expected instead.
+            - **The log.** The app's log (the game's drawer → the log entry → share) is the most useful thing you can attach. The lines that start with `[RED]` mark something unimplemented or wrong: those are the ones we want.
+            - **The device.** The phone or tablet, its GPU and its Android version.
+
+            If a game **runs** for you, the *Game report* form fits better than a bug report: it puts the game on the list, with your name on it.
+
+            Two things never belong in a report: your game files and your `prod.keys`. This repository holds no game content.
+
+            Questions? Ask here — they get answered.
+
+          pr-message: |
+            Welcome, and thank you!
+
+            A review here looks at two things: **the evidence** and **the scope**.
+
+            - **The evidence.** For a port: the device, the game's version, the frame rate and a screenshot or a log. Reasoning is not verification — "this should work" is not a test result. For a change to the shared core: the games it was measured on, and how the other games were checked.
+            - **The scope.** A change to the shared core has to hold for every game. What is true of one game alone belongs in that game's profile (`nxnative/dm/games/<title ID>/`), not in the code.
+
+            Porting a game? [docs/PORTING_GUIDE.md](https://github.com/zFitness/nx2androidX/blob/android/docs/PORTING_GUIDE.md) has the whole flow: the profile's files, the Android keys, the checklist line to tick and the evidence to attach.
+
+            Please keep game files, keys and data packs out of the pull request.
+
+            We aim to answer within two days.
+
+      - name: Label a first-time contributor
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          merged=$(gh api "repos/$REPO/pulls?state=closed&per_page=100" --paginate \
+            --jq ".[] | select(.user.login == \"$AUTHOR\" and .merged_at != null) | .number" | wc -l | tr -d ' ')
+          if [ "$merged" -lt 1 ]; then
+            gh issue edit "$NUMBER" --add-label "first-timer" --repo "$REPO"
+          fi
