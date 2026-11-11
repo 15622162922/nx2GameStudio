@@ -133,6 +133,17 @@ PC 端工具由上游 nx2android 发布，本仓库的发布页上只有 APK。
 
 这个仓库的产品是手机 App，APK 的构建是 `bash packaging/android-apk/build_apk.sh`（加 `release` 参数出发布用的包），各部分和手机端的能力边界见 [packaging/android-apk/README.md](packaging/android-apk/README.md)。
 
+## 参与贡献
+
+欢迎贡献，而且第一个贡献不必是代码。
+
+- **某个游戏在你设备上能跑了？** 提一个 **Game report**（游戏报告）issue：游戏、你的设备、版本和帧率。它会把游戏写进清单，并署上你的名字。
+- **某个游戏还跑不起来？** 提一个 **Port request**（移植请求）issue。有些游戏根本没法移植，issue 里会写明是哪些，下一个人就不用再白忙一晚上。
+- **想移植一个游戏？** [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) —— 完整流程，在手机上或电脑上都能做，而且全程其实用不上电脑。
+- **想改代码、文档或做翻译？** [CONTRIBUTING.md](CONTRIBUTING.md) —— 规则、仓库结构、测试和提交信息规范。
+
+问题和实况去 [Discussions](https://github.com/zFitness/nx2androidX/discussions)：*Q&A* 提问，*Show and tell* 晒实况，*Ideas* 提想法。
+
 ## 密钥与游戏文件
 
 nx2android 移植时读取你的游戏文件，需要你自己的 `prod.keys` —— 你的主机自己使用的密钥。本仓库和它的发布包里没有密钥、没有游戏文件、没有固件、没有任何从游戏里提取出来的东西，工具也从不下载这些，本项目不提供任何获取密钥的方法或链接。两者都从你自己的 Switch 导出，不要把它们或者用它们做出来的数据包分享出去。

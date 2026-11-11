@@ -132,6 +132,17 @@ Start here: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — the tools to 
 
 Running from the repository, the command line, the repository layout, building the bundle, tests and commit messages: [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md). How it is put together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Contributing
+
+Contributions are welcome, and the first one does not have to be code.
+
+- **A game runs on your device?** Open a **Game report** issue: the game, your device, the version and the frame rate. It puts the game on the list, with your name on it.
+- **A game does not run yet?** Open a **Port request** issue. Some games cannot be ported at all; the issue says which ones, so the next person does not lose an evening over it.
+- **A game to port?** [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) — the whole flow, on the phone or on a computer, and no computer is needed at all.
+- **Code, docs or translations?** [CONTRIBUTING.md](CONTRIBUTING.md) — the rules, the repository map, the tests and the commit messages.
+
+Questions and footage go to [Discussions](https://github.com/zFitness/nx2androidX/discussions): *Q&A* for questions, *Show and tell* for your footage, *Ideas* for what the app should do next.
+
 ## Keys and game files
 
 Reading your game files while it ports them needs your `prod.keys` — the keys your own console uses. This repository and its releases contain no keys, no game files, no firmware and nothing extracted from them; the tool never downloads any of them, and this project provides no method or link to obtain keys. Dump both from your own Switch, and don't share them or the data packs built from them.
