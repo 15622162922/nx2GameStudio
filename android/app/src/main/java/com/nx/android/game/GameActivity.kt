@@ -71,7 +71,7 @@ internal fun forwardsKeyToGame(keyCode: Int): Boolean =
  * swapchain and every input event is forwarded as the snapshot the shared core reads (jni_android.h). The
  * drawer (Compose, over the surface) holds the game's live switches — the frame generation among them; Back
  * stays with the game's own pause menu. The host ends the process when the game ends (one game per process),
- * and [endGame] kills it too — a started host cannot be started again in the same process, so a recreated
+ * and [endProcess] kills it too — a started host cannot be started again in the same process, so a recreated
  * activity of a running game only re-hands its window ([hostRunning]).
  */
 class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
@@ -201,15 +201,15 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         setContentView(frame)
         immersive()
         if (hostRunning) return   // a recreation (the system rebuilt the activity): the running game takes the new window in surfaceCreated
-        if (intent.getBooleanExtra(EXTRA_EXIT, false)) return endGame()
+        if (intent.getBooleanExtra(EXTRA_EXIT, false)) return endProcess()
         val pack = intent.getStringExtra(EXTRA_PACK)
         val host = intent.getStringExtra(EXTRA_HOST)
-        if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast(locale.str(R.string.game_no_game_to_run)); finish(); return }
+        if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast(locale.str(R.string.game_no_game_to_run)); endProcess(); return }
         try {
             System.load(host)
         } catch (t: Throwable) {
             toast(locale.str(R.string.game_cannot_load_host, t.message))
-            finish()
+            endProcess()
             return
         }
         // 旧版宿主编的包：老的前端没有 frontCaps 这个入口（调用即抛），这个包要用当前版本重新移植
@@ -217,7 +217,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         // 性能 HUD 的计数也要新宿主：老宿主还在画面上自己画帧率计数器，两处帧率不是一回事
         if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0 || caps and Native.FRONT_CAPS_PERF == 0) {
             toast(locale.str(R.string.game_needs_report))
-            finish()
+            endProcess()
             return
         }
         // the title id keeps this game's saves, temp and log apart from the others' (host_start_common)
@@ -231,7 +231,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         hudFahrenheit = prefs.bool(PrefsStore.HUD_TEMP_F, false)
         val env = fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()
         if (!Native.start(pack, filesDir.path, titleId, resources.displayMetrics.densityDpi, env, this)) {
-            finish()   // the save import asked to end: it happens at the next start
+            endProcess()   // the save import asked to end: it happens at the next start
             return
         }
         hostRunning = true
@@ -355,7 +355,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 },
                 onExit = {
                     drawerOpen = false
-                    endGame()
+                    endProcess()
                 },
             )
             // 布局编辑器：App 自己的面板，画在游戏画面上（游戏先等着）
@@ -460,11 +460,15 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_EXIT, false)) endGame()
+        if (intent.getBooleanExtra(EXTRA_EXIT, false)) endProcess()
     }
 
-    /** the game stays up in the background (the app can come back to it); leaving ends the process, the host cannot run twice in one */
-    private fun endGame() {
+    /**
+     * 这一页没了，进程也走：宿主在一个进程里只能跑一次（见类注释）。
+     * 游戏没起来也一样要把进程带走——只结束页面不结束进程，会留下一个「有进程没游戏」的幽灵，
+     * 库页会以为游戏还在跑（点「运行」就会去回到一个已经不在的页面）。
+     */
+    private fun endProcess() {
         finish()
         Handler(Looper.getMainLooper()).postDelayed({ Process.killProcess(Process.myPid()) }, 300)
     }

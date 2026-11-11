@@ -54,6 +54,16 @@ class PlayerStateTest {
     }
 
     @Test
+    fun `a game whose process was already gone leaves nothing behind`() {
+        // 启动就失败了：进程从来没有活起来，状态不能留着说「游戏在跑」
+        val p = PlayerState(alive = { false }, pollMs = 20)
+        p.start("0100000000010000", "Hades II")
+        assertTrue("the watch notices the process is gone", waitUntil { !p.running })
+        assertEquals("", p.titleId)
+        assertEquals("", p.name)
+    }
+
+    @Test
     fun `starting again after the game ended watches again`() {
         var alive = true
         val p = PlayerState(alive = { alive }, pollMs = 20)

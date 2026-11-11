@@ -184,7 +184,6 @@
     <string name="drawer_pause_game">暂停游戏</string>
     <string name="drawer_resume_game">继续游戏</string>
     <string name="drawer_exit">退出游戏</string>
-    <string name="drawer_back_to_game">回到游戏</string>
     <string name="drawer_no_dll">还没有 Lossless.dll —— 去设置页选一个，再打开这个开关</string>
     <string name="drawer_generating">正在生成帧</string>
     <string name="drawer_waiting_stable">已开启，等待稳定帧率</string>

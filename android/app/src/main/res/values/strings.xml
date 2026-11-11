@@ -185,7 +185,6 @@
     <string name="drawer_pause_game">Pause the game</string>
     <string name="drawer_resume_game">Resume the game</string>
     <string name="drawer_exit">Exit the game</string>
-    <string name="drawer_back_to_game">Back to the game</string>
     <string name="drawer_no_dll">No Lossless.dll yet - pick one on the settings page, then turn this on</string>
     <string name="drawer_generating">Generating frames</string>
     <string name="drawer_waiting_stable">On, waiting for a stable frame rate</string>

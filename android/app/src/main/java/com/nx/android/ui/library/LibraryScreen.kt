@@ -365,14 +365,6 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
             Text(stringResource(R.string.lib_close_current_game, player.name), style = MaterialTheme.typography.bodySmall,
                  color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (status == GameStatus.DONE && player.running && player.titleId == (ported?.titleId ?: "")) {
-            // 这个游戏正在玩：回到游戏与退出直达
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QuietButton(stringResource(R.string.drawer_back_to_game), onClick = { actions.onResumeGame() })
-                QuietButton(stringResource(R.string.drawer_exit), onClick = { actions.onStopGame() })
-            }
-        }
     }
 }
 
@@ -515,34 +507,27 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         Spacer(Modifier.height(10.dp))
                         SaveRows(ported, FolderScanner.labelFor(f, ported), player, actions, onRequest, actions.onToast)
                         Spacer(Modifier.height(6.dp))
-                        val playing = player.running && player.titleId == ported.titleId
-                        if (playing) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                CapsuleButton(locale.str(R.string.drawer_back_to_game), { actions.onResumeGame() }, modifier = Modifier.weight(1f))
-                                CapsuleButton(locale.str(R.string.drawer_exit), { actions.onStopGame() }, modifier = Modifier.weight(1f))
-                            }
-                        } else {
-                            val locked = player.running
-                            if (locked) Hint(locale.str(R.string.lib_close_current_game, player.name))
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                // 旧版宿主编的包：运行按钮变成「重新移植」（重新移植这个游戏，用当前版本的宿主）
-                                if (ported.needsRePort) {
-                                    CapsuleButton(locale.str(R.string.lib_report_again), {
-                                        lib.buildsTarget = f
-                                        onClose()
-                                        onGoBuilds()
-                                    }, modifier = Modifier.weight(1f), enabled = !locked)
-                                } else {
-                                    CapsuleButton(locale.str(R.string.builds_run_action), {
-                                        actions.onRun(ported.pack, FolderScanner.labelFor(f, ported))
-                                    }, modifier = Modifier.weight(1f), enabled = !locked)
-                                }
-                                CapsuleButton(locale.str(R.string.lib_build_action), {
+                        // 别的游戏在跑时锁住这个：跑着的那个自己不受限（点它的「运行」是回到它）
+                        val locked = player.running && player.titleId != ported.titleId
+                        if (locked) Hint(locale.str(R.string.lib_close_current_game, player.name))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // 旧版宿主编的包：运行按钮变成「重新移植」（重新移植这个游戏，用当前版本的宿主）
+                            if (ported.needsRePort) {
+                                CapsuleButton(locale.str(R.string.lib_report_again), {
                                     lib.buildsTarget = f
                                     onClose()
                                     onGoBuilds()
-                                }, modifier = Modifier.weight(1f))
+                                }, modifier = Modifier.weight(1f), enabled = !locked)
+                            } else {
+                                CapsuleButton(locale.str(R.string.builds_run_action), {
+                                    actions.onRun(ported.pack, FolderScanner.labelFor(f, ported))
+                                }, modifier = Modifier.weight(1f), enabled = !locked)
                             }
+                            CapsuleButton(locale.str(R.string.lib_build_action), {
+                                lib.buildsTarget = f
+                                onClose()
+                                onGoBuilds()
+                            }, modifier = Modifier.weight(1f))
                         }
                     }
                 }

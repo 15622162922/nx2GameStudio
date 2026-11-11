@@ -25,6 +25,8 @@ import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
 import com.nx.android.domain.FolderScanner
+import com.nx.android.domain.LibraryLogic
+import com.nx.android.domain.RunAction
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.AppRoot
 import java.io.File
@@ -93,20 +95,27 @@ class MainActivity : ComponentActivity() {
         },
         onCancelPort = { PortService.cancel(this) },
         onRun = { pack, name ->
-            // 运行一个完成的移植：宿主与驱动拷进私有目录后拉起 :play（包是唯一真源，拷贝覆盖旧副本）
+            // 运行一个完成的移植：这个游戏还活着就把它带回前台（不重启），否则拉起 :play
+            // （包是唯一真源，拷贝覆盖旧副本）
             FolderScanner.portFromPack(pack)?.let { ported ->
-                container.player.start(ported.titleId, name)
-                Player.run(this, ported, name) { ok ->
-                    if (!ok) {
-                        container.player.stop()
-                        toast(locale.str(R.string.main_cannot_run_no_host, pack.name))
+                val action = LibraryLogic.runAction(
+                    running = container.player.running,
+                    runningTitleId = container.player.titleId,
+                    portTitleId = ported.titleId,
+                    processAlive = Player.playProcessAlive(this),
+                )
+                if (action == RunAction.RESUME) {
+                    com.nx.android.game.GameActivity.resume(this)
+                } else {
+                    container.player.start(ported.titleId, name)
+                    Player.run(this, ported, name) { ok ->
+                        if (!ok) {
+                            container.player.stop()
+                            toast(locale.str(R.string.main_cannot_run_no_host, pack.name))
+                        }
                     }
                 }
             } ?: toast(locale.str(R.string.main_cannot_run_not_a_pack, pack.name))
-        },
-        onResumeGame = {
-            container.player.start(container.player.titleId, container.player.name)
-            com.nx.android.game.GameActivity.resume(this)
         },
         onStopGame = {
             container.player.stop()
