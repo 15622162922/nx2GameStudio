@@ -178,7 +178,6 @@
     <string name="fg_choose">Choose Lossless.dll</string>
     <string name="fg_ready_short">Frame generation is ready</string>
     <string name="fg_not_a_dll">This file does not look like Lossless.dll (a PE image, at least 100 KB)</string>
-    <string name="fg_find_again">Look again</string>
     <string name="fg_hint">Turn it on in the drawer\'s frame generation page while a game runs; a new DLL is copied to the private folder on its own.</string>
     <string name="drawer_tab_framegen">Frame generation</string>
     <string name="drawer_tab_display">Display</string>

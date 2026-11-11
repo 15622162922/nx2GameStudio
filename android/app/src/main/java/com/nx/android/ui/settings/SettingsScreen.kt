@@ -322,21 +322,22 @@ private fun DisplaySection(actions: AppActions, onRequest: (PickerRequest) -> Un
     var model by remember { mutableStateOf(LosslessDll.ensure(context)?.absolutePath) }
 
     SubtitleRow(stringResource(R.string.fg_section))
+    // 一行：状态 + 一个动作（挑一个装上，或换一个）。没有「重新发现」那个按钮：
+    // 私有副本在每次进游戏前、每次进这一区时都会自己刷新一遍。
     InfoRow(
         title = "Lossless.dll",
         note = if (model != null) stringResource(R.string.fg_ready, model!!) else stringResource(R.string.fg_not_found),
-        trailing = if (model != null) {
-            { QuietButton(stringResource(R.string.fg_find_again), onClick = { model = LosslessDll.ensure(context)?.absolutePath }) }
-        } else null,
+        trailing = {
+            QuietButton(stringResource(if (model != null) R.string.common_change else R.string.common_choose), onClick = {
+                onRequest(PickerRequest(PickerMode.FILE, emptySet(), null, locale.str(R.string.fg_choose), onPicked = { f ->
+                    if (LosslessDll.install(context, f)) {
+                        model = LosslessDll.ensure(context)?.absolutePath
+                        actions.onToast(locale.str(R.string.fg_ready_short))
+                    } else actions.onToast(locale.str(R.string.fg_not_a_dll))
+                }))
+            })
+        },
     )
-    ActionRow(title = stringResource(R.string.fg_choose), label = stringResource(R.string.common_choose)) {
-        onRequest(PickerRequest(PickerMode.FILE, emptySet(), null, locale.str(R.string.fg_choose), onPicked = { f ->
-            if (LosslessDll.install(context, f)) {
-                model = LosslessDll.ensure(context)?.absolutePath
-                actions.onToast(locale.str(R.string.fg_ready_short))
-            } else actions.onToast(locale.str(R.string.fg_not_a_dll))
-        }))
-    }
     NoteRow(stringResource(R.string.fg_hint))
 }
 

@@ -177,7 +177,6 @@
     <string name="fg_choose">选择 Lossless.dll</string>
     <string name="fg_ready_short">帧生成已就绪</string>
     <string name="fg_not_a_dll">这个文件不像 Lossless.dll（PE 镜像，至少 100 KB）</string>
-    <string name="fg_find_again">重新发现</string>
     <string name="fg_hint">游戏运行中在抽屉里打开帧生成即可使用；DLL 的更新会自动拷到私有目录。</string>
     <string name="drawer_tab_framegen">帧生成</string>
     <string name="drawer_tab_display">显示</string>
