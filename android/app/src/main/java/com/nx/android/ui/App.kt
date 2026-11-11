@@ -113,8 +113,6 @@ data class AppActions(
     val onToast: (String) -> Unit,
     val version: () -> String,
     val keys: () -> String,
-    val out: () -> String,
-    val onSetOut: (String) -> Unit,
     val onShareLog: () -> Unit,
     val onClearLog: () -> Unit,
     val readLog: () -> String,
@@ -291,7 +289,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
-                Tab.SETTINGS -> SettingsScreen(container.onboarding, lib, container.env, container.drivers, container.update, actions,
+                Tab.SETTINGS -> SettingsScreen(container.onboarding, container.drivers, container.update, actions,
                     onRequest, onDrivers, onLog)
             }
         }

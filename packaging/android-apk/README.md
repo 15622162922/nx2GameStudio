@@ -6,7 +6,7 @@ unpacked on the first start, and the porter runs inside it; the screen is Androi
 
 ```
 ┌─ the app (com.nx.android) ─────────────────────────────────────┐
-│  Setup: prod.keys, output folder          Port: game file       │
+│  Setup: prod.keys                        Port: game file       │
 │  [准备环境] [下载 .NET SDK]                [开始移植]            │
 │  the log: the porter's own output                             │
 └────────────────────────────────────────────────────────────────┘
@@ -54,7 +54,7 @@ the Python of the rootfs is started through the loader directly and needs no rew
 
 ## What the phone does and does not do
 
-- **Makes the APK and the data pack** on the phone, into the output folder (`/sdcard/Switch/Ports` by default).
+- **Makes the data pack** on the phone, into the app's own private folder (`files/ports/<Game>-data`).
 - **Says what a port is**: the pack's manifest carries the profile's own status, so the library shows an experimental port as one
   (`experimental` = the game was never brought up on Android: it may stop at a path that was never walked).
 - **Installs the APK** with the system installer (the app hands it over; Android asks the user).

@@ -80,7 +80,7 @@ tool's tree, pre-builds the two C# tools (`nx_extract`, the shader translator â€
 - First launch walks the four onboarding steps and unpacks the environment (rootfs, build tools, .NET runtime,
   about 700 MB). Builds with `-PnoPayload` leave it alone.
 - The porter itself runs on the phone: the **Builds** tab picks a game file and starts a port; the data packs
-  land in the output folder (`/sdcard/Switch/Ports` by default) and the library runs them.
+  land in the app's own private folder (`files/ports/<Game>-data`) and the library runs them.
 - Host and shader changes are rebuilt by the port on the phone (its own ARM64 compiler; `NX2A_ARM_HOST`), so
   the app is self-sufficient â€” but that loop is slower than Loop A. Most core work is faster on the desktop;
   the phone runs the finished pack.

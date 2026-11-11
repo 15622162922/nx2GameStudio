@@ -16,7 +16,7 @@ object FolderScanner {
         Regex("\\[(0[0-9a-fA-F]{15})]").find(name)?.groupValues?.get(1)?.uppercase()
 
     /**
-     * The title ID of every finished port the output folder holds: the port wrote `<stem>-data/` with
+     * The title ID of every finished port the ports folder holds: the port wrote `<stem>-data/` with
      * `nx2a-data.json` (the game, its title ID) and the host the player runs (host/libdmplay.so). A pack
      * without its host (a rebuild in flight, a deleted file) does not count as done.
      */

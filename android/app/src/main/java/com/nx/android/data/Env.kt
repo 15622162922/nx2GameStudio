@@ -34,6 +34,9 @@ class Env(private val ctx: Context) {
     val nxHome = File(files, "nx2a")
     val tmp = File(files, "tmp")
 
+    /** 移植产出的数据包：移植器写在这里（NX2A_WORK 的旁边），游戏库也只在这里找包 */
+    val ports = File(files, "ports")
+
     val loader = File(rootfs, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1")
     val python = File(rootfs, "usr/bin/python3.13")
     val interpPath = "${rootfs.absolutePath}/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"

@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
         onStartPort = { file, cfg ->
             // 没有「所有文件访问」权限就读不到游戏文件（重装 App 后会掉）：移植会死在半个 Python 栈里，先说清楚
             if (file.canRead()) {
-                PortService.start(this, file.absolutePath, container.prefs.keys, container.prefs.out,
+                PortService.start(this, file.absolutePath, container.prefs.keys,
                                   cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom)
             } else {
                 toast(locale.str(R.string.builds_needs_storage)); askStorage()
@@ -126,8 +126,6 @@ class MainActivity : ComponentActivity() {
         onToast = { toast(it) },
         version = { versionName() },
         keys = { container.prefs.keys },
-        out = { container.prefs.out },
-        onSetOut = { container.prefs.writeOut(it) },
         onShareLog = {
             val text = AppLog.text()
             if (text.isNotEmpty()) {

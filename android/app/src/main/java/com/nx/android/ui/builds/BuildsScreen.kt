@@ -151,20 +151,6 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
                 )
             }
         }
-        // 输出目录行：就地修改（与设置页同一设置）
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.common_output_dir), style = MaterialTheme.typography.bodyMedium)
-                Hint(actions.out(), size = 11.sp)
-            }
-            QuietButton(stringResource(R.string.common_modify), onClick = {
-                onRequest(PickerRequest(PickerMode.DIR, emptySet(), File(actions.out()), locale.str(R.string.builds_choose_output_dir),
-                    onPicked = { dir ->
-                        actions.onSetOut(dir.path)
-                        lib.rescan()
-                    }))
-            })
-        }
         Hint(stringResource(R.string.builds_updates_taken))
 
         // 该游戏自己的参数：出发前最后确认，改动即时保存

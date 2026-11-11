@@ -9,17 +9,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The tool's saved settings: every key in one place, and the two paths the whole UI reads (the keys file and
- * the output folder) as observable state — a write goes to disk at once, a read is a Compose read. The key
- * names and their meanings are the old app's, unchanged: an update keeps its settings.
+ * The tool's saved settings: every key in one place, and the path the whole UI reads (the keys file) as
+ * observable state — a write goes to disk at once, a read is a Compose read. The key names and their meanings
+ * are the old app's, unchanged: an update keeps its settings.
  */
 class PrefsStore(ctx: Context) {
 
     companion object {
-        // the two paths (the old app's keys, unchanged)
+        // the old app's key, unchanged
         const val KEYS = "keys"
-        const val OUT = "out"
-        const val OUT_DEFAULT = "/sdcard/Switch/Ports"
         // the old app's global port options: a game without its own config keeps them as the defaults
         const val LEGACY_TOUCH = "touch"
         const val LEGACY_FPS60 = "fps60"
@@ -52,18 +50,9 @@ class PrefsStore(ctx: Context) {
     var keys by mutableStateOf(prefs.getString(KEYS, "") ?: "")
         private set
 
-    /** 移植产物（数据包）的输出目录 */
-    var out by mutableStateOf(prefs.getString(OUT, OUT_DEFAULT) ?: OUT_DEFAULT)
-        private set
-
     fun writeKeys(path: String) {
         keys = path.trim()
         prefs.edit().putString(KEYS, keys).apply()
-    }
-
-    fun writeOut(path: String) {
-        out = path.trim()
-        prefs.edit().putString(OUT, out).apply()
     }
 
     // ---- 通用读写（引导与库的记忆；键名见常量） ----

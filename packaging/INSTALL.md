@@ -33,7 +33,7 @@ A few antivirus engines may flag `nx2android.exe` (on VirusTotal, 3 of 69 flagge
 
 ## 4. Put it on the device
 
-The nx2android app on the phone is what plays a game: it ports on the phone itself, and it plays the data packs it finds in its output folder. The pack this tool wrote is the same thing the app's own port produces.
+The nx2android app on the phone is what plays a game: it ports on the phone itself, and it plays the data packs it made there. The pack this tool wrote is the same thing the app's own port produces — but the app keeps its packs in its own private folder and does not read the shared storage, so to play on the phone, port on the phone.
 
 ## When something goes wrong
 

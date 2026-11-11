@@ -42,12 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.appstate.DriverState
-import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Drivers
-import com.nx.android.data.Env
 import com.nx.android.data.LosslessDll
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
@@ -70,14 +68,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Settings: the environment's state and its prepare/reset, the doctor's check and the keys' path, the output
- * folder, the Vulkan drivers, the log (view, clear, share), the version and the way back into the guided setup.
+ * Settings: the environment's state and its prepare/reset, the doctor's check and the keys' path, the Vulkan
+ * drivers, the log (view, clear, share), the version and the way back into the guided setup.
  *
  * The driver page and the log cover the whole screen; they are composed above this page (App.kt), so this page
  * only asks for them.
  */
 @Composable
-fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: DriverState, update: UpdateState,
+fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit, onLog: () -> Unit) {
     Column(
@@ -88,7 +86,6 @@ fun SettingsScreen(ob: OnboardingState, lib: LibraryState, env: Env, drivers: Dr
         AboutSection(ob, update, actions)
         LanguageSection()
         EnvSection(ob, actions, onRequest)
-        PathsSection(lib, env, actions, onRequest)
         DriversSection(drivers, actions, onRequest, onDrivers)
         FrameGenSection(actions, onRequest)
         LogSection(actions, onLog)
@@ -268,29 +265,6 @@ private fun KeysRow(actions: AppActions, onRequest: (PickerRequest) -> Unit) {
             onRequest(PickerRequest(PickerMode.FILE, emptySet(), null, locale.str(R.string.onb_choose_prod_keys),
                 onPicked = { f -> actions.onSetKeys(f.path) }))
         })
-    }
-}
-
-@Composable
-private fun PathsSection(lib: LibraryState, env: Env, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    val locale = LocalAppLocale.current
-    val out = actions.out()
-    Section(stringResource(R.string.common_output_dir)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.set_output_dir_hint), style = MaterialTheme.typography.bodyMedium)
-                Text(out, style = MaterialTheme.typography.bodySmall,
-                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-            QuietButton(stringResource(R.string.common_modify), onClick = {
-                onRequest(PickerRequest(PickerMode.DIR, emptySet(), File(out), locale.str(R.string.builds_choose_output_dir),
-                    onPicked = { dir ->
-                        actions.onSetOut(dir.path)
-                        lib.rescan()
-                    }))
-            })
-        }
-        Hint(stringResource(R.string.set_output_dir_note))
     }
 }
 

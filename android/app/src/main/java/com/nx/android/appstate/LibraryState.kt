@@ -25,8 +25,10 @@ import java.io.File
  * entry keeps the old defaults). A game counts as done when its pack and the host inside it are there — the
  * ones this app ported are remembered by source path, the ones from before are matched through the data
  * packs' manifests (the title ID in the file's name).
+ *
+ * [portsDir] is the app's own ports folder: the data packs the porter writes there, found by their title ID.
  */
-class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
+class LibraryState(private val prefs: PrefsStore, private val port: PortState, private val portsDir: File) {
 
     var games by mutableStateOf(listOf<File>()); private set
 
@@ -132,7 +134,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState) {
             val real = extras.map(::File).filter { it.isFile }
             var found = (if (FAKE_DATA) fakeGames() else emptyList()) + real
             found = found.distinctBy { it.absolutePath }.sortedBy { it.name.lowercase() }
-            val byTitle = FolderScanner.outIndex(File(prefs.out))
+            val byTitle = FolderScanner.outIndex(portsDir)
             val matched = HashMap(ports.filterKeys { name -> found.any { it.absolutePath == name } })
             for (f in found) {
                 val id = FolderScanner.titleIdIn(f.name) ?: continue

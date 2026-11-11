@@ -47,7 +47,7 @@ class AppContainer(app: NxApp) {
 
     val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk },
         onEnvChanged = { envCheck.refresh() })
-    val library = LibraryState(prefs, port)
+    val library = LibraryState(prefs, port, env.ports)
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */
     val drivers = DriverState()

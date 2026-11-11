@@ -39,7 +39,6 @@
     <string name="common_interrupted">Interrupted</string>
     <string name="common_idle">Idle</string>
     <string name="common_log">Log</string>
-    <string name="common_output_dir">Output folder</string>
     <string name="common_error_unknown_reason">unknown reason</string>
     <string name="main_cannot_run_no_host">Cannot run: the host program is missing from %1$s</string>
     <string name="main_cannot_run_not_a_pack">Cannot run: %1$s is not a runnable data pack</string>
@@ -128,9 +127,6 @@
     <string name="set_language_en">English</string>
     <string name="set_language_note">The app\'s own language. The game\'s own language is in the library\'s drawer, one game at a time.</string>
     <string name="set_keys_not_set">Not set yet</string>
-    <string name="set_output_dir_hint">The port\'s artifacts (the data packs) are written here</string>
-    <string name="set_choose_output_dir">Choose an output folder</string>
-    <string name="set_output_dir_note">Changing the output folder makes the library\'s \"Done\" count again from the new folder</string>
     <string name="set_log_hint">Everything the tools say is in one file: share it from here when something went wrong.</string>
     <string name="set_log_clear">Clear</string>
     <string name="set_section_about">About</string>
@@ -242,7 +238,6 @@
     <string name="builds_game_file">Game file</string>
     <string name="builds_change">Change</string>
     <string name="builds_clear">Clear</string>
-    <string name="builds_choose_output_dir">Choose an output folder</string>
     <string name="builds_updates_taken">The updates and the DLC next to it are taken along</string>
     <string name="builds_touch_game">Touch game (the gamepad starts hidden)</string>
     <string name="builds_60fps">60 fps</string>
@@ -292,9 +287,9 @@
     <string name="lib_share_failed">The share failed: %1$s</string>
     <string name="lib_log_export_failed">The log could not be exported: %1$s</string>
     <string name="lib_manage">Manage</string>
-    <string name="lib_artifact_missing">The data pack is gone (the output folder does not hold it)</string>
+    <string name="lib_artifact_missing">The data pack is gone</string>
     <string name="lib_porting_see_builds">A port is running - see the progress on the builds page, or tap \"See the build\" below</string>
-    <string name="lib_artifact_missing_state">The data pack is gone (the output folder does not hold it) - the state falls back to not ported</string>
+    <string name="lib_artifact_missing_state">The data pack is gone - the state falls back to not ported</string>
     <string name="lib_build_action">▶ Build</string>
     <string name="lib_delete_artifact">Delete the data pack</string>
     <string name="lib_delete_artifact_confirm">Delete the data pack?</string>

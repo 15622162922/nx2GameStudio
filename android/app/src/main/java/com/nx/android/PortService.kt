@@ -28,17 +28,17 @@ class PortService : Service() {
 
     companion object {
         const val CHANNEL = "nx2a_port"
-        const val GAME = "game"; const val KEYS = "keys"; const val OUT = "out"
+        const val GAME = "game"; const val KEYS = "keys"
         const val TOUCH = "touch"; const val FPS60 = "fps60"; const val EXP = "exp"
         const val ALIAS = "alias"
         private var instance: PortService? = null
 
         /** Starts a port: the state goes up first (the UI turns at once), the service keeps it alive */
-        fun start(ctx: Context, game: String, keys: String, out: String,
+        fun start(ctx: Context, game: String, keys: String,
                   touch: Boolean, fps60: Boolean, exp: Boolean, aliasHeadroom: Int) {
             (ctx.applicationContext as NxApp).container.port.begin(game)
             val i = Intent(ctx, PortService::class.java)
-                .putExtra(GAME, game).putExtra(KEYS, keys).putExtra(OUT, out)
+                .putExtra(GAME, game).putExtra(KEYS, keys)
                 .putExtra(TOUCH, touch).putExtra(FPS60, fps60).putExtra(EXP, exp)
                 .putExtra(ALIAS, aliasHeadroom)
             ctx.startForegroundService(i)
@@ -69,13 +69,12 @@ class PortService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val game = intent?.getStringExtra(GAME) ?: return stop()
         val keys = intent.getStringExtra(KEYS) ?: return stop()
-        val out = intent.getStringExtra(OUT) ?: return stop()
         startForeground(1, notification())
         runner = PortRunner(Env(applicationContext), locale) { line ->
             port.onLine(line)
             nm.notify(1, notification())
         }
-        runner!!.port(game, keys, out, intent.getBooleanExtra(TOUCH, false),
+        runner!!.port(game, keys, intent.getBooleanExtra(TOUCH, false),
             intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
             intent.getIntExtra(ALIAS, ALIAS_AUTO)) {
             port.finish()
