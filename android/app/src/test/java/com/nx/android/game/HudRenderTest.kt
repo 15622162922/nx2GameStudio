@@ -54,10 +54,25 @@ class HudRenderTest {
     }
 
     @Test
-    fun `the frame generation names its engine and shows both rates`() {
+    fun `the frame generation names its engine and shows the presented rate`() {
         val sample = HudSample(gameFps = 60.0, presentedFps = 120.0)
         val lines = HudData.render(sample, setOf(HudField.FPS), engineLabel = "LSFG x2")
-        assertEquals("LSFG x2 60 → 120 fps", lines[0].text)
+        assertEquals("LSFG x2 120 fps", lines[0].text)   // one number: what reaches the screen
+    }
+
+    @Test
+    fun `a frame generation that is not adding frames shows the game's own rate, without the engine`() {
+        val sample = HudSample(gameFps = 60.0, presentedFps = 60.0)
+        val lines = HudData.render(sample, setOf(HudField.FPS), engineLabel = "LSFG x2")
+        assertEquals("60 fps", lines[0].text)
+    }
+
+    @Test
+    fun `the frame time is hidden while the frame generation is adding frames`() {
+        val generating = HudSample(gameFps = 60.0, presentedFps = 120.0, frameMs = 16.7)
+        assertEquals(listOf("LSFG x2 120 fps"), HudData.render(generating, setOf(HudField.FPS, HudField.FRAME_TIME), engineLabel = "LSFG x2").map { it.text })
+        val idle = HudSample(gameFps = 60.0, presentedFps = 60.0, frameMs = 16.7)
+        assertEquals(listOf("60 fps", "16.7 ms"), HudData.render(idle, setOf(HudField.FPS, HudField.FRAME_TIME), engineLabel = "LSFG x2").map { it.text })
     }
 
     @Test

@@ -89,7 +89,9 @@ object HudData {
     /**
      * One line per selected field, in the fixed order. The frame rate is the star and wears the accent; the
      * temperature grades good, warn and bad. With the frame generation on, the frame rate names the engine and
-     * shows the game's own rate and what reaches the screen.
+     * shows what reaches the screen — one number, the presented rate (the game's own frames and the generated
+     * ones). The game's own rate is not shown beside it: the player would have to work out which of the two is
+     * the one they feel, and the frame time (the game's own frame interval) would not match it.
      */
     fun render(
         s: HudSample,
@@ -97,42 +99,48 @@ object HudData {
         fahrenheit: Boolean = false,
         engineLabel: String? = null,
         chargingText: String = "charging",
-    ): List<HudLine> = HudField.entries.filter { it in fields }.map { field ->
-        when (field) {
-            HudField.FPS -> {
-                val text = when {
-                    s.gameFps == null -> PLACEHOLDER
-                    s.presentedFps != null && s.presentedFps > s.gameFps + 0.5 ->
-                        (if (engineLabel != null) "$engineLabel " else "") + "${s.gameFps.toInt()} → ${s.presentedFps.toInt()} fps"
-                    else -> "${s.gameFps.toInt()} fps"
+    ): List<HudLine> {
+        // the frame generation is adding frames: the presented rate is above the game's own, and the frame time
+        // (the game's own frame interval) does not belong next to it
+        val generating = s.presentedFps != null && s.gameFps != null && s.presentedFps > s.gameFps + 0.5
+        return HudField.entries.filter { it in fields }.map { field ->
+            when (field) {
+                HudField.FPS -> {
+                    val text = when {
+                        s.gameFps == null -> PLACEHOLDER
+                        else -> {
+                            val fps = if (s.presentedFps != null) s.presentedFps else s.gameFps
+                            (if (generating && engineLabel != null) "$engineLabel " else "") + "${fps.toInt()} fps"
+                        }
+                    }
+                    HudLine(text, HudRole.ACCENT)
                 }
-                HudLine(text, HudRole.ACCENT)
+                HudField.FRAME_TIME -> if (generating) null else HudLine(s.frameMs?.let { num("%.1f ms", it) } ?: PLACEHOLDER, HudRole.PLAIN)
+                HudField.CPU -> HudLine(s.cpuPercent?.let { num("CPU %.0f%%", it) } ?: "CPU $PLACEHOLDER", HudRole.PLAIN)
+                HudField.GPU -> HudLine(s.gpuPercent?.let { num("GPU %.0f%%", it) } ?: "GPU $PLACEHOLDER", HudRole.PLAIN)
+                HudField.APP_RAM -> HudLine(s.appRamMb?.let { num("RAM %d MB", it) } ?: "RAM $PLACEHOLDER", HudRole.PLAIN)
+                HudField.SYS_RAM -> HudLine(
+                    if (s.sysRamUsedMb != null && s.sysRamTotalMb != null)
+                        num("MEM %.1f/%.1f GB", s.sysRamUsedMb / 1024.0, s.sysRamTotalMb / 1024.0)
+                    else "MEM $PLACEHOLDER",
+                    HudRole.PLAIN,
+                )
+                HudField.TEMP -> {
+                    val c = s.tempC
+                    val text = c?.let { if (fahrenheit) num("%.1f°F", it * 9.0 / 5.0 + 32.0) else num("%.1f°C", it) } ?: PLACEHOLDER
+                    HudLine(text, tempRole(c))
+                }
+                // The battery's current is the charge current while it charges: a marker, not watts. The percentage rides along.
+                HudField.POWER -> HudLine(
+                    when {
+                        s.charging -> listOfNotNull(chargingText, s.capacity?.let { "$it%" }).joinToString(" ")
+                        s.powerW != null -> listOfNotNull(num("%.1f W", s.powerW), s.capacity?.let { "$it%" }).joinToString(" ")
+                        else -> s.capacity?.let { "$it%" } ?: PLACEHOLDER
+                    },
+                    if (s.charging) HudRole.ACCENT else HudRole.PLAIN,
+                )
             }
-            HudField.FRAME_TIME -> HudLine(s.frameMs?.let { num("%.1f ms", it) } ?: PLACEHOLDER, HudRole.PLAIN)
-            HudField.CPU -> HudLine(s.cpuPercent?.let { num("CPU %.0f%%", it) } ?: "CPU $PLACEHOLDER", HudRole.PLAIN)
-            HudField.GPU -> HudLine(s.gpuPercent?.let { num("GPU %.0f%%", it) } ?: "GPU $PLACEHOLDER", HudRole.PLAIN)
-            HudField.APP_RAM -> HudLine(s.appRamMb?.let { num("RAM %d MB", it) } ?: "RAM $PLACEHOLDER", HudRole.PLAIN)
-            HudField.SYS_RAM -> HudLine(
-                if (s.sysRamUsedMb != null && s.sysRamTotalMb != null)
-                    num("MEM %.1f/%.1f GB", s.sysRamUsedMb / 1024.0, s.sysRamTotalMb / 1024.0)
-                else "MEM $PLACEHOLDER",
-                HudRole.PLAIN,
-            )
-            HudField.TEMP -> {
-                val c = s.tempC
-                val text = c?.let { if (fahrenheit) num("%.1f°F", it * 9.0 / 5.0 + 32.0) else num("%.1f°C", it) } ?: PLACEHOLDER
-                HudLine(text, tempRole(c))
-            }
-            // The battery's current is the charge current while it charges: a marker, not watts. The percentage rides along.
-            HudField.POWER -> HudLine(
-                when {
-                    s.charging -> listOfNotNull(chargingText, s.capacity?.let { "$it%" }).joinToString(" ")
-                    s.powerW != null -> listOfNotNull(num("%.1f W", s.powerW), s.capacity?.let { "$it%" }).joinToString(" ")
-                    else -> s.capacity?.let { "$it%" } ?: PLACEHOLDER
-                },
-                if (s.charging) HudRole.ACCENT else HudRole.PLAIN,
-            )
-        }
+        }.filterNotNull()
     }
 
     /** A number in the app's own format: the decimal point is a point, whatever the phone's language is */
