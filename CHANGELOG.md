@@ -15,6 +15,46 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha06 - 2026-11-11
+
+### Before you update
+
+- The data packs are untouched this time: the games you ported with alpha05
+  play as they are, no porting again.
+- The output folder setting is gone: the data pack lives in the app's own
+  folder. A pack made on a computer does not play on the phone any more - the
+  game is ported on the phone (the shaders are reused, so it is quick).
+
+### New
+
+- The data pack can live on a removable card: one button in the library moves
+  it (with a progress bar), and a rebuild writes the new pack on the card as
+  well. Pulling the card during a move leaves the pack where it was; a
+  deletion with the card out says that the pack on the card was not deleted.
+  Verified on a device (a Xiaomi tablet and a memory card).
+- The library clears the build cache and deletes a game: a failed port no
+  longer leaves files behind that nothing could get rid of. A deletion takes
+  the data pack (and the saves in it) with it, and your own game files stay.
+  Both ask first, and the confirmation says what the action does.
+- The settings page is a page of sections: an icon in the top bar opens it,
+  five sections on the left, one row per setting. The settings themselves did
+  not change; the language moved into About.
+- The update dialog spreads over the available width on a small screen.
+
+### Fixed
+
+- Picking a Lossless.dll from anywhere failed to copy: only the path that
+  finds it on its own made the folder, and the failure was reported as "this
+  does not look like a Lossless.dll". The folder is made now, and a copy that
+  does not work is logged.
+- The frame generation row has one button: the private copy refreshes itself,
+  so the button that refreshed it by hand only repeated what the app did.
+
+### Community ports
+
+- No community pull request has been merged since the last version - you can
+  be the first.
+
 ## v0.3.0-alpha05 - 2026-11-11
 
 ### Before you update
