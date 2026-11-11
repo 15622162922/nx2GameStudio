@@ -52,8 +52,9 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 
 ### Community ports
 
-- No community pull request has been merged since the last version - you can
-  be the first.
+- **@15622162922** — #10: fix(android): compile adrenotools C hooks with clang
+  The Vulkan driver loader's hooks keep their names now: they were built as
+  C++, so the names came out mangled and the loader could not find them.
 
 ## v0.3.0-alpha05 - 2026-11-11
 
