@@ -145,6 +145,10 @@ private fun experimentalTag(ported: Ported?): String? =
 private fun reportTag(ported: Ported?): String? =
     if (ported?.needsRePort == true) stringResource(R.string.lib_needs_report) else null
 
+/** 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项，就不显示 */
+private fun versionTag(ported: Ported?): String? =
+    ported?.display?.trim()?.takeIf { it.isNotEmpty() }
+
 /** The cover's two colors, picked by the name so one game always wears the same coat */
 private fun coverColors(name: String): List<Color> {
     val h = name.hashCode()
@@ -215,7 +219,7 @@ internal fun HeroBackground(lib: LibraryState, port: PortState, sel: File?) {
                 )
             )
             Text(
-                FolderScanner.displayName(sel).take(1).ifEmpty { "?" },
+                FolderScanner.labelFor(sel, lib.portOf(sel)).take(1).ifEmpty { "?" },
                 fontSize = 180.sp, fontWeight = FontWeight.Bold,
                 color = Color.White.copy(alpha = 0.10f),
                 modifier = Modifier.align(Alignment.Center),
@@ -267,12 +271,12 @@ private fun HeroTile(lib: LibraryState, port: PortState, f: File, selected: Bool
         val bitmap = icon
         if (bitmap != null) {
             androidx.compose.foundation.Image(
-                bitmap, FolderScanner.displayName(f), Modifier.padding(2.dp).fillMaxSize(),
+                bitmap, FolderScanner.labelFor(f, lib.portOf(f)), Modifier.padding(2.dp).fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
         } else {
             Text(
-                FolderScanner.displayName(f).take(1).ifEmpty { "?" },
+                FolderScanner.labelFor(f, lib.portOf(f)).take(1).ifEmpty { "?" },
                 fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.85f),
             )
         }
@@ -302,12 +306,12 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
 
     Column(Modifier.widthIn(max = 640.dp)) {
         Text(
-            FolderScanner.displayName(f),
+            FolderScanner.labelFor(f, ported),
             style = MaterialTheme.typography.displaySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            listOfNotNull(titleId, statusLabel(status) +
+            listOfNotNull(titleId, versionTag(ported), statusLabel(status) +
                 if (status == GameStatus.PORTING) " ${(port.progress * 100).toInt()}%" else "",
                 experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
             style = MaterialTheme.typography.bodyMedium,
@@ -325,7 +329,7 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
                     .clip(RoundedCornerShape(50))
                     .background(if (locked) NxPalette.Unbuilt else NxPalette.Cream)
                     .clickable(enabled = !locked) {
-                        if (running && !stale) actions.onRun(ported!!.pack, FolderScanner.displayName(f))
+                        if (running && !stale) actions.onRun(ported!!.pack, FolderScanner.labelFor(f, ported))
                         else {
                             lib.buildsTarget = f
                             onGoBuilds()
@@ -398,7 +402,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     /** 游戏运行日志：宿主把它写在了数据包里，拷进下载目录再发出去（整份文件，不截断） */
     fun shareGameLog(target: Ported) {
         if (!actions.storageOk()) { actions.onToast(locale.str(R.string.lib_log_needs_storage)); return }
-        val game = FolderScanner.displayName(f)
+        val game = FolderScanner.labelFor(f, ported)
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching { GameLog.copyTo(target.pack, SaveShare.packagesDir(context), game) }
@@ -448,11 +452,11 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        FolderScanner.displayName(f),
+                        FolderScanner.labelFor(f, ported),
                         style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(titleId, statusLabel(status), experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
+                        listOfNotNull(titleId, versionTag(ported), statusLabel(status), experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -509,7 +513,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         Spacer(Modifier.height(8.dp))
                         RunOptions(ported)
                         Spacer(Modifier.height(10.dp))
-                        SaveRows(ported, FolderScanner.displayName(f), player, actions, onRequest, actions.onToast)
+                        SaveRows(ported, FolderScanner.labelFor(f, ported), player, actions, onRequest, actions.onToast)
                         Spacer(Modifier.height(6.dp))
                         val playing = player.running && player.titleId == ported.titleId
                         if (playing) {
@@ -530,7 +534,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                                     }, modifier = Modifier.weight(1f), enabled = !locked)
                                 } else {
                                     CapsuleButton(locale.str(R.string.builds_run_action), {
-                                        actions.onRun(ported.pack, FolderScanner.displayName(f))
+                                        actions.onRun(ported.pack, FolderScanner.labelFor(f, ported))
                                     }, modifier = Modifier.weight(1f), enabled = !locked)
                                 }
                                 CapsuleButton(locale.str(R.string.lib_build_action), {

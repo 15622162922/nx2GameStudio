@@ -65,6 +65,7 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.StorageVolumes
 import com.nx.android.domain.EnvCheck
+import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameConfig
 import com.nx.android.ui.builds.BuildsScreen
@@ -379,7 +380,7 @@ private fun ActivityBar(port: PortState, openBuilds: () -> Unit) {
                     modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = NxPalette.Building,
                 )
                 Text(
-                    File(port.gameFile).name,
+                    FolderScanner.displayName(File(port.gameFile)),
                     style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f), maxLines = 1,
                 )

@@ -48,8 +48,16 @@ object FolderScanner {
                       icon = File(pack, "icon.png").takeIf { it.isFile },
                       titleId = id, name = man.optString("name"),
                       status = man.optString("status"),
-                      hostFront = man.optString("host_front"))
+                      hostFront = man.optString("host_front"),
+                      display = man.optString("display"))
     }
+
+    /**
+     * The game's label: the name the data pack's manifest holds - the game's own name - or the file's
+     * name without its brackets when there is no pack yet or the pack carries no name (an old pack).
+     */
+    fun labelFor(file: File, ported: Ported?): String =
+        ported?.name?.trim()?.takeIf { it.isNotEmpty() } ?: displayName(file)
 
     /** The game's display name: the file's name without its brackets and extension */
     fun displayName(file: File): String {

@@ -72,4 +72,55 @@ class FolderScannerTest {
         // nothing left after the brackets: the file's whole name stays
         assertEquals("(demo).nsp", FolderScanner.displayName(File("(demo).nsp")))
     }
+
+    @Test
+    fun `the label is the game's own name when the pack carries one`() {
+        val out = tmpDir()
+        val pack = File(out, "Arceus-data")
+        File(pack, "host").mkdirs()
+        File(pack, "nx2a-data.json").writeText("""{"title_id":"01001F5010DFA000","name":"Pokémon Legends: Arceus","display":"1.1.1"}""")
+        File(pack, "host/libdmplay.so").writeText("ELF")
+
+        val p = FolderScanner.outIndex(out)["01001F5010DFA000"]!!
+        // the file the player downloaded says nothing about the game: the pack does
+        assertEquals("Pokémon Legends: Arceus", FolderScanner.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), p))
+        // the game's own version comes from the pack too
+        assertEquals("1.1.1", p.display)
+        out.deleteRecursively()
+    }
+
+    @Test
+    fun `a game without a pack keeps its file's name as the label`() {
+        assertEquals("xxxx", FolderScanner.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), null))
+    }
+
+    @Test
+    fun `a pack without a name, or with a blank one, falls back to the file's name`() {
+        val out = tmpDir()
+        val old = File(out, "Old-data")
+        File(old, "host").mkdirs()
+        File(old, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
+        File(old, "host/libdmplay.so").writeText("ELF")
+        val blank = File(out, "Blank-data")
+        File(blank, "host").mkdirs()
+        File(blank, "nx2a-data.json").writeText("""{"title_id":"0100000000020000","name":"   "}""")
+        File(blank, "host/libdmplay.so").writeText("ELF")
+
+        val f = File("/sdcard/Games/[本体v1.0.0]xxxx.nsp")
+        assertEquals("xxxx", FolderScanner.labelFor(f, FolderScanner.outIndex(out)["0100000000010000"]))
+        assertEquals("xxxx", FolderScanner.labelFor(f, FolderScanner.outIndex(out)["0100000000020000"]))
+        out.deleteRecursively()
+    }
+
+    @Test
+    fun `a pack without a display version leaves the version empty`() {
+        val out = tmpDir()
+        val pack = File(out, "Old-data")
+        File(pack, "host").mkdirs()
+        File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000","name":"Hades II"}""")
+        File(pack, "host/libdmplay.so").writeText("ELF")
+
+        assertEquals("", FolderScanner.outIndex(out)["0100000000010000"]!!.display)
+        out.deleteRecursively()
+    }
 }

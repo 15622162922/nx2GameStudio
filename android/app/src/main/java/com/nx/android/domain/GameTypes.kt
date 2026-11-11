@@ -48,6 +48,7 @@ data class Ported(
     val name: String = "", // 清单里的游戏名
     val status: String = "", // 清单里的档案状态（playable / wip / boots / experimental）：experimental 的移植提醒玩家它还没被正式调通
     val hostFront: String = "", // 清单里的宿主前端（"player"）：别的值（没有这个字段 = 旧版宿主）要用当前版本重新移植
+    val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
 ) {
     /** 这个包是用当前版本的前端编的吗？不是的话要重新移植（宿主的前端变了，老的宿主没有新的入口） */
     val needsRePort: Boolean get() = hostFront != FolderScanner.HOST_FRONT

@@ -14,6 +14,7 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
 import com.nx.android.domain.ALIAS_AUTO
+import com.nx.android.domain.FolderScanner
 import java.io.File
 
 /**
@@ -114,7 +115,7 @@ class PortService : Service() {
         }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)   // the mark's shapes: the notification tints the silhouette
-            .setContentTitle(if (port.gameFile.isEmpty()) locale.str(R.string.app_name) else File(port.gameFile).name)
+            .setContentTitle(if (port.gameFile.isEmpty()) locale.str(R.string.app_name) else FolderScanner.displayName(File(port.gameFile)))
             .setContentText(what)
             .setProgress(100, (port.progress * 100).toInt(), port.running && port.progress <= 0f)
             .setOngoing(port.running)

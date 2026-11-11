@@ -141,7 +141,7 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
             StatusDot(statusColor(status))
             Column(Modifier.weight(1f)) {
                 Text(
-                    FolderScanner.displayName(f),
+                    FolderScanner.labelFor(f, lib.portOf(f)),
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2,
                 )
                 Text(
@@ -200,7 +200,7 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
 @Composable
 private fun ConfigDisclosure(lib: LibraryState, f: File) {
     var open by remember { mutableStateOf(false) }
-    Section(stringResource(R.string.builds_config_of, FolderScanner.displayName(f))) {
+    Section(stringResource(R.string.builds_config_of, FolderScanner.labelFor(f, lib.portOf(f)))) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -332,7 +332,7 @@ private fun OutcomeCard(lib: LibraryState, port: PortState, f: File, actions: Ap
             val ported = lib.portOf(f) ?: return
             Section(locale.str(R.string.builds_artifact)) {
                 Hint(locale.str(R.string.builds_artifact_path, ported.pack.absolutePath), size = 11.sp)
-                CapsuleButton(locale.str(R.string.builds_run_action), { actions.onRun(ported.pack, FolderScanner.displayName(f)) }, modifier = Modifier.fillMaxWidth())
+                CapsuleButton(locale.str(R.string.builds_run_action), { actions.onRun(ported.pack, FolderScanner.labelFor(f, ported)) }, modifier = Modifier.fillMaxWidth())
             }
         }
         else -> {
@@ -438,7 +438,7 @@ private fun History(lib: LibraryState, port: PortState, actions: AppActions) {
                 // 完成记录的「▶ 运行」：与库页相同地启动（数据包还在才能跑）
                 if (r.phase == PortState.Phase.DONE && r.out.isNotEmpty() && FolderScanner.portFromPack(File(r.out)) != null) {
                     QuietButton(stringResource(R.string.builds_run_action), {
-                        FolderScanner.portFromPack(File(r.out))?.let { actions.onRun(it.pack, File(r.game).nameWithoutExtension) }
+                        FolderScanner.portFromPack(File(r.out))?.let { actions.onRun(it.pack, FolderScanner.labelFor(File(r.game), it)) }
                     })
                 }
             }
