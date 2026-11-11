@@ -48,6 +48,10 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 
 ### Fixed
 
+- The app update replaces the tool tree instead of writing over it. An update
+  that left the old files behind built two hosts at once, and every port
+  failed.
+- The update check runs on its own: an error there no longer closes the app.
 - The frame generation no longer slows frame-locked games down. Measured on a
   Y700 (120 Hz): 60 -> 120 fps.
 - The frame generation can be turned off from the in-game menu. The switch only
