@@ -48,8 +48,10 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 本线的版本号是它承载的**上游基版本**：`porter/__init__.py` 持有基版本（`0.MINOR.PATCH`，当前 `0.3.0`）；
 发布 tag 是基版本加上本线的预发布阶段：`v<base>-alphaNN`（如 `v0.3.0-alpha02`），或正式版 `v<base>`。
 
-- 预发布用 GitHub **pre-release**（`--prerelease`），正式版才成为仓库的 "Latest"；app 的更新检查读 "Latest"，
-  所以已发布的正式版玩家不会被推上 alpha
+- 预发布用 GitHub **pre-release**（`--prerelease`）；app 的更新检查读 "Latest"，所以正式版玩家不会被推上 alpha。
+  **GitHub 不允许预发布成为 "Latest"**（API：drafts and prereleases cannot be set as latest）：要让某个 alpha
+  成为当前版本，就去掉它的预发布标记（`gh release edit <tag> --prerelease=false`）——tag 名字里的 `alpha` 不变，
+  之后的预发布不会自动抢走这个位置。现状：`v0.3.0-alpha05` 是 Latest
 - **构建只由 tag 触发**：推分支什么都不构建。tag 一推，构建就开始（产物从那个 tag 的提交来），
   它会等 release 建好后把 APK 附上去（`gh release create` 紧跟着 tag 就行）。**要重新构建就把 tag 重推一次**
   （`git tag -f` + `git push --force`），构建跟着新 tag 走
