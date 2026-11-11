@@ -342,6 +342,8 @@
     <string name="storage_internal">Internal storage</string>
     <string name="storage_sd_card">SD card (%1$s)</string>
     <string name="update_available">A newer version is available: %1$s</string>
+    <string name="update_your_version">You have %1$s</string>
+    <string name="update_later">Later</string>
     <string name="update_check">Check for updates</string>
     <string name="update_check_hint">The app looks on the release page for a newer version.</string>
     <string name="update_checking">Checking…</string>

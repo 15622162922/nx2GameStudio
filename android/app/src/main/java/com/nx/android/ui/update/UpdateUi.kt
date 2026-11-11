@@ -3,27 +3,36 @@ package com.nx.android.ui.update
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.text.Html
+import android.text.method.LinkMovementMethod
+import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.nx.android.R
 import com.nx.android.appstate.UpdateState
 import com.nx.android.domain.UpdateVersion
-import com.nx.android.ui.components.CapsuleButton
 import com.nx.android.ui.components.Hint
 import com.nx.android.ui.components.QuietButton
-import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 
 /**
@@ -50,29 +59,85 @@ fun openRepo(context: Context) {
 }
 
 /**
- * 主页上的那条提示：有新版本时出现。不挡事（不是弹窗），可以关掉——关掉之后这个版本不再提。
+ * 有新版本时的弹框：新版本号、那个 release 自己的更新说明、两个按钮。
+ *
+ * 弹框是玩家冷启动后看到的第一个东西，所以它得说得清：哪个版本、比自己新在哪、去哪拿。
+ * 「稍后」＝这一次启动不再问（下次冷启动还会问）；「去下载」＝浏览器打开 release 页。
  */
 @Composable
-fun UpdateBanner(state: UpdateState, modifier: Modifier = Modifier) {
-    if (state.phase != UpdateState.Phase.AVAILABLE || state.dismissed) return
+fun UpdatePopup(state: UpdateState, modifier: Modifier = Modifier) {
+    if (state.phase != UpdateState.Phase.AVAILABLE || state.later) return
     val ctx = LocalContext.current
-    GlassSheet(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.update_available, state.latest),
-                 style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CapsuleButton(stringResource(R.string.update_download), { openReleases(ctx) },
-                              modifier = Modifier.weight(1f))
-                QuietButton(stringResource(R.string.common_close), { state.dismiss() },
-                            modifier = Modifier.weight(1f))
+    AlertDialog(
+        onDismissRequest = { state.postpone() },
+        title = {
+            Text(stringResource(R.string.update_available, state.latest), fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.mine.isNotEmpty()) {
+                    Text(stringResource(R.string.update_your_version, state.mine),
+                         style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (state.notes.isNotEmpty()) ReleaseNotes(state.notes)
             }
-        }
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = { openReleases(ctx) }) {
+                Text(stringResource(R.string.update_download), color = NxPalette.Building)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { state.postpone() }) { Text(stringResource(R.string.update_later)) }
+        },
+    )
 }
 
 /**
+ * 那个 release 的更新说明：release 页自己的正文（GitHub 渲染好的 HTML）。
+ *
+ * 用系统的 TextView 画，不自己读 HTML：正文是 release 作者写的样子（标题、列表、代码、链接），
+ * 系统自己的读者认得这些，App 不需要再懂一遍 Markdown 或 HTML。
+ */
+@Composable
+private fun ReleaseNotes(html: String) {
+    val color = MaterialTheme.colorScheme.onSurface.toArgb()
+    val linkColor = NxPalette.Building.toArgb()
+    // 太长的正文要能滚：弹框里的正文最多占屏幕的一半，下面两个按钮一直看得见
+    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.45f).dp
+    val spanned = remember(html) {
+        // <code> 系统不认（它只认 <tt>），换了它代码块才是等宽的
+        Html.fromHtml(html.replace("<code>", "<tt>").replace("</code>", "</tt>"), Html.FROM_HTML_MODE_LEGACY)
+    }
+    Column(
+        Modifier
+            .heightIn(max = maxHeight)
+            .verticalScroll(rememberScrollState())
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { ctx ->
+                TextView(ctx).apply {
+                    setTextColor(color)
+                    setLinkTextColor(linkColor)
+                    textSize = 14f
+                    setLineSpacing(ctx.dp(2f), 1f)
+                    // 链接点得开：release 的说明里常有指向别处的地址
+                    movementMethod = LinkMovementMethod.getInstance()
+                }
+            },
+            update = { it.text = spanned },
+        )
+    }
+}
+
+/** 一个 dp 在这个屏幕上是几个像素 */
+private fun Context.dp(value: Float): Float = value * resources.displayMetrics.density
+
+/**
  * 设置页里的那一条：玩家自己查一次，结果当场摆出来——已是最新、有新版本（带去拿它的入口）、
- * 还是查不成。玩家主动问的，就给他真答案（不管他之前关掉过哪一版的提示）。
+ * 还是查不成。玩家主动问的，就给他真答案。
  */
 @Composable
 fun UpdateCheckRow(state: UpdateState, modifier: Modifier = Modifier) {

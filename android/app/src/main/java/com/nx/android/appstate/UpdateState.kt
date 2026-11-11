@@ -5,8 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nx.android.data.AppVersion
-import com.nx.android.data.PrefsStore
 import com.nx.android.data.UpdateChecker
+import com.nx.android.domain.UpdateFeed
 import com.nx.android.domain.UpdateVersion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,10 +17,10 @@ import kotlinx.coroutines.launch
  * 有没有新版本。
  *
  * 冷启动时安静地查一次，查不到就安静地过去；玩家在设置页可以自己再查一次，那一次把结果都摆出来。
- * 查到的新版本比 App 现在的版本新，就记下来，主页放一条提示。玩家关掉提示＝这个版本不再提
- * （记在 prefs 里），但他自己去问，还是得到真答案。
+ * 查到的新版本比 App 现在的版本新，就记下来，连同那个 release 自己的更新说明（release 的正文）。
+ * 玩家点「稍后」＝这一次启动不再问；下次冷启动还会问（这是玩家自己的选择，不是永久的拒绝）。
  */
-class UpdateState(private val prefs: PrefsStore, private val context: Context) {
+class UpdateState(private val context: Context) {
 
     enum class Phase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, FAILED }
 
@@ -30,13 +30,24 @@ class UpdateState(private val prefs: PrefsStore, private val context: Context) {
     /** 新版本的版本号（canonical 的写法：0.3.0-alpha02）；没有新版本时是空的 */
     var latest by mutableStateOf(""); private set
 
-    /** 玩家关掉了这条提示：主页不再弹，但设置页照实说 */
-    var dismissed by mutableStateOf(false); private set
+    /** App 自己的版本号（0.3.0-alpha02）——弹框里告诉玩家他现在在哪 */
+    var mine by mutableStateOf(""); private set
+
+    /** 新版本的更新说明：那个 release 的正文（HTML，GitHub 自己渲染好的） */
+    var notes by mutableStateOf(""); private set
+
+    /** 玩家说了「稍后」：这一次启动不再弹 */
+    var later by mutableStateOf(false); private set
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** 自动的那一次只查一次（一个进程一次） */
+    private var checked = false
+
     /** 冷启动的那一次：查不到不出声 */
     fun checkQuietly() {
+        if (checked) return
+        checked = true
         scope.launch { run(manual = false) }
     }
 
@@ -45,10 +56,9 @@ class UpdateState(private val prefs: PrefsStore, private val context: Context) {
         scope.launch { run(manual = true) }
     }
 
-    /** 玩家关掉了提示：这个版本不再提（他自己去问还是查得出来） */
-    fun dismiss() {
-        if (latest.isNotEmpty()) prefs.put(PrefsStore.UPDATE_IGNORED, latest)
-        dismissed = true
+    /** 玩家说「稍后」：这一次启动不再问 */
+    fun postpone() {
+        later = true
     }
 
     private suspend fun run(manual: Boolean) {
@@ -59,16 +69,27 @@ class UpdateState(private val prefs: PrefsStore, private val context: Context) {
             return
         }
         val release = UpdateVersion.parse(tag)
-        val mine = UpdateVersion.parseOwn(AppVersion.of(context))
-        if (release == null || mine == null || release <= mine) {
+        val ownText = AppVersion.of(context)
+        val own = UpdateVersion.parseOwn(ownText)
+        if (release == null || own == null || release <= own) {
             phase = Phase.UP_TO_DATE
             latest = ""
-            dismissed = false
+            notes = ""
             return
         }
         latest = release.toString()
-        // 自动的那一次：玩家关掉过的版本不再提；玩家自己问的那一次照实说
-        dismissed = !manual && prefs.str(PrefsStore.UPDATE_IGNORED) == latest
+        mine = ownText
+        notes = notesOf(tag)
+        later = false
         phase = Phase.AVAILABLE
+    }
+
+    /**
+     * 那个 release 自己的更新说明：feed 里它那一条的正文。取不到就是空的——弹框照样弹，只是没有说明
+     * （说明是好的，不是必须的）。
+     */
+    private suspend fun notesOf(tag: String): String {
+        val feed = UpdateChecker.releaseFeed().getOrNull() ?: return ""
+        return UpdateFeed.notes(feed, tag) ?: ""
     }
 }

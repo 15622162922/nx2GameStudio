@@ -205,9 +205,11 @@ the same reason). The release page redirects to the newest release's tag, so fol
 reading the last piece of the address is enough.
 
 The three layers, as everywhere else in the app: `domain/UpdateVersion.kt` holds the fork's versions and
-their comparison (free of Android, so the tests run on the JVM), `data/UpdateChecker.kt` asks for the tag,
-and `appstate/UpdateState.kt` holds the state the screens read — the notice on the home page and the entry
-in the settings (`ui/update/UpdateUi.kt`).
+their comparison (free of Android, so the tests run on the JVM), `domain/UpdateFeed.kt` reads the
+repository's release feed (GitHub's Atom feed: every release with its own notes, already rendered into HTML —
+also a plain page, so no API's rate limit), `data/UpdateChecker.kt` asks for the tag and the feed, and
+`appstate/UpdateState.kt` holds the state the screens read — the popup on a cold start and the entry in the
+settings (`ui/update/UpdateUi.kt`).
 
 One platform quirk is worth knowing: a locale **with** a region (`en_US`, `zh_CN`) overrides the phone's own
 locale, a locale with only a language (`en`) does not — on Android 16 the configuration keeps the phone's

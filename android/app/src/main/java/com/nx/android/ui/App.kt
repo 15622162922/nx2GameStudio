@@ -86,7 +86,7 @@ import com.nx.android.ui.settings.SettingsScreen
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.theme.NxTheme
-import com.nx.android.ui.update.UpdateBanner
+import com.nx.android.ui.update.UpdatePopup
 import com.nx.android.ui.update.openRepo
 import kotlinx.coroutines.delay
 import java.io.File
@@ -285,8 +285,8 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             chip = container.envCheck.chip,
             onChip = onEnvCheck,
         )
-        // 有新版本时的提示条：在顶栏下面、内容上面，不挡事，可以关掉
-        UpdateBanner(container.update)
+        // 有新版本时的弹框：冷启动查到了新版本才出现
+        UpdatePopup(container.update)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })

@@ -39,8 +39,6 @@ class PrefsStore(ctx: Context) {
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
         const val PORT_HISTORY = "port.history"
-        // the update check: the version the player closed the notice for (empty = none)
-        const val UPDATE_IGNORED = "update.ignored"
         // the performance HUD: the two lines and what the performance one shows
         const val HUD_STATS = "hud.stats"
         const val HUD_DEVICE = "hud.device"

@@ -45,6 +45,32 @@ object UpdateChecker {
         null
     }
 
+    /**
+     * The feed of the repository's releases (Atom): every release with its own notes. A plain web page, so
+     * no API's rate limit - asked only when there is a new version to describe.
+     */
+    suspend fun releaseFeed(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching { body(UpdateVersion.RELEASES_FEED_URL) ?: throw IOException("no answer") }
+    }
+
+    /** The page's own text; a failure is a failure - the caller stays quiet about it */
+    private fun body(url: String): String? = try {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15000
+            readTimeout = 15000
+            setRequestProperty("User-Agent", UA)
+        }
+        try {
+            if (conn.responseCode != HttpURLConnection.HTTP_OK) throw IOException("HTTP ${conn.responseCode}")
+            conn.inputStream.readBytes().toString(Charsets.UTF_8)
+        } finally {
+            conn.disconnect()
+        }
+    } catch (e: IOException) {
+        null
+    }
+
     /** The address the request ended at - after the redirect, that is the release's tag address */
     private fun request(url: String, method: String): String? {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
