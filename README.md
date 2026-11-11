@@ -4,6 +4,11 @@
 
 > **English**. 中文文档：[README.zh.md](README.zh.md)
 
+[![Contributors](https://img.shields.io/github/contributors/zFitness/nx2androidX?style=flat&label=contributors)](https://github.com/zFitness/nx2androidX/graphs/contributors)
+[![Discussions](https://img.shields.io/github/discussions/zFitness/nx2androidX?style=flat&label=discussions)](https://github.com/zFitness/nx2androidX/discussions)
+[![Release](https://img.shields.io/github/v/release/zFitness/nx2androidX?style=flat&label=release)](https://github.com/zFitness/nx2androidX/releases/latest)
+[![License](https://img.shields.io/github/license/zFitness/nx2androidX?style=flat&label=license)](LICENSE)
+
 Port your own Switch games to Android, natively: the game's own arm64 code runs on the device, with the Switch's system services stood in for by a host and NVN graphics replayed on Vulkan. Pick the game's file, click **Port**, and get the game's data pack, which the nx2androidX app on the phone runs. Bring your own game files and keys; this repository holds no game content and no keys.
 
 This repository is nx2androidX, built on nx2android — the PC tool that ports a Switch game and packages the APK. nx2androidX moves that to the phone: give it the game's files and it compiles and runs them on the device itself, with no computer in the loop. The games that play on Android are listed upstream: [Games](#games).
@@ -20,11 +25,11 @@ This branch closed the loop on "playing it on the phone": the app went from a pl
 
 ### The app is now the whole tool
 
-Porting used to happen on the computer: install the tools, pick the file, click Port, copy the data pack back to the phone. Now the phone starts the port itself — pick a game file on the **Builds** tab, tap **Start a port**, the port runs in the background (the notification bar shows "Port progress"), the data pack lands in the output folder, and the game is playable from the library.
+Porting used to happen on the computer: install the tools, pick the file, click Port, copy the data pack back to the phone. Now the phone starts the port itself — pick a game file on the **Builds** tab, tap **Start a port**, the port runs in the background (the notification bar shows "Port progress"), the data pack lands in the app's own folder, and the game is playable from the library.
 
 ![Four screens of the app: starting a port on the Builds tab, a game entry in the library, the in-game drawer's frame generation, and the Settings tab](docs/images/app-screens.png)
 
-*Top left: starting a port on the Builds tab; top right: a game entry in the library; bottom left: the in-game drawer's frame generation; bottom right: the Settings tab (language, environment, keys, output folder, Vulkan drivers).*
+*Top left: starting a port on the Builds tab; top right: a game entry in the library; bottom left: the in-game drawer's frame generation; bottom right: the Settings tab (language, environment, keys, Vulkan drivers).*
 
 The library got simpler too: it used to take a folder to be the library, and the scan behind it was recursive — one root directory was a long freeze. Now **the library only holds the games registered on the Builds tab**, the whole folder scan is gone, and an empty library shows one line of guidance instead of buttons.
 
@@ -103,7 +108,7 @@ The PC tool is released upstream, by nx2android; this repository's releases hold
 1. Download `nx2android-<version>-windows-x64.zip` (Windows) or `nx2android-<version>-macos-arm64.zip` (Mac with Apple silicon) from the upstream [nx2android Releases](https://github.com/shirai91/nx2android/releases/latest), unzip it and start **nx2android** (on a Mac, see [packaging/INSTALL.md](packaging/INSTALL.md#1-start-the-app) first).
 2. **Setup** tab: click **Download missing tools** (the Android NDK, the .NET SDK and platform-tools, about 1 GB, from Google and Microsoft), then set your **prod.keys**. Every line turns green.
 3. **Port** tab: choose the folder with the game's NSP, XCI, NSZ or XCZ files (base game, update, DLC) and click **Port**.
-4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. To play it on the phone: copy the whole `<Game>-data/` directory into the app's output folder (**Settings** → **Output folder**) and register the game file on the **Builds** tab — the library then recognizes the data pack (the title IDs have to match).
+4. The port leaves the game's data pack (`<Game>-data/`) in the game folder. The phone app keeps its own data packs in its own private folder and does not read that one — to play on the phone, port the game on the phone (route one).
 
    A computer is not needed at all: the app ports the game itself, see route one.
 
@@ -150,6 +155,27 @@ Reading your game files while it ports them needs your `prod.keys` — the keys 
 The tool is for running personal backups of the games you own. How you obtain the game files and the keys, and whether that is legal where you live, is for you to judge and to answer for.
 
 The game profiles under `nxnative/dm/games/` hold interoperation metadata only: the hashes that identify a game's shaders, the offsets inside a module, and patch stubs of a few bytes of machine code that make a particular game build run. They are the information the host needs to work with a game, not the game itself.
+
+## Contributors
+
+Everyone who is in this repository's history, and everyone who comes with a pull request: a game brought up, a device bug fixed, a document corrected. A report that a game runs counts too.
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/shirai91"><img src="https://avatars.githubusercontent.com/u/8848513?v=4&size=100" width="100px" height="100px" alt="Tung Pham"/><br /><sub><b>Tung Pham</b></sub></a><br /><a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Code">💻</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Documentation">📖</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Tests">⚠️</a> <a href="https://github.com/zFitness/nx2androidX/pulls?q=is%3Apr+reviewed-by%3Ashirai91" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/zFitness"><img src="https://avatars.githubusercontent.com/u/41500499?v=4&size=100" width="100px" height="100px" alt="zfitness"/><br /><sub><b>zfitness</b></sub></a><br /><a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Code">💻</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Documentation">📖</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Tests">⚠️</a> <a href="https://github.com/zFitness/nx2androidX/pulls?q=is%3Apr+reviewed-by%3AzFitness" title="Reviewed Pull Requests">👀</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License
 

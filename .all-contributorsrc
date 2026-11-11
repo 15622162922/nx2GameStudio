@@ -1,0 +1,40 @@
+{
+  "projectName": "nx2androidX",
+  "projectOwner": "zFitness",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md",
+    "README.zh.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "contributors": [
+    {
+      "login": "shirai91",
+      "name": "Tung Pham",
+      "avatar_url": "https://avatars.githubusercontent.com/u/8848513?v=4",
+      "profile": "https://github.com/shirai91",
+      "contributions": [
+        "code",
+        "doc",
+        "test",
+        "review"
+      ]
+    },
+    {
+      "login": "zFitness",
+      "name": "zfitness",
+      "avatar_url": "https://avatars.githubusercontent.com/u/41500499?v=4",
+      "profile": "https://github.com/zFitness",
+      "contributions": [
+        "code",
+        "doc",
+        "test",
+        "review"
+      ]
+    }
+  ]
+}

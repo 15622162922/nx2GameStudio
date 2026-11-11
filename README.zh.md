@@ -4,6 +4,11 @@
 
 > **中文文档**。English: [README.md](README.md)
 
+[![Contributors](https://img.shields.io/github/contributors/zFitness/nx2androidX?style=flat&label=contributors)](https://github.com/zFitness/nx2androidX/graphs/contributors)
+[![Discussions](https://img.shields.io/github/discussions/zFitness/nx2androidX?style=flat&label=discussions)](https://github.com/zFitness/nx2androidX/discussions)
+[![Release](https://img.shields.io/github/v/release/zFitness/nx2androidX?style=flat&label=release)](https://github.com/zFitness/nx2androidX/releases/latest)
+[![License](https://img.shields.io/github/license/zFitness/nx2androidX?style=flat&label=license)](LICENSE)
+
 把你的 Switch 游戏原生移植到安卓手机上：游戏自己的 arm64 代码在设备上直接跑，Switch 的系统服务由一个宿主程序顶替，NVN 图形调用重放到 Vulkan 上。选好游戏文件，点 **移植**，得到游戏的数据包，手机上的 nx2androidX App 负责运行它。
 
 **自带游戏文件和密钥；本仓库不含任何游戏内容与密钥。**
@@ -22,13 +27,13 @@
 
 ### 手机 App 现在是完整工具
 
-以前移植要在电脑上做：装工具、选文件、点移植、把数据包传回手机。现在手机上就能发起移植 —— 构建页选一个游戏文件，点 **开始移植**（英文界面是 ▶ Start a port），移植在后台跑（系统通知栏有「移植进度」，英文界面是 Port progress），跑完数据包落到输出目录，游戏库里直接就能运行。
+以前移植要在电脑上做：装工具、选文件、点移植、把数据包传回手机。现在手机上就能发起移植 —— 构建页选一个游戏文件，点 **开始移植**（英文界面是 ▶ Start a port），移植在后台跑（系统通知栏有「移植进度」，英文界面是 Port progress），跑完数据包落到 App 自己的私有目录，游戏库里直接就能运行。
 
 游戏库也简化了：以前要挑一个文件夹当库，背后的扫描是递归的，点错一个根目录就是一次长时间卡死。现在**游戏库只收构建页登记过的游戏**，整段扫盘逻辑删掉了；库空的时候只给一句指路提示，不再有按钮。
 
 ![App 的四个界面：构建页发起移植、游戏库条目、游戏内抽屉的帧生成、设置页](docs/images/app-screens.png)
 
-*左上：构建页选文件发起移植；右上：游戏库里的一个条目；左下：游戏内抽屉的帧生成；右下：设置页（语言、环境、密钥、输出目录、Vulkan 驱动）。*
+*左上：构建页选文件发起移植；右上：游戏库里的一个条目；左下：游戏内抽屉的帧生成；右下：设置页（语言、环境、密钥、Vulkan 驱动）。*
 
 ### 当前版本新加的东西
 
@@ -102,7 +107,7 @@ PC 端工具由上游 nx2android 发布，本仓库的发布页上只有 APK。
 1. 从上游 [nx2android Releases](https://github.com/shirai91/nx2android/releases/latest) 下载 `nx2android-<版本>-windows-x64.zip`（Windows）或 `nx2android-<版本>-macos-arm64.zip`（Apple 芯片的 Mac），解压后启动 **nx2android**（Mac 上先看 [packaging/INSTALL.md](packaging/INSTALL.md#1-start-the-app)）。
 2. **Setup** 页：点 **Download missing tools**（Android NDK、.NET SDK 和 platform-tools，约 1 GB，来自 Google 和微软），然后设置你的 **prod.keys**。每一行都会变绿。
 3. **Port** 页：选择放着游戏 NSP、XCI、NSZ 或 XCZ 文件的文件夹（本体、更新、DLC），点 **Port**。
-4. 移植会把游戏数据包（`<游戏名>-data/`）留在游戏文件夹里。想在手机上玩：把整个 `<游戏名>-data/` 目录复制到手机 App 的输出目录（**设置** → **输出目录**），再在**构建页**登记一下这个游戏文件，库页就会认出这个数据包（按游戏 ID 对上号）。
+4. 移植会把游戏数据包（`<游戏名>-data/`）留在游戏文件夹里。手机 App 的数据包放在它自己的私有目录里，不读那一份 —— 想在手机上玩，就在手机上移植（路线一）。
 
    其实完全不用电脑：App 自己就能移植，走路线一。
 
@@ -152,6 +157,27 @@ nx2android 移植时读取你的游戏文件，需要你自己的 `prod.keys` �
 
 `nxnative/dm/games/` 下的游戏 profile 只存互通用的元数据：用来识别游戏着色器的哈希、模块内部的偏移、还有几个字节的机器码补丁桩（让某个游戏版本能跑起来）。这些是宿主程序跟游戏打交道需要的信息，不是游戏本身。
 
+
+## 贡献者
+
+这个仓库历史里的每一个人，以及以后带着 PR 来的人：移植一个游戏、修一个设备上的 bug、改一处文档，都算。一份"某个游戏在我这儿能跑"的报告也算。
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/shirai91"><img src="https://avatars.githubusercontent.com/u/8848513?v=4&size=100" width="100px" height="100px" alt="Tung Pham"/><br /><sub><b>Tung Pham</b></sub></a><br /><a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Code">💻</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Documentation">📖</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=shirai91" title="Tests">⚠️</a> <a href="https://github.com/zFitness/nx2androidX/pulls?q=is%3Apr+reviewed-by%3Ashirai91" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/zFitness"><img src="https://avatars.githubusercontent.com/u/41500499?v=4&size=100" width="100px" height="100px" alt="zfitness"/><br /><sub><b>zfitness</b></sub></a><br /><a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Code">💻</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Documentation">📖</a> <a href="https://github.com/zFitness/nx2androidX/commits?author=zFitness" title="Tests">⚠️</a> <a href="https://github.com/zFitness/nx2androidX/pulls?q=is%3Apr+reviewed-by%3AzFitness" title="Reviewed Pull Requests">👀</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## 许可
 

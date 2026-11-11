@@ -54,7 +54,7 @@ Two kinds of report, both welcome, neither needs a patch:
 
 What happens next: the report is checked against the games that already work, the game's checklist line is
 updated, and **your name is recorded next to the game** — in the checklist line, in the profile's comment
-header and in the release notes.
+header, in the release notes and in the contributors' table at the end of the README.
 
 Questions that fit no template go to [Discussions](https://github.com/zFitness/nx2androidX/discussions):
 *Show and tell* for your footage, *Q&A* for questions and for getting unstuck on a port, *Ideas* for what the
