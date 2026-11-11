@@ -16,7 +16,16 @@ import java.util.zip.GZIPInputStream
  */
 class Env(private val ctx: Context) {
 
-    companion object { const val TAG = "Nx2aEnv" }
+    companion object {
+        const val TAG = "Nx2aEnv"
+
+        /**
+         * The generation of the build's stamp: it changes when the rule "the tree goes and comes again"
+         * changes, so the phones that were updated with the older rule (which only wrote over the old
+         * files and never removed them) do the wipe once, when they install an app with this rule.
+         */
+        private const val STAMP_GEN = "wipe1:"
+    }
 
     val files = ctx.filesDir
     val rootfs = File(files, "rootfs")
@@ -233,19 +242,34 @@ class Env(private val ctx: Context) {
      */
     fun refreshTools() {
         if (!ready) return      // the environment is not there yet: the unpack brings everything
+        // Without the payload there are no modes to write, and the assets hold no tree to copy either:
+        // a copy now would strip the execute bit off the tools (the assets have no permissions). A build
+        // without the payload leaves the tree alone.
+        if (modes.isEmpty()) {
+            Log.i(TAG, "the app carries no payload: the tree is left alone")
+            return
+        }
         try {
-            copyAssets("tool/tools", File(tool, "tools"))
-            copyAssets("tool/porter", File(tool, "porter"))
-            copyAssets("tool/nxnative/scripts", File(tool, "nxnative/scripts"))
-            copyAssets("tool/nxnative/dm/tools", File(tool, "nxnative/dm/tools"))
-            // the sources the port compiles: the host (dm/android), its gfx tools and the host's core
-            copyAssets("tool/nxnative/dm/android", File(tool, "nxnative/dm/android"))
-            copyAssets("tool/nxnative/dm/gfx", File(tool, "nxnative/dm/gfx"))
-            copyAssets("tool/nxnative/dm/host", File(tool, "nxnative/dm/host"))
-            // the build's stamp: when it changes, the whole tree is copied again (the games' profiles are big)
+            // The build's stamp: when it changes, the tree goes and comes again.
+            //
+            // The tree has to GO, not just be written over: the port compiles every source it finds
+            // (build.py globs dm/android/*.c), so a file the new payload no longer has - a renamed one -
+            // would be compiled next to its replacement, and the link would die on duplicate symbols.
+            // The stamp is written after the copy, so a copy cut short (the process died) is done again.
             if (buildIdChanged()) {
-                Log.i(TAG, "the assets are newer than the tree: copying it again")
+                Log.i(TAG, "the assets are newer than the tree: it goes and comes again")
+                wipeTree()
                 copyAssets("tool", tool)
+                storeBuildId()
+            } else {
+                copyAssets("tool/tools", File(tool, "tools"))
+                copyAssets("tool/porter", File(tool, "porter"))
+                copyAssets("tool/nxnative/scripts", File(tool, "nxnative/scripts"))
+                copyAssets("tool/nxnative/dm/tools", File(tool, "nxnative/dm/tools"))
+                // the sources the port compiles: the host (dm/android), its gfx tools and the host's core
+                copyAssets("tool/nxnative/dm/android", File(tool, "nxnative/dm/android"))
+                copyAssets("tool/nxnative/dm/gfx", File(tool, "nxnative/dm/gfx"))
+                copyAssets("tool/nxnative/dm/host", File(tool, "nxnative/dm/host"))
             }
             fixGlobalization()
             patchInterpreters()
@@ -256,17 +280,50 @@ class Env(private val ctx: Context) {
         }
     }
 
-    /** The build's stamp in the assets, against the one the tree was unpacked with */
+    /**
+     * The tree goes: everything the assets bring again. The build tools stay: they are big (285 MB) and
+     * they are not what the stamp is about.
+     */
+    private fun wipeTree() {
+        for (child in tool.listFiles() ?: emptyArray()) {
+            if (child.name == "toolchain") continue
+            child.deleteRecursively()
+        }
+    }
+
+    /**
+     * The build's stamp in the assets, against the one the tree was unpacked with.
+     *
+     * The stamp carries a generation of its own: when the rule changes (the tree goes and comes again
+     * instead of only being written over), the generation changes too - so the phones that were updated
+     * with the older rule (which left the files the new payload no longer has) do the wipe once, when
+     * they install an app with this rule.
+     */
     private fun buildIdChanged(): Boolean {
-        val want = try {
-            ctx.assets.open("build-id").use { it.readBytes().toString(Charsets.UTF_8).trim() }
-        } catch (e: Exception) { return false }
-        if (want.isEmpty()) return false
+        val want = stampInAssets()
+        if (want.isEmpty()) return false      // the assets carry no stamp: nothing to compare
+        return want != storedBuildId()
+    }
+
+    /** The stamp the assets carry, with the generation in front of it */
+    private fun stampInAssets(): String = try {
+        val raw = ctx.assets.open("build-id").use { it.readBytes().toString(Charsets.UTF_8).trim() }
+        if (raw.isEmpty()) "" else "$STAMP_GEN$raw"
+    } catch (e: Exception) {
+        ""
+    }
+
+    /** The stamp the tree was unpacked with */
+    private fun storedBuildId(): String {
         val mark = File(files, ".nx2a-build")
-        val have = if (mark.exists()) mark.readText().trim() else ""
-        if (have == want) return false
-        mark.writeText(want)
-        return true
+        return if (mark.exists()) mark.readText().trim() else ""
+    }
+
+    /** The stamp is written after the copy: a copy that was cut short is done again on the next start */
+    private fun storeBuildId() {
+        val want = stampInAssets()
+        if (want.isEmpty()) return
+        File(files, ".nx2a-build").writeText(want)
     }
 
     /**
