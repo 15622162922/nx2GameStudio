@@ -15,6 +15,7 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
+import com.nx.android.data.PhantomFix
 import com.nx.android.data.StorageVolumes
 import com.nx.android.ui.env.EnvCheckState
 
@@ -39,13 +40,16 @@ class AppContainer(app: NxApp) {
     /** 界面语言：玩家选的那个（没选就是跟随系统）。屏幕用 stringResource 读词，没有屏幕的地方用它的 str() */
     val locale = AppLocale(app, prefs)
 
+    /** 子进程限制的修复：它要自己读系统设置，也要用它自己的话（通知里没有屏幕） */
+    init { PhantomFix.attach(app, locale) }
+
     /** 所有文件访问权限：MainActivity 在 onResume 时更新 */
     var storageOk by mutableStateOf(false)
 
     val port = PortState(prefs, locale)
 
     /** 顶栏的环境状态胶囊：两个便宜的事实，加上按需跑的工具自检 */
-    val envCheck = EnvCheckState(env, prefs, locale)
+    val envCheck = EnvCheckState(env, prefs, locale, app)
 
     val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk },
         onEnvChanged = { envCheck.refresh() })

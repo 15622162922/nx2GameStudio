@@ -65,6 +65,10 @@
             android:exported="false"
             android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
 
+        <!-- The Wireless debugging pairing code typed into the child-process limit fix's
+             notification (data/PhantomFix.kt). -->
+        <receiver android:name=".data.PhantomFixReceiver" android:exported="false" />
+
         <!-- The save packages the panel shares: the system share sheet reads them through this provider (a
              file:// URI is refused by Android since 7). It hands out the download folder's nx2android/ and
              the app's own external files folder, and nothing else. -->

@@ -1,5 +1,8 @@
 package com.nx.android.ui.env
 
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,9 +11,12 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PortRunner
+import com.nx.android.data.PhantomFix
 import com.nx.android.domain.DoctorOutput
 import com.nx.android.domain.EnvCheck
+import com.nx.android.domain.PhantomCheck
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * The environment's state: the two cheap facts the top bar's chip shows, and the doctor's rows.
@@ -19,8 +25,16 @@ import java.io.File
  * the player changed one of them (the environment was prepared, the keys were replaced). The doctor runs a
  * python inside the rootfs - seconds, not milliseconds - so it only runs when the player asks for it, and its
  * rows stay until the next run.
+ *
+ * Android's limit on the app's child processes is a third fact: reading it runs a program, so it is read on
+ * a thread of its own and lands here when it is there.
  */
-class EnvCheckState(private val env: Env, private val prefs: PrefsStore, private val locale: AppLocale) {
+class EnvCheckState(
+    private val env: Env,
+    private val prefs: PrefsStore,
+    private val locale: AppLocale,
+    private val app: Context,
+) {
 
     /** The environment is prepared (the rootfs, the tool and the compiler are there) */
     var envReady by mutableStateOf(false); private set
@@ -49,6 +63,15 @@ class EnvCheckState(private val env: Env, private val prefs: PrefsStore, private
     /** The doctor ran, but nothing came out that could be read */
     var noOutput by mutableStateOf(false); private set
 
+    /** Android's limit on the app's child processes: the porter is one of them */
+    var phantom by mutableStateOf(PhantomCheck.Status.UNKNOWN); private set
+
+    /** The limit's state has been read: before that, the row says nothing */
+    var phantomKnown by mutableStateOf(false); private set
+
+    /** A read of the limit is running: another one does not start */
+    @Volatile private var phantomReading = false
+
     /** Reads the two facts again */
     fun refresh() {
         envReady = env.ready
@@ -56,6 +79,32 @@ class EnvCheckState(private val env: Env, private val prefs: PrefsStore, private
         keysOk = keysPath.isNotBlank() && File(keysPath).isFile()
         known = true
         chip = EnvCheck.chip(envReady, keysOk)
+        refreshPhantom()
+    }
+
+    /**
+     * Reads Android's limit on the app's child processes.
+     *
+     * Reading it runs `device_config`, so it happens on a thread of its own: the screen shows the row as
+     * soon as the answer is there. A read that is already running is left alone - the answer does not
+     * change between two reads.
+     */
+    fun refreshPhantom() {
+        if (phantomReading) return
+        phantomReading = true
+        thread(name = "phantom-check") {
+            val s = try {
+                PhantomFix.status(app)
+            } catch (e: Exception) {
+                AppLog.line("[RED] the child-process limit could not be read: ${e.message}")
+                PhantomCheck.Status.UNKNOWN
+            }
+            Handler(Looper.getMainLooper()).post {
+                phantom = s
+                phantomKnown = true
+                phantomReading = false
+            }
+        }
     }
 
     /**

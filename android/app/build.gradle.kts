@@ -123,6 +123,10 @@ android {
         implementation("androidx.compose.material3:material3")
         implementation("androidx.compose.material:material-icons-extended")
         implementation("androidx.activity:activity-compose:1.13.0")
+        // adb's wireless debugging pairing needs the TLS session's keying material, which the
+        // platform's Conscrypt does not export: the app pairs with itself to switch off Android's
+        // child-process limit (data/PhantomFix.kt)
+        implementation("org.conscrypt:conscrypt-android:2.7.0")
         testImplementation("junit:junit:4.13.2")
         // the porter's progress events and the data pack's manifest are JSON: the JVM tests parse them with
         // the real org.json (the android.jar the tests run against only has the stubs)

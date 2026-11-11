@@ -23,6 +23,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.data.PhantomFix
 import com.nx.android.domain.EnvCheck
+import com.nx.android.domain.PhantomCheck
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.theme.NxPalette
@@ -54,6 +61,8 @@ fun EnvChecklistDialog(
     onPickKeys: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // 子进程限制的修复弹窗：盖在清单上面
+    var phantomOpen by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { onDismiss() },
         contentAlignment = Alignment.Center,
@@ -98,6 +107,8 @@ fun EnvChecklistDialog(
                         action = if (state.keysOk) null else stringResource(R.string.common_modify),
                         onAction = onPickKeys,
                     )
+                    // 子进程限制：Android 会停掉本应用的子进程，移植器就是其中之一（它是活最久的那个）
+                    PhantomLine(state) { phantomOpen = true }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -138,7 +149,42 @@ fun EnvChecklistDialog(
                 }
             }
         }
+        // 子进程限制的修复弹窗：盖在清单上面
+        if (phantomOpen) PhantomFixDialog(onDismiss = { phantomOpen = false })
     }
+}
+
+/**
+ * The row about Android's limit on the app's child processes.
+ *
+ * The porter is one of those child processes, and the oldest one: when the list overflows, it goes first
+ * and the port dies without an error. The limit being on is a hint, not a failure - the port can start
+ * either way - so the row is yellow and offers the way out.
+ */
+@Composable
+private fun PhantomLine(state: EnvCheckState, onFix: () -> Unit) {
+    val st = PhantomFix.state
+    // 修好了就再读一次：这一行跟着变绿
+    LaunchedEffect(st) { if (st is PhantomFix.State.Done) state.refreshPhantom() }
+    val row = PhantomCheck.row(state.phantom)
+    val detail = when {
+        !state.phantomKnown -> stringResource(R.string.env_check_phantom_reading)
+        else -> stringResource(
+            when (row.detailKey) {
+                PhantomCheck.Detail.NONE -> R.string.env_check_phantom_none
+                PhantomCheck.Detail.OFF -> R.string.env_check_phantom_off
+                PhantomCheck.Detail.ON -> R.string.env_check_phantom_on
+                PhantomCheck.Detail.UNKNOWN -> R.string.env_check_phantom_unknown
+            }
+        )
+    }
+    CheckLine(
+        stringResource(R.string.env_check_phantom),
+        if (state.phantomKnown) row.level else EnvCheck.Level.HINT,
+        detail,
+        action = if (row.fixable) stringResource(R.string.env_check_phantom_fix) else null,
+        onAction = onFix,
+    )
 }
 
 /** The doctor's check needs the environment, and it does not run next to a port */
