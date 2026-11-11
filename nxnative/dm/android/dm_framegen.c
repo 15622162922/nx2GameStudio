@@ -6,6 +6,7 @@
 // and the status vocabulary stay Banana's.
 #include "dm_framegen.h"
 #include "vka.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,8 @@
 static _Atomic int g_on = -1, g_mult = 2, g_target, g_flow = 75, g_state;   // g_state: 0 off, 1 generating, 2 on and not generating, -1 unavailable
 static char g_reason[256] = "off";
 static pthread_mutex_t g_rmu = PTHREAD_MUTEX_INITIALIZER;
+// The host's frame rate limit (the adaptive rate, perf_android.c): the rate's own strong definition wins this weak one; 0 = no limit here
+__attribute__((weak)) int dm_perf_rate_fps(void) { return 0; }
 static void reason(const char *fmt, const char *a) { pthread_mutex_lock(&g_rmu); snprintf(g_reason, sizeof g_reason, fmt, a); pthread_mutex_unlock(&g_rmu); }
 
 static void settings_init(void) {
@@ -156,6 +159,9 @@ int dm_fg_frame(vkimg_t *im, const int *crop, double period, VkImage gen[3], dou
     }
     if (!im || !im->img) return 0;
     if (!load()) return 0;
+    // The game's frame period is never shorter than the host's own frame limit allows (the adaptive rate, perf_android.c): a game that asks for interval 1
+    // (16.7 ms) but is held to 30 fps has two refreshes of a 60 Hz panel a frame, room for one generated frame, and its output rate is 60, not 120
+    { int lim = dm_perf_rate_fps(); if (lim > 0 && period < 1.0 / lim) period = 1.0 / lim; }
     // The window's frame rate: a shorter output period at once, a longer one only after it held for 2 s (a game that switches its own present
     // interval would flip the panel's mode back and forth; the generated frames are paced by hold, not by the panel's rate)
     double want = target > 0 ? 1.0 / target : period / (mult < 2 ? 2 : mult > 4 ? 4 : mult), tnow = mono_s();
@@ -174,6 +180,9 @@ int dm_fg_frame(vkimg_t *im, const int *crop, double period, VkImage gen[3], dou
     if (!F.chain || F.ext.width != e.width || F.ext.height != e.height || F.flow != flow) {
         if (!rebuild(e, flow)) { unavailable("%s", "the frame generation chain could not be made (see the [RED] lines)"); return 0; }
     }
+    // The floor for the game's own rate (DM_LSFG_MIN_FPS, default 30): the generation's work must not push the game under it
+    F.pacer.min_base = 30.0f;
+    { const char *e = getenv("DM_LSFG_MIN_FPS"); if (e && atoi(e) > 0) F.pacer.min_base = (float)atoi(e); }
     lsfg_plan plan = lsfg_pacer_plan(&F.pacer, LSFG_MAX_GENERATIONS, mult, target, mono_s());
     uint64_t count = F.count++;
     int warm = plan.warm && count + 1 >= 2;
@@ -184,7 +193,9 @@ int dm_fg_frame(vkimg_t *im, const int *crop, double period, VkImage gen[3], dou
     // the FIFO present, and the game with it, to a fraction of its rate — Banana's Honor phone note). DM_VK_FG_REFRESH_CAP=0: no cap
     uint64_t rns = getenv("DM_VK_FG_REFRESH_CAP") && !atoi(getenv("DM_VK_FG_REFRESH_CAP")) ? 0 : vk_refresh_cycle_ns(); int capped = 0;
     if (ng && rns && period > 0) {
-        double n = period * 1e9 / (double)rns;
+        // The game's frame period: the requested one (the limit's, above) or the measured one when longer (a throttled game's frames are further apart)
+        double gp = F.pacer.smoothed_interval > period ? F.pacer.smoothed_interval : period;
+        double n = gp * 1e9 / (double)rns;   // the refreshes in a game frame
         size_t fit = n < 1.9 ? 0 : (size_t)(n + 0.1) - 1;
         if (ng > fit) { ng = fit; capped = 1; F.pacer.issued = ng; }
     }
@@ -216,14 +227,21 @@ int dm_fg_frame(vkimg_t *im, const int *crop, double period, VkImage gen[3], dou
     double interval = F.pacer.smoothed_interval > 0 ? F.pacer.smoothed_interval : period;
     if (interval < period) interval = period;
     if (ng) *hold = interval / (double)(ng + 1);
+    // A hold within 0.15 refresh of a whole number of refreshes is that number: the measured interval runs a little long (34 ms at a 30 fps frame step), and a hold
+    // of 17 ms on a 16.7 ms panel let each image's desired time (the previous one's plus the hold) drift across a refresh every few dozen frames, two images in one
+    // refresh
+    if (ng && rns) { double r = *hold * 1e9 / (double)rns, w = floor(r + 0.5); if (w >= 1 && fabs(r - w) <= 0.15) *hold = w * (double)rns / 1e9; }
     int st2 = ng ? 1 : 2;
-    static int was_capped;
-    if (atomic_exchange(&g_state, st2) != st2 || (st2 == 2 && capped != was_capped)) {
+    // The target rate is met: there is no frame to add (the game already runs at the target, or faster)
+    int met = target > 0 && F.pacer.smoothed_interval > 0 && 1.0 / F.pacer.smoothed_interval >= target * 0.95;
+    static int was_capped, was_met;
+    if (atomic_exchange(&g_state, st2) != st2 || (st2 == 2 && capped != was_capped) || (st2 == 2 && met != was_met)) {
         char why[96]; snprintf(why, sizeof why, "on, the display runs at %.0f Hz: no refresh left for a generated frame", rns ? 1e9 / (double)rns : 0.0);
-        reason("%s", st2 == 1 ? "generating" : capped ? why : "on, waiting for a steady frame rate");
+        reason("%s", st2 == 1 ? "generating" : capped ? why : met ? "on, the target rate is met: no frame to add" : "on, waiting for a steady frame rate");
         static int ncap; if (st2 == 2 && capped && ncap++ < 4) VLOG("frame generation: not generating, %s (game frame period %.1f ms)", why + 4, period * 1e3);
     }
     was_capped = st2 == 2 && capped;
+    was_met = st2 == 2 && met;
     return (int)ng;
 }
 #endif

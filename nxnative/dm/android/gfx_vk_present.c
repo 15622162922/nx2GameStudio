@@ -664,6 +664,26 @@ static int overlay_ready(VkCommandBuffer cb, uint32_t k, int menu) {   // k: thi
 // slack). The pause menu's redraws carry no time. DM_VK_PACE=0 (live) presents without times
 static uint64_t g_refresh_ns, g_pace_target, g_pace_anchor, g_pace_n, g_pace_resync, g_pace_slip; static uint32_t g_pace_id; static int g_pace_on = 1;
 static uint64_t mono_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_nsec; }
+// ---- the frame generation's state, for the paths outside the present thread ----
+// The output stream's period (ns; 0 = the frame generation is off): the rate the window asks the system for, so the panel can carry the extra images. Without it the
+// panel stays at the game's own rate and the extra presents do not fit into its refreshes, which slows the game down (the FIFO swapchain carries one image a refresh)
+// The images presented per game frame (1 = the game alone): the adaptive frame rate judges the game's own wait for the present thread by it (with the frame
+// generation on that wait is longer by design, not a slow frame)
+static _Atomic uint64_t g_fg_out_ns; static _Atomic int g_fg_images = 1; static _Atomic int g_refresh_polls;
+int vk_fg_images(void) { return atomic_load(&g_fg_images); }
+// The rate the window asks the system for: the game's own, or the frame generation's output rate while it is on (the panel has to carry the extra images: with the
+// game's own rate the panel stays at 60 Hz, where two images do not fit into one refresh — the FIFO swapchain carries one a refresh — and the present thread then runs
+// at half the game's rate with the game waiting behind it)
+static double window_fps(double period) { uint64_t out_ns = atomic_load(&g_fg_out_ns); return out_ns ? 1e9 / (double)out_ns : (period > 0 ? 1.0 / period : 60.0); }
+// Whether the window's rate has to be asked for again: a higher rate at once, a lower one only after the current one held for 60 presents (a panel that changes its
+// mode for every vote flickers, and the game that switches its own present interval would send it back and forth)
+static int window_rate_changed(double fps, double *rate_fps, double *want_fps, uint64_t *want_since, uint64_t presents) {
+    if (fps != *want_fps) { *want_fps = fps; *want_since = presents; }
+    if (fps == *rate_fps) return 0;
+    if (fps > *rate_fps) { *rate_fps = fps; return 1; }
+    if (presents - *want_since >= 60) { *rate_fps = fps; return 1; }
+    return 0;
+}
 // ---- the performance HUD's counters (dm_present_sample) ----
 // The game's frames presented, the frame generation's frames presented, and the intervals between the game's frames (their sum and their count)
 // for the average frame time. The app reads two samples a second apart and does the arithmetic.
@@ -700,10 +720,17 @@ static uint64_t pace_snap(uint64_t t) {   // the first vsync at or after t on th
 static uint64_t pace_desired(double period) {   // the frame's desired present time (0 = none)
     if (!V.has_dtiming || !g_swap) return 0;
     if (g_pace_n % 30 == 0) { const char *e = getenv("DM_VK_PACE"); g_pace_on = !(e && !atoi(e)); }
-    if (!g_refresh_ns || g_pace_n % 120 == 0) {
-        VkRefreshCycleDurationGOOGLE rc; uint64_t was = g_refresh_ns;
-        if (vkGetRefreshCycleDurationGOOGLE(V.dev, g_swap, &rc) == VK_SUCCESS && rc.refreshDuration > 1000000) g_refresh_ns = rc.refreshDuration;
-        if (g_refresh_ns && g_refresh_ns != was) { VKLOG("[perf] display timing: refresh %.3f ms", g_refresh_ns / 1e6); g_pace_target = 0; }
+    {   // The panel's refresh: a window rate change may take a few frames to follow (read it often for a while), and while the frame generation is on the panel may
+        // change on its own (LTPO, thermal): a slow poll then, too
+        int polls = atomic_load(&g_refresh_polls);
+        int poll = !g_refresh_ns || g_pace_n % 120 == 0;
+        if (!poll && polls > 0 && g_pace_n % 30 == 0) { poll = 1; atomic_store(&g_refresh_polls, polls - 1); }
+        if (!poll && vk_fg_images() > 1 && g_pace_n % 240 == 0) poll = 1;
+        if (poll) {
+            VkRefreshCycleDurationGOOGLE rc; uint64_t was = g_refresh_ns;
+            if (vkGetRefreshCycleDurationGOOGLE(V.dev, g_swap, &rc) == VK_SUCCESS && rc.refreshDuration > 1000000) g_refresh_ns = rc.refreshDuration;
+            if (g_refresh_ns && g_refresh_ns != was) { VKLOG("[perf] display timing: refresh %.3f ms", g_refresh_ns / 1e6); g_pace_target = 0; }
+        }
     }
     VkPastPresentationTimingGOOGLE pt[16]; uint32_t np = 16;
     if (vkGetPastPresentationTimingGOOGLE(V.dev, g_swap, &np, pt) >= 0)
@@ -854,11 +881,16 @@ static void *present_thread(void *arg) {
                 int ng = e.period >= 0 ? dm_fg_frame(e.im, e.has_crop ? e.crop : NULL, e.period, gen, &hold, &out_period) : 0;
                 int cx = e.has_crop && e.crop[0] ? e.crop[0] : 0, cy = e.has_crop && e.crop[1] ? e.crop[1] : 0,
                     cw = e.has_crop && e.crop[2] ? e.crop[2] : (int)e.im->w, ch = e.has_crop && e.crop[3] ? e.crop[3] : (int)e.im->h;
-                (void)out_period;
+                if (e.period >= 0) {   // a redraw presents the last frame again: the frame generation's state stays as it was
+                    atomic_store(&g_fg_out_ns, out_period > 0 ? (uint64_t)(out_period * 1e9) : 0);
+                    atomic_store(&g_fg_images, ng > 0 ? ng + 1 : 1);
+                }
                 // the generated frames first (each held for its equal share), then the game's own frame — the
                 // overlay travels on every one of them, or the gamepad would flicker at the game's rate
                 for (int g = 0; g < ng; g++) present_one(gen[g], 0, 0, cw, ch, 0, hold, 0, 0);
-                present_one(e.im->img, cx, cy, cw, ch, 1, e.period, e.n, 1);
+                // The game frame holds its own share of the interval, like the generated ones: stepping by the game's period instead would space the desired
+                // present times unevenly (one image for two refreshes, the next for one)
+                present_one(e.im->img, cx, cy, cw, ch, 1, ng ? hold : e.period, e.n, 1);
             }
             pthread_mutex_unlock(&g_present_mu); }
         pthread_mutex_lock(&g_pq_mu); g_pq_tail++; g_pq_done = e.n; pthread_cond_broadcast(&g_pq_cv); pthread_mutex_unlock(&g_pq_mu);
@@ -892,9 +924,18 @@ uint64_t mtl_present(const tex_t *t, double period, const int crop[4]) {
     // A longer period goes to the window only once it has held for 60 presents; a shorter one at once. Super Mario Bros. Wonder's own controller (main+0xcfd24) asks
     // for interval 2 for a frame or a few and then 1 again: each ask was a vote (176 in 3 minutes of its first level on the Y700, 27-60 a run in issue #64's log of an
     // Adreno 750 phone with a 60 Hz display), and where the display changes its mode for a vote, the switch itself lengthens the next frames (issue #45: 30-40 fps)
-    static ANativeWindow *rate_win; static double rate_period, want_period; static uint64_t want_since;
-    if (period != want_period) { want_period = period; want_since = g_presents; }
-    if (g_win && (g_win != rate_win || (period != rate_period && (period < rate_period || g_presents - want_since >= 60)))) { rate_win = g_win; rate_period = period; dm_perf_window(g_win, period > 0 ? 1.0 / period : 60); }
+    // The rate asked for is the frame generation's output rate while it is on: the panel has to carry the extra images, and with the game's own rate the panel
+    // stays at 60 Hz, where two images do not fit into one refresh (the FIFO swapchain carries one a refresh) — the present thread then runs at half the game's
+    // rate and the game waits behind it: the game slows down
+    static ANativeWindow *rate_win; static double rate_fps, want_fps; static uint64_t want_since;
+    double fps = window_fps(period);
+    int changed = window_rate_changed(fps, &rate_fps, &want_fps, &want_since, g_presents);
+    if (g_win && (g_win != rate_win || changed)) {
+        rate_win = g_win;
+        if (!changed) rate_fps = fps;
+        dm_perf_window(g_win, fps);
+        atomic_store(&g_refresh_polls, 300);   // the panel follows the vote after a few frames: read its refresh often for a while
+    }
     uint64_t n = ++g_presents;
     // without display times (no VK_GOOGLE_display_timing, no window, or none came back) the hand-over time stands in, as before: the governor's late check needs readings
     { int disp = V.has_dtiming && dm_front_window() && (n <= 240 || g_pres_recorded); struct timespec ts; if (!disp) clock_gettime(CLOCK_MONOTONIC, &ts);

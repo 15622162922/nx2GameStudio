@@ -147,6 +147,11 @@ static int64_t g_work_start;
 static const int64_t STEPS[] = {16666667, 25000000, 33333333};   // 60, 40, 30 fps
 static int g_step = 0, g_adapt = -1; static int64_t g_work_hist[64]; static int g_nwork;
 static int64_t g_last_change, g_last_up, g_up_hold = 2000000000; static int g_ok_frames; static uint64_t g_game_period;   // the period the game asks for, before the adaptive step
+// The frame generation's images per game frame (1 = the game alone): the present path's strong one wins (a weak definition, like the display's refresh below)
+__attribute__((weak)) int vk_fg_images(void) { return 1; }
+// The wait for the present thread is a pace, not work: at 40 or 30 fps it is the longer period's own pace, and with the frame generation on the present thread presents
+// more images per game frame, so the game's wait for it is longer by design (or the adaptive rate steps down while the frame generation runs)
+int64_t dm_perf_pq_pace(int64_t pq) { return (g_step > 0 || vk_fg_images() > 1) ? pq : 0; }
 static int64_t work_pct(int q) {   // the q-th percentile of the last 64 frames' work
     int n = g_nwork < 64 ? g_nwork : 64; if (n < 16) return 0;
     int64_t v[64]; memcpy(v, g_work_hist, sizeof(int64_t) * (size_t)n);
@@ -161,6 +166,9 @@ uint64_t dm_present_period_adapt(uint64_t period) {
     int64_t want = STEPS[g_step];
     return (uint64_t)want > period ? (uint64_t)want : period;   // never faster than the game asks
 }
+// The rate the frames are held to now (60, 40 or 30 fps): the frame generation needs it (its frame's period is never shorter than the rate allows, or a game held
+// to 30 fps would be counted as one refresh short and the generation would ask for more frames than the panel can show)
+int dm_perf_rate_fps(void) { return (int)(1000000000ll / STEPS[g_step]); }
 static int fps_pin(void) {   // a DM_CTL "env DM_FPS_PIN=40" line holds that step (60, 40 or 30; anything else lets the rate adapt again): tests
     static unsigned k; static int pin = -1; if (k++ % 30) return pin;
     const char *e = getenv("DM_FPS_PIN"); int v = e ? atoi(e) : 0, st = v == 60 ? 0 : v == 40 ? 1 : v == 30 ? 2 : -1;
@@ -252,7 +260,8 @@ static void adapt_frame(int64_t work, int64_t now) {
 // pq_ns: the wait for the present thread (hle_nvn.c), left out of the work the adaptive rate judges (at 40 or 30 fps it is the longer period's pace, and counted
 // it held the rate down for good) but kept in the work the CPU hint gets (with the replay on its own thread it is the replay's and the GPU's time as well:
 // left out, Super Mario Odyssey's hint saw light frames and the clocks stayed at 1-2 GHz). At 60 fps it is not a pace but the display or the swapchain
-// holding the frames back, and it stays in the work, or the rate could not step down for it
+// holding the frames back, and it stays in the work, or the rate could not step down for it. With the frame generation on it is longer by design (the present
+// thread presents more images per game frame): it is a pace there too, or the rate steps down while the frame generation is running
 static int64_t g_prev_present, g_pace, g_pq;
 void dm_perf_frame_start(uint64_t pace_ns, uint64_t pq_ns) { g_work_start = perf_now(); g_pace = (int64_t)pace_ns; g_pq = (int64_t)pq_ns; }
 // Called on the presenting thread right before a present; period in seconds (1/60, 1/30, ...).
@@ -265,7 +274,7 @@ void dm_perf_frame(double period) {
     { static unsigned n; if (++n % 60 == 0) gpu_turbo(); }
     if (g_work_start) {   // (a longer span: the game was held, by the pause menu or the background)
         int64_t w = g_prev_present ? t - g_prev_present - g_pace : t - g_work_start;
-        int64_t pq = g_prev_present ? g_pq : 0, pace = g_step > 0 ? pq : 0;   // (t - g_work_start starts after the wait already)
+        int64_t pq = g_prev_present ? g_pq : 0, pace = dm_perf_pq_pace(pq);   // (t - g_work_start starts after the wait already)
         if (w > 0 && w < 250000000) { adapt_frame(w - pace > 0 ? w - pace : 0, t); if (g_hint) hint_report(w, pq, pace, t, g_hint_target); }
         g_work_start = 0;
     }

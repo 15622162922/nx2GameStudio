@@ -3,7 +3,9 @@
 
 // Ported to C for Banana Native from Eden's src/video_core/renderer_vulkan/present/frame_gen_pacer.cpp: how many frames to generate for each game frame. With a fixed
 // multiplier, multiplier - 1 once the game's frame rate is steady; with a target rate, as many as hold that output rate, probing one more at a time and rolling a step back
-// when it lowers the game's own rate. Times are seconds on CLOCK_MONOTONIC (0 = unset)
+// when it lowers the game's own rate. The floor (min_base, DM_LSFG_MIN_FPS) holds the generation back when the game's own rate falls under it: the generation's work
+// must not slow the game down (a game natively slower than the floor keeps its frames: the unloaded rate is what says the generation is the cause).
+// Times are seconds on CLOCK_MONOTONIC (0 = unset)
 #include "lsfg.h"
 #include <math.h>
 #include <string.h>
@@ -92,18 +94,42 @@ lsfg_plan lsfg_pacer_plan(lsfg_pacer *p, size_t capacity, int multiplier, int ta
     p->smoothed_interval = p->smoothed_interval > 0 ? p->smoothed_interval + (interval - p->smoothed_interval) * INTERVAL_SMOOTHING : interval;
     if (!previous_generations) {
         float measured = 1.0f / p->smoothed_interval;
-        p->unloaded_base_rate = p->unloaded_base_rate > 0 ? p->unloaded_base_rate + (measured - p->unloaded_base_rate) * INTERVAL_SMOOTHING : measured;
+        // A rate under the floor is the generation's own doing: the reference (what the game does without the generation) stays where it was, or the floor would
+        // release itself exactly when it is needed
+        if (p->min_base <= 0 || measured >= p->min_base)
+            p->unloaded_base_rate = p->unloaded_base_rate > 0 ? p->unloaded_base_rate + (measured - p->unloaded_base_rate) * INTERVAL_SMOOTHING : measured;
     }
     if (p->stable_until) {
         if (now < p->stable_until) return none;
         p->stable_until = 0;
     }
+    // The floor (DM_LSFG_MIN_FPS): the generation's own work must not push the game under it. The unloaded rate says what the game does without the
+    // generation: a game that is natively slower than the floor is not the generation's doing and keeps its frames.
+    float base = 1.0f / p->smoothed_interval;
+    if (p->min_base > 0 && p->limit > 0 && base < p->min_base && p->unloaded_base_rate > p->min_base) {
+        if (!p->below_since) p->below_since = now;
+        else if (now - p->below_since >= DEFICIT_DURATION) {
+            p->limit--; p->below_since = 0; p->deficit_since = 0; p->output_credit = 0;
+            p->probe_failures = p->probe_failures + 1 < MAX_PROBE_FAILURES ? p->probe_failures + 1 : MAX_PROBE_FAILURES;
+            p->next_probe = now + probe_backoff(p->probe_failures);   // the game needs a while at its own rate before the generation tries again
+        }
+        p->output_credit = 0; p->issued = 0;
+        return none;   // under the floor: no generation, the game runs at its own rate
+    }
+    p->below_since = 0;
+    // A change of the mode (the multiplier to a target rate, or back) starts the plan afresh: the limit the multiplier mode left behind is not the target
+    // mode's limit, and it would keep generating past the target (the drawer's live switch changes it while the game runs)
+    if (p->mode_target != target_rate) {
+        p->mode_target = target_rate;
+        p->limit = 0; p->output_credit = 0; p->deficit_since = 0; p->probe_failures = 0; p->next_probe = 0; p->below_since = 0;
+    }
     if (!target_rate) {
+        if (p->next_probe && now < p->next_probe) { p->output_credit = 0; return none; }   // the floor's back-off
         p->limit = zmin((size_t)(multiplier - 1), ceiling);   // Settings::FrameGenGenerations
         p->output_credit = 0; p->issued = p->limit;
         return (lsfg_plan){p->limit, p->limit > 0};
     }
-    update_limit(p, now, 1.0f / p->smoothed_interval, target, ceiling);
+    update_limit(p, now, base, target, ceiling);
     size_t allowed = zmin(p->limit, ceiling);
     float desired_outputs = p->smoothed_interval * target;
     if (!allowed || desired_outputs <= 1.0f) { p->output_credit = 0; return none; }
