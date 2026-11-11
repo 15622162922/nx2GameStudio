@@ -62,6 +62,9 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
   （守卫也会拦不带标记的 `--draft`）
 - 步骤：提交 `chore(release): version <x.y.z>` → 打附注 tag `v<base>-alphaNN` → push 两者 →
   `gh release create v<base>-alphaNN --verify-tag --prerelease --notes-file <notes> --repo zFitness/nx2androidX`，**不带 zip**
+- **notes 里要有一段 `Community ports`**，点名本版本涉及的社区贡献（谁移植了哪个游戏、谁修了什么）。
+  名单用 `python3 devtools/release_contributors.py` 取（上个 tag 之后合并的 PR 与作者），粘进 notes；
+  游戏级别的署名同时落在 `docs/PORT_CHECKLIST.md` 的那一行（`ported by @handle`）
 - app 的 `versionName` 在 `android/app/build.gradle.kts`（当前 `0.3.0-alpha05`），与 tag 去掉 `v` 一致
 - **一次发布只带手机的 APK，别无其它**。桌面 workflow（`release-windows.yml` / `release-macos.yml`）不发版，
   只在需要时手动触发（Actions → 该 workflow → Run workflow），产物留在该次运行的 artifact 里

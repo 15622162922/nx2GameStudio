@@ -63,6 +63,8 @@ The phone app says the same version: its `versionName` in `android/app/build.gra
 
 A release checks only the games it adds or fixes, not the older ones; a break in an older game is fixed by a later patch release. The version is raised by a commit `chore(release): version <x.y.z>`.
 
+The release notes carry a `Community ports` section: the people whose work went into the version, named. `python3 devtools/release_contributors.py` lists the pull requests merged since the last tag and who opened them — paste the list into the notes file. A port that came from the community is credited twice: on the game's line in `docs/PORT_CHECKLIST.md` (`ported by @handle`) and in that section.
+
 ## Building the bundle
 
 ```
