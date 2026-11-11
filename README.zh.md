@@ -5,7 +5,6 @@
 > **中文文档**。English: [README.md](README.md)
 
 [![Contributors](https://img.shields.io/github/contributors/zFitness/nx2androidX?style=flat&label=contributors)](https://github.com/zFitness/nx2androidX/graphs/contributors)
-[![Discussions](https://img.shields.io/github/discussions/zFitness/nx2androidX?style=flat&label=discussions)](https://github.com/zFitness/nx2androidX/discussions)
 [![Release](https://img.shields.io/github/v/release/zFitness/nx2androidX?style=flat&label=release)](https://github.com/zFitness/nx2androidX/releases/latest)
 [![License](https://img.shields.io/github/license/zFitness/nx2androidX?style=flat&label=license)](LICENSE)
 
@@ -147,7 +146,7 @@ PC 端工具由上游 nx2android 发布，本仓库的发布页上只有 APK。
 - **想移植一个游戏？** [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) —— 完整流程，在手机上或电脑上都能做，而且全程其实用不上电脑。
 - **想改代码、文档或做翻译？** [CONTRIBUTING.md](CONTRIBUTING.md) —— 规则、仓库结构、测试和提交信息规范。
 
-问题和实况去 [Discussions](https://github.com/zFitness/nx2androidX/discussions)：*Q&A* 提问，*Show and tell* 晒实况，*Ideas* 提想法。
+没有合适模板的问题也欢迎：开一个 issue，打上 `question` 标签即可。能跑的游戏走 **Game report** 表单，跑不起来的走 **Port request** 表单。
 
 ## 密钥与游戏文件
 

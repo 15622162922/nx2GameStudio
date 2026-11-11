@@ -5,7 +5,6 @@
 > **English**. 中文文档：[README.zh.md](README.zh.md)
 
 [![Contributors](https://img.shields.io/github/contributors/zFitness/nx2androidX?style=flat&label=contributors)](https://github.com/zFitness/nx2androidX/graphs/contributors)
-[![Discussions](https://img.shields.io/github/discussions/zFitness/nx2androidX?style=flat&label=discussions)](https://github.com/zFitness/nx2androidX/discussions)
 [![Release](https://img.shields.io/github/v/release/zFitness/nx2androidX?style=flat&label=release)](https://github.com/zFitness/nx2androidX/releases/latest)
 [![License](https://img.shields.io/github/license/zFitness/nx2androidX?style=flat&label=license)](LICENSE)
 
@@ -146,7 +145,7 @@ Contributions are welcome, and the first one does not have to be code.
 - **A game to port?** [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) — the whole flow, on the phone or on a computer, and no computer is needed at all.
 - **Code, docs or translations?** [CONTRIBUTING.md](CONTRIBUTING.md) — the rules, the repository map, the tests and the commit messages.
 
-Questions and footage go to [Discussions](https://github.com/zFitness/nx2androidX/discussions): *Q&A* for questions, *Show and tell* for your footage, *Ideas* for what the app should do next.
+A question that fits no template is welcome too: open an issue and label it `question`. A game that runs goes through the **Game report** form, a game that does not through the **Port request** form.
 
 ## Keys and game files
 

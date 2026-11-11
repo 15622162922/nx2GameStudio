@@ -56,9 +56,8 @@ What happens next: the report is checked against the games that already work, th
 updated, and **your name is recorded next to the game** — in the checklist line, in the profile's comment
 header, in the release notes and in the contributors' table at the end of the README.
 
-Questions that fit no template go to [Discussions](https://github.com/zFitness/nx2androidX/discussions):
-*Show and tell* for your footage, *Q&A* for questions and for getting unstuck on a port, *Ideas* for what the
-app should do next.
+A question that fits no template is welcome too: open an issue and label it `question`. A game that runs
+goes through the *Game report* form, a game that does not through the *Port request* form.
 
 ---
 
@@ -156,8 +155,8 @@ something in it; nobody is waiting for the other one to go quiet first.
 ## Code of conduct
 
 Be decent to each other and to the people whose devices and games are involved. Assume good faith, keep
-discussions about the work, and no harassment of any kind. This applies to the repository, the discussions
-and the issue tracker. A maintainer can remove a comment or block an account that does not follow it.
+discussions about the work, and no harassment of any kind. This applies to the repository and the issue
+tracker. A maintainer can remove a comment or block an account that does not follow it.
 
 ## License
 
