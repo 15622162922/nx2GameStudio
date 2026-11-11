@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.GridView
@@ -77,6 +78,7 @@ import com.nx.android.data.Player
 import com.nx.android.data.SaveBackup
 import com.nx.android.data.SaveShare
 import com.nx.android.domain.FolderScanner
+import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.PackEnv
 import com.nx.android.domain.Ported
@@ -123,6 +125,7 @@ private fun statusColor(s: GameStatus) = when (s) {
     GameStatus.NOT_PORTED -> NxPalette.Unbuilt
     GameStatus.PORTING -> NxPalette.Building
     GameStatus.DONE -> NxPalette.Ready
+    GameStatus.FAILED -> NxPalette.Danger
 }
 
 @Composable
@@ -130,6 +133,7 @@ private fun statusLabel(s: GameStatus): String = when (s) {
     GameStatus.NOT_PORTED -> stringResource(R.string.common_not_ported)
     GameStatus.PORTING -> stringResource(R.string.common_porting)
     GameStatus.DONE -> stringResource(R.string.common_done)
+    GameStatus.FAILED -> stringResource(R.string.lib_last_build_failed)
 }
 
 /**
@@ -371,6 +375,14 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
 // ---- 移植配置面板（右侧全高滑入） --------------------------------------------------------------------------------
 
 /**
+ * 抽屉里的两个破坏性动作：清构建缓存（游戏照常能玩）与删游戏（连存档一起删，游戏出库）。
+ */
+private enum class Removal { CACHE, DELETE }
+
+/** 一次破坏性动作的请求：做什么、要删哪些东西 */
+private data class RemovalRequest(val kind: Removal, val plan: GameCleanup.Plan)
+
+/**
  * 移植配置面板：文件路径、状态与该游戏自己的选项，开始移植与安装也从这里走。
  * 由页面的根在最上层画（MainScreen），它的遮罩要盖住顶栏。
  */
@@ -387,9 +399,62 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var removal by remember { mutableStateOf<RemovalRequest?>(null) }
     // 完成的移植：数据包里带着宿主写的运行日志（log.txt）
     val ported = lib.portOf(f)
+    // 数据包里的存档（packs 的 saves/）：删包时它们会一起消失
+    val packHasSaves = ported?.let {
+        val s = File(it.pack, "saves")
+        s.isDirectory && s.listFiles()?.isNotEmpty() == true
+    } == true
+
+    /**
+     * 破坏性动作：正在构建 / 正在运行就说清楚为什么，不能动；能动就把要删的东西算出来给确认框。
+     * 清缓存不动数据包，删游戏连数据包与存档一起删——两个动作的确认框各自写清影响。
+     */
+    fun askRemoval(kind: Removal) {
+        val blocked = lib.removalBlocked(f)
+        if (blocked != null) {
+            actions.onToast(locale.str(removeBlockedText(blocked)))
+            return
+        }
+        scope.launch {
+            val p = withContext(Dispatchers.IO) {
+                if (kind == Removal.CACHE) lib.planCache(f) else lib.planRemoval(f)
+            }
+            removal = RemovalRequest(kind, p)
+        }
+    }
+
+    /** 确认之后真的做 */
+    fun doRemoval() {
+        val req = removal ?: return
+        removal = null
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                if (req.kind == Removal.CACHE) lib.clearCache(f) else lib.remove(f)
+            }
+            actions.onToast(
+                when (r.outcome) {
+                    GameCleanup.Outcome.DONE -> {
+                        // 游戏没了，这个抽屉也就没有意义了
+                        if (req.kind == Removal.DELETE) onClose()
+                        val done = when (req.kind) {
+                            Removal.CACHE -> locale.str(R.string.lib_remove_cache_done)
+                            Removal.DELETE -> locale.str(R.string.lib_remove_done)
+                        }
+                        if (r.workspaceKnown) done else locale.str(
+                            if (req.kind == Removal.CACHE) R.string.lib_remove_cache_workspace_unknown
+                            else R.string.lib_remove_workspace_unknown)
+                    }
+                    GameCleanup.Outcome.FAILED ->
+                        locale.str(R.string.lib_remove_failed_files, r.failed.joinToString { it.name })
+                    GameCleanup.Outcome.BUSY_PORTING -> locale.str(R.string.lib_remove_busy_porting)
+                    GameCleanup.Outcome.BUSY_RUNNING -> locale.str(R.string.lib_remove_busy_running)
+                }
+            )
+        }
+    }
 
     /** 游戏运行日志：宿主把它写在了数据包里，拷进下载目录再发出去（整份文件，不截断） */
     fun shareGameLog(target: Ported) {
@@ -474,9 +539,14 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                                 },
                             )
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(locale.str(R.string.lib_delete_artifact), color = NxPalette.Danger) },
+                                text = { Text(locale.str(R.string.lib_remove_cache_action)) },
+                                leadingIcon = { Icon(Icons.Filled.CleaningServices, null, Modifier.size(18.dp)) },
+                                onClick = { menuOpen = false; askRemoval(Removal.CACHE) },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(locale.str(R.string.lib_remove_action), color = NxPalette.Danger) },
                                 leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = NxPalette.Danger) },
-                                onClick = { menuOpen = false; confirmDelete = true },
+                                onClick = { menuOpen = false; askRemoval(Removal.DELETE) },
                             )
                         }
                     }
@@ -532,34 +602,86 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                     }
                 }
                 else -> {
+                    // 上次构建失败：说清楚它失败过（原因在构建页的日志里）
+                    if (status == GameStatus.FAILED) {
+                        Hint(locale.str(R.string.lib_last_failed_hint))
+                        Spacer(Modifier.height(8.dp))
+                    }
                     // ▶ 构建：参数已即时保存，带参跳转，开始按钮在构建页上
                     CapsuleButton(locale.str(R.string.lib_build_action), {
                         lib.buildsTarget = f
                         onClose()
                         onGoBuilds()
                     }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // 清构建缓存：游戏照常能玩，只把能再生的东西清掉
+                        QuietButton(locale.str(R.string.lib_remove_cache_action),
+                            { askRemoval(Removal.CACHE) }, modifier = Modifier.weight(1f))
+                        QuietButton(locale.str(R.string.lib_remove_action),
+                            { askRemoval(Removal.DELETE) }, modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
     }
 
-    if (confirmDelete) {
+    removal?.let { req ->
+        // 要删的东西，一样一行：数据包（带存档）、工作区、半成品包
+        val items = req.plan.targets.map { t ->
+            when (t.kind) {
+                GameCleanup.Kind.PACK ->
+                    if (packHasSaves) locale.str(R.string.lib_remove_item_pack_saves)
+                    else locale.str(R.string.lib_remove_item_pack)
+                GameCleanup.Kind.WORKSPACE -> locale.str(R.string.lib_remove_item_workspace)
+                GameCleanup.Kind.PARTIAL -> locale.str(R.string.lib_remove_item_partial)
+            }
+        }
         androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(locale.str(R.string.lib_delete_artifact_confirm)) },
-            text = { Text(locale.str(R.string.lib_delete_artifact_what)) },
+            onDismissRequest = { removal = null },
+            title = {
+                Text(locale.str(if (req.kind == Removal.CACHE) R.string.lib_remove_cache_confirm_title
+                else R.string.lib_remove_confirm_title))
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        when {
+                            req.kind == Removal.CACHE && items.isEmpty() -> locale.str(R.string.lib_remove_cache_nothing)
+                            req.kind == Removal.CACHE && status == GameStatus.DONE -> locale.str(R.string.lib_remove_cache_what_done)
+                            req.kind == Removal.CACHE -> locale.str(R.string.lib_remove_cache_what_failed)
+                            items.isEmpty() -> locale.str(R.string.lib_remove_what_empty)
+                            status == GameStatus.DONE -> locale.str(R.string.lib_remove_what_done)
+                            else -> locale.str(R.string.lib_remove_what_failed)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    items.forEach {
+                        Text("· $it", style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
             confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    confirmDelete = false
-                    val gone = lib.deleteOutcome(f)
-                    actions.onToast(if (gone) locale.str(R.string.lib_artifact_deleted) else locale.str(R.string.lib_delete_failed_busy))
-                }) { Text(locale.str(R.string.common_delete), color = NxPalette.Danger) }
+                androidx.compose.material3.TextButton(onClick = { doRemoval() }) {
+                    Text(locale.str(if (req.kind == Removal.CACHE) R.string.common_clear else R.string.common_delete),
+                         color = NxPalette.Danger)
+                }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { Text(locale.str(R.string.common_cancel)) }
+                androidx.compose.material3.TextButton(onClick = { removal = null }) {
+                    Text(locale.str(R.string.common_cancel))
+                }
             },
         )
     }
+}
+
+/** 删不了的时候说清楚为什么 */
+private fun removeBlockedText(outcome: GameCleanup.Outcome): Int = when (outcome) {
+    GameCleanup.Outcome.BUSY_PORTING -> R.string.lib_remove_busy_porting
+    GameCleanup.Outcome.BUSY_RUNNING -> R.string.lib_remove_busy_running
+    else -> R.string.lib_remove_failed
 }
 
 /**

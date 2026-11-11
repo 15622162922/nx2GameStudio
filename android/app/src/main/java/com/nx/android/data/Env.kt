@@ -37,6 +37,9 @@ class Env(private val ctx: Context) {
     /** 移植产出的数据包：移植器写在这里（NX2A_WORK 的旁边），游戏库也只在这里找包 */
     val ports = File(files, "ports")
 
+    /** 移植的工作区（NX2A_WORK）：解包、重写、着色器都在这里，一个游戏一个子目录 */
+    val work = File(files, "work")
+
     val loader = File(rootfs, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1")
     val python = File(rootfs, "usr/bin/python3.13")
     val interpPath = "${rootfs.absolutePath}/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
@@ -66,7 +69,7 @@ class Env(private val ctx: Context) {
             "NX2A_NX_EXTRACT" to "${tool}/tools/nx_extract",
             // the build folder: Android does not let the app run a program on the shared storage, so the
             // port's own tools and the unpacked game live in the app's own folder
-            "NX2A_WORK" to "${files}/work",
+            "NX2A_WORK" to work.absolutePath,
             "PYTHONUNBUFFERED" to "1",
             "PYTHONIOENCODING" to "utf-8",
             "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT" to "1",

@@ -288,7 +288,7 @@ private fun DriversSection(state: DriverState, actions: AppActions, onRequest: (
                         if (Drivers.remove(context, d.id)) {
                             state.refresh(context)
                             actions.onToast(locale.str(R.string.driver_deleted, d.name))
-                        } else actions.onToast(locale.str(R.string.lib_delete_failed_busy))
+                        } else actions.onToast(locale.str(R.string.driver_delete_failed))
                     })
                 }
             },

@@ -47,14 +47,15 @@ class AppContainer(app: NxApp) {
 
     val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk },
         onEnvChanged = { envCheck.refresh() })
-    val library = LibraryState(prefs, port, env.ports)
+
+    /** 正在玩的游戏（:play 进程的存在与否，两秒一查） */
+    val player = PlayerState(alive = { Player.playProcessAlive(app) })
+
+    val library = LibraryState(prefs, port, player, env.ports, env.work)
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */
     val drivers = DriverState()
 
     /** 有没有新版本：冷启动时查一次，弹框与设置页读同一份 */
     val update = UpdateState(app)
-
-    /** 正在玩的游戏（:play 进程的存在与否，两秒一查） */
-    val player = PlayerState(alive = { Player.playProcessAlive(app) })
 }

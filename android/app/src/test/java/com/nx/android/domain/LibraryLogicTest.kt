@@ -40,6 +40,56 @@ class LibraryLogicTest {
                      LibraryLogic.statusOf(f, mapOf(f.absolutePath to port(hostExists = false)), portRunning = false, portGameFile = ""))
     }
 
+    /** 上次构建失败的游戏与「从没移植过」不是一回事，玩家要能看出来 */
+    @Test
+    fun `a game whose last build failed is failed, not just not ported`() {
+        val f = File("/sdcard/Games/Game.nsp")
+        assertEquals(GameStatus.FAILED,
+                     LibraryLogic.statusOf(f, mapOf(), portRunning = false, portGameFile = "", lastFailed = true))
+        assertEquals(GameStatus.NOT_PORTED,
+                     LibraryLogic.statusOf(f, mapOf(), portRunning = false, portGameFile = "", lastFailed = false))
+    }
+
+    /** 重新构建失败但旧包还在：游戏照样能玩 */
+    @Test
+    fun `a finished port wins over a failed build`() {
+        val f = File("/sdcard/Games/Game.nsp")
+        assertEquals(GameStatus.DONE,
+                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to port(hostExists = true)),
+                                          portRunning = false, portGameFile = "", lastFailed = true))
+    }
+
+    /** 正在构建的永远是构建中 */
+    @Test
+    fun `the running build wins over everything else`() {
+        val f = File("/sdcard/Games/Game.nsp")
+        assertEquals(GameStatus.PORTING,
+                     LibraryLogic.statusOf(f, mapOf(f.absolutePath to port(hostExists = true)),
+                                          portRunning = true, portGameFile = f.absolutePath, lastFailed = true))
+    }
+
+    /** 正在构建 / 正在运行的游戏不能删，别的游戏能删 */
+    @Test
+    fun `a game that is being ported or is running cannot be deleted`() {
+        val path = "/sdcard/Games/Game.nsp"
+        assertEquals(GameCleanup.Outcome.BUSY_PORTING,
+                     LibraryLogic.removalBlocked(portRunning = true, portGameFile = path, gamePath = path,
+                                                playerRunning = false, playerTitleId = "", titleId = "0100000000010000"))
+        assertEquals(GameCleanup.Outcome.BUSY_RUNNING,
+                     LibraryLogic.removalBlocked(portRunning = false, portGameFile = "", gamePath = path,
+                                                playerRunning = true, playerTitleId = "0100000000010000",
+                                                titleId = "0100000000010000"))
+        // 别的游戏在构建 / 在玩：这个游戏照样能删
+        assertEquals(null,
+                     LibraryLogic.removalBlocked(portRunning = true, portGameFile = "/sdcard/Games/Other.nsp",
+                                                gamePath = path, playerRunning = true,
+                                                playerTitleId = "0100000000020000", titleId = "0100000000010000"))
+        // 什么都没在跑：能删
+        assertEquals(null,
+                     LibraryLogic.removalBlocked(portRunning = false, portGameFile = "", gamePath = path,
+                                                playerRunning = false, playerTitleId = "", titleId = "0100000000010000"))
+    }
+
     /**
      * 点「运行」的两种走法：这个游戏还活着就回到它（不重启），否则全新启动。
      * 状态慢半拍（进程没了而状态还没清）与状态整个丢了（App 的进程被回收过）都要走全新启动。

@@ -11,6 +11,7 @@ import com.nx.android.data.PrefsStore.Companion.LIB_CONFIGS
 import com.nx.android.data.PrefsStore.Companion.LIB_EXTRA
 import com.nx.android.data.PrefsStore.Companion.LIB_PORTS
 import com.nx.android.domain.FolderScanner
+import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameConfig
 import com.nx.android.domain.GameConfigJson
 import com.nx.android.domain.GameStatus
@@ -27,8 +28,11 @@ import java.io.File
  * packs' manifests (the title ID in the file's name).
  *
  * [portsDir] is the app's own ports folder: the data packs the porter writes there, found by their title ID.
+ * [workRoot] is the porter's work folder: the unpacked game and the shader work of every build, one folder per
+ * title ID. Deleting a game takes both away.
  */
-class LibraryState(private val prefs: PrefsStore, private val port: PortState, private val portsDir: File) {
+class LibraryState(private val prefs: PrefsStore, private val port: PortState, private val player: PlayerState,
+                   private val portsDir: File, private val workRoot: File) {
 
     var games by mutableStateOf(listOf<File>()); private set
 
@@ -148,7 +152,17 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
 
     fun statusOf(f: File): GameStatus {
         if (FAKE_DATA) fakeStatus[f.absolutePath]?.let { return it }
-        return LibraryLogic.statusOf(f, ports, port.running, port.gameFile)
+        return LibraryLogic.statusOf(f, ports, port.running, port.gameFile, failedBefore(f))
+    }
+
+    /**
+     * 这个游戏上一次是不是构建失败了：构建历史里它最新的一条记录是失败。
+     * 历史最多留 20 条，很久以前的失败会被挤出去——那之后它就只是「未移植」，不影响删除。
+     */
+    fun failedBefore(f: File): Boolean {
+        val path = f.absolutePath
+        val rec = port.history.firstOrNull { it.game == path } ?: return false
+        return rec.phase == PortState.Phase.FAILED
     }
 
     /** The game's finished port (its pack), null when it has none */
@@ -158,16 +172,68 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
     }
 
     /**
-     * 删除一个移植产物：整个数据包目录（宿主、图标、**存档在数据包里，随之删除**）。游戏源文件不动。
-     * 删完刷新状态：该游戏回落为未移植。
+     * 删掉一个游戏：把它移出游戏库，删掉它的构建数据（数据包、工作区、半成品包）。
+     * 游戏源文件是玩家的，不碰。正在构建或正在运行时不动任何东西。
      */
-    fun deleteOutcome(f: File): Boolean {
-        val port = ports[f.absolutePath] ?: return false
-        val gone = !port.pack.exists() || port.pack.deleteRecursively()
+    fun remove(f: File): GameCleanup.Result {
+        removalBlocked(f)?.let { return GameCleanup.Result(it) }
+        val plan = planRemoval(f)
+        val result = GameCleanup.delete(plan)
+        // 登记最后摘：删到一半被系统打断，游戏还在库里，玩家可以再删一次
+        // 有东西没删掉时也留着登记：那点残留还在库里管得到，不至于变成没人管的孤儿
+        if (result.failed.isEmpty()) forget(f)
+        return GameCleanup.Result(
+            outcome = if (result.failed.isEmpty()) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
+            workspaceKnown = plan.workspaceKnown,
+            failed = result.failed,
+        )
+    }
+
+    /**
+     * 只清掉构建缓存：工作区与半成品包。数据包、存档、库里的登记都不动——游戏照常能玩。
+     * 正在构建或正在运行时不动任何东西。
+     */
+    fun clearCache(f: File): GameCleanup.Result {
+        removalBlocked(f)?.let { return GameCleanup.Result(it) }
+        val plan = planCache(f)
+        val result = GameCleanup.delete(plan)
+        return GameCleanup.Result(
+            outcome = if (result.failed.isEmpty()) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
+            workspaceKnown = plan.workspaceKnown,
+            failed = result.failed,
+        )
+    }
+
+    /** 这个游戏现在能不能删/清缓存：正在构建 / 正在运行都不能（返回原因），能删返回 null */
+    fun removalBlocked(f: File): GameCleanup.Outcome? =
+        LibraryLogic.removalBlocked(
+            portRunning = port.running, portGameFile = port.gameFile, gamePath = f.absolutePath,
+            playerRunning = player.running, playerTitleId = player.titleId, titleId = titleIdOf(f))
+
+    /** 删除前先看看要删什么（界面在 IO 线程上调它）：数据包 + 工作区 + 半成品包 */
+    fun planRemoval(f: File): GameCleanup.Plan {
+        val pack = portOf(f)
+        return GameCleanup.plan(titleIdOf(f), pack?.pack, workRoot, portsDir,
+            keepPartials = port.running)
+    }
+
+    /** 清缓存前先看看要清什么：只有工作区与半成品包（数据包不碰） */
+    fun planCache(f: File): GameCleanup.Plan =
+        GameCleanup.plan(titleIdOf(f), null, workRoot, portsDir, keepPartials = port.running)
+
+    /** 这个游戏的 title ID：文件名里的优先，没有就用数据包清单里的 */
+    private fun titleIdOf(f: File): String? =
+        FolderScanner.titleIdIn(f.name) ?: portOf(f)?.titleId?.takeIf { it.isNotEmpty() }
+
+    /** 忘记一个游戏：它不再在库里登记，也不再有产物的登记 */
+    private fun forget(f: File) {
+        extras = extras - f.absolutePath
+        val a = org.json.JSONArray()
+        for (p in extras) a.put(p)
+        prefs.putArray(LIB_EXTRA, a)
         ports = ports - f.absolutePath
         prefs.putJson(LIB_PORTS, JSONObject(ports.mapValues { it.value.pack.absolutePath }))
         rescan()
-        return gone
     }
 
     /** A port came out done: the source and its data pack stay together */

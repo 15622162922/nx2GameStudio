@@ -7,7 +7,7 @@ import java.io.File
 val GAME_FILE_EXTENSIONS = setOf("nsp", "xci", "nsz", "xcz")
 
 /** A game card's status, and the port options a game carries — pure vocabulary, shared by the layers */
-enum class GameStatus { NOT_PORTED, PORTING, DONE }
+enum class GameStatus { NOT_PORTED, PORTING, DONE, FAILED }
 
 /**
  * 额外地址空间（别名区）：-1 = Auto（不指定，由移植器按自己的规则决定：档案调通过的版本不加，
