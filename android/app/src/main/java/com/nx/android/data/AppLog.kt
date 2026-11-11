@@ -14,7 +14,13 @@ object AppLog {
 
     fun init(ctx: Context) {
         if (file != null) return
-        val f = File(ctx.filesDir, "nx2a/log.txt")
+        init(File(ctx.filesDir, "nx2a/log.txt"))
+    }
+
+    /** The log file itself: the app's own directory in the app, a temp file in the tests */
+    fun init(f: File) {
+        try { writer?.close() } catch (e: Exception) {}
+        writer = null
         f.parentFile?.mkdirs()
         file = f
     }

@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,12 +37,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLocale
+import com.nx.android.data.AppLog
 import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
@@ -62,12 +65,12 @@ import com.nx.android.ui.theme.NxPalette
 import java.io.File
 
 /**
- * 构建页：发起与跟踪移植的工作台，按移植的顺序排卡——目标（游戏与它的参数）、进度与取消、日志、产物、历史。
+ * 构建页：发起与跟踪移植的工作台，按移植的顺序排卡——目标（游戏与它的参数）、进度与取消、产物、日志、历史。
  * 游戏库里点「▶ 构建」把游戏带进来（buildsTarget）；开始按钮在这里，前提的检查与说明也在这里。
  */
 @Composable
 fun BuildsScreen(lib: LibraryState, port: PortState, keys: String, envReady: Boolean,
-                 actions: AppActions, onRequest: (PickerRequest) -> Unit) {
+                 actions: AppActions, onRequest: (PickerRequest) -> Unit, onLog: () -> Unit) {
     val locale = LocalAppLocale.current
     val running = port.running
     val target = lib.buildsTarget ?: port.gameFile.takeIf { running }?.let { File(it) }
@@ -80,11 +83,12 @@ fun BuildsScreen(lib: LibraryState, port: PortState, keys: String, envReady: Boo
             ProgressCard(port, actions)
             // 运行中：目标卡让位，配置收起为可展开行
             target?.let { ConfigDisclosure(lib, it) }
-            LogCard(port.log, expandedHeight = 320.dp)
+            // 日志模块：这一页上日志唯一的家（看、分享、清空都在这里）
+            LogCard(port, actions, onLog)
         } else if (target != null) {
             TargetCard(lib, port, keys, envReady, target, actions, onRequest)
             OutcomeCard(lib, port, target, actions)
-            LogCard(port.log, expandedHeight = 320.dp)
+            LogCard(port, actions, onLog)
         } else {
             // 没有目标：构建页自己选一个游戏文件（NX2Apple FilesCard 的入口逻辑）
             Section(stringResource(R.string.builds_start_title)) {
@@ -101,6 +105,8 @@ fun BuildsScreen(lib: LibraryState, port: PortState, keys: String, envReady: Boo
                         }))
                 })
             }
+            // 日志模块在历史之前：历史能长到二十条，日志不该被它埋到底下
+            LogCard(port, actions, onLog)
             if (port.history.isNotEmpty()) History(lib, port, actions)
         }
         Spacer(Modifier.height(12.dp))
@@ -259,23 +265,41 @@ private fun ProgressCard(port: PortState, actions: AppActions) {
     }
 }
 
-// ---- 日志卡（可展开） -------------------------------------------------------------------------------------------
+// ---- 日志模块（尾部 + 展开 + 查看/分享/清空） -----------------------------------------------
 
+/**
+ * 日志模块：工具说过的话的尾部，加上把它带走的三个动作——查看全部、分享日志、清空日志。
+ *
+ * 屏幕上给的是内存里的那一份（移植进行中它最新）；App 重启之后内存里空了，就退回文件里那一份
+ * （上一轮留下的）。「查看全部」与「分享日志」给的始终是文件里的内容，不只是屏幕上这些行。
+ */
 @Composable
-private fun LogCard(log: List<String>, expandedHeight: androidx.compose.ui.unit.Dp) {
+private fun LogCard(port: PortState, actions: AppActions, onView: () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    // 内存里没有输出时（App 重启之后），读文件里那一份
+    var fileTail by remember { mutableStateOf(listOf<String>()) }
+    LaunchedEffect(port.log.isEmpty()) {
+        if (port.log.isEmpty()) fileTail = AppLog.text(400).lines()
+    }
+    val lines = if (port.log.isNotEmpty()) port.log else fileTail
     Section(stringResource(R.string.common_log)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.builds_log_hint), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             QuietButton(if (open) stringResource(R.string.builds_collapse) else stringResource(R.string.builds_expand), { open = !open })
         }
-        LogTail(log, if (open) expandedHeight else 160.dp)
+        LogTail(lines, if (open) 320.dp else 160.dp, if (open) 200 else 30)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = onView) { Text(stringResource(R.string.builds_log_view)) }
+            TextButton(onClick = { actions.onShareLog() }) { Text(stringResource(R.string.builds_log_share)) }
+            // 清空：文件与屏幕上这份一起清（动作里清的是内存那份，这里清的是文件那份的读出）
+            TextButton(onClick = { actions.onClearLog(); fileTail = listOf() }) { Text(stringResource(R.string.builds_log_clear)) }
+        }
     }
 }
 
 /** The log's last lines (mono, the failures red) */
 @Composable
-fun LogTail(log: List<String>, height: androidx.compose.ui.unit.Dp = 160.dp) {
+fun LogTail(log: List<String>, height: Dp = 160.dp, lines: Int = 30) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.Black.copy(alpha = 0.35f),
@@ -288,12 +312,12 @@ fun LogTail(log: List<String>, height: androidx.compose.ui.unit.Dp = 160.dp) {
                 .verticalScroll(scroll).padding(10.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                val lines = log.takeLast(30)
-                if (lines.isEmpty()) {
+                val shown = log.takeLast(lines)
+                if (shown.isEmpty()) {
                     Text(stringResource(R.string.builds_no_output), style = MaterialTheme.typography.bodySmall,
                          color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    for (line in lines) {
+                    for (line in shown) {
                         Text(
                             line,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),

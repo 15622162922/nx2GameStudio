@@ -81,7 +81,6 @@ import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
 import com.nx.android.ui.onboarding.OnboardingScreen
 import com.nx.android.ui.settings.DriverScreen
-import com.nx.android.ui.settings.LogOverlay
 import com.nx.android.ui.settings.SettingsScreen
 import com.nx.android.ui.settings.SettingsSection
 import com.nx.android.ui.theme.GlassSheet
@@ -292,7 +291,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })
-                Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
+                Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest, onLog)
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
@@ -314,7 +313,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
         if (settingsOpen) {
             SettingsScreen(container.onboarding, container.drivers, container.update, actions,
-                onRequest, onDrivers, onLog,
+                onRequest, onDrivers,
                 section = settingsSection, onSelectSection = { settingsSection = it },
                 onClose = { settingsOpen = false })
         }

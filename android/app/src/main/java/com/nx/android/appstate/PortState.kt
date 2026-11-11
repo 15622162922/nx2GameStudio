@@ -142,6 +142,11 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
         AppLog.line(s)
     }
 
+    /** The player cleared the log: the tail goes too, so the page shows what the file has (nothing) */
+    fun clearLog() {
+        log = listOf()
+    }
+
     // ---- the history, kept as JSON in the prefs ----------------------------------------------------------------
 
     private fun loadHistory(): List<Record> = try {

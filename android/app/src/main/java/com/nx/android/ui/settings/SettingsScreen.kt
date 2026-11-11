@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,7 +39,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,7 +65,6 @@ import com.nx.android.ui.components.SubtitleRow
 import com.nx.android.ui.components.rememberPageScroll
 import com.nx.android.ui.components.step
 import com.nx.android.ui.failureText
-import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.update.UpdateCheckRow
 import com.nx.android.ui.update.openRepo
@@ -80,30 +77,30 @@ import java.io.File
  * 设置页：左边一栏分区，右边一栏内容。
  *
  * 它是一整页，盖住顶栏与下面的页面（从顶栏的设置图标进来，关掉才回到底下的页面）。
- * 分区固定五个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
+ * 分区固定四个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
  * 展开，右边自己滚；分区换了，右边的滚动位置回到顶上。
  *
  * 设置的内容还是原来那些：环境的状态与准备/重置、prod.keys 的路径、Vulkan 驱动（装/删/
- * 下载/导入）、帧生成的 Lossless.dll、日志（看/分享/清空）、版本与检查更新、界面语言、
- * 重跑引导。每一项占一行（见 `ui/components/SettingsRows.kt` 的行）。
+ * 下载/导入）、帧生成的 Lossless.dll、版本与检查更新、界面语言、重跑引导。每一项占一行
+ * （见 `ui/components/SettingsRows.kt` 的行）。日志（看/分享/清空）不在这里：它在构建页
+ * 的日志模块里（见 `ui/builds/BuildsScreen.kt`）。
  *
  * 分区是外面给的状态（[section] 与 [onSelectSection]）：关掉这一页再打开，玩家上次看的
  * 那一区还在；从别处带着一个分区进来也可以。
  *
- * 驱动下载页与日志浮层盖住整屏，它们在更上面组合（App.kt），所以这个页面只请它们。
+ * 驱动下载页盖住整屏，它在更上面组合（App.kt），所以这个页面只请它。
  */
 enum class SettingsSection(@StringRes val title: Int) {
     ENVIRONMENT(R.string.env_section),
     DRIVERS(R.string.driver_section),
     DISPLAY(R.string.set_section_display),
-    LOG(R.string.common_log),
     ABOUT(R.string.set_section_about),
 }
 
 @Composable
 fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
-                   onDrivers: () -> Unit, onLog: () -> Unit,
+                   onDrivers: () -> Unit,
                    section: SettingsSection, onSelectSection: (SettingsSection) -> Unit,
                    onClose: () -> Unit) {
     val scroll = rememberPageScroll()
@@ -145,7 +142,6 @@ fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateStat
                         SettingsSection.ENVIRONMENT -> EnvironmentSection(ob, actions, onRequest)
                         SettingsSection.DRIVERS -> DriversSection(drivers, actions, onRequest, onDrivers)
                         SettingsSection.DISPLAY -> DisplaySection(actions, onRequest)
-                        SettingsSection.LOG -> LogSection(actions, onLog)
                         SettingsSection.ABOUT -> AboutSection(ob, update, actions)
                     }
                 }
@@ -341,15 +337,6 @@ private fun DisplaySection(actions: AppActions, onRequest: (PickerRequest) -> Un
     NoteRow(stringResource(R.string.fg_hint))
 }
 
-/** 日志：工具说的每一句都在一个文件里，这里是看它、分享它、清掉它。 */
-@Composable
-private fun LogSection(actions: AppActions, onLog: () -> Unit) {
-    NoteRow(stringResource(R.string.set_log_hint))
-    ActionRow(title = stringResource(R.string.set_log_view), label = stringResource(R.string.common_view)) { onLog() }
-    ActionRow(title = stringResource(R.string.set_log_share), label = stringResource(R.string.common_share)) { actions.onShareLog() }
-    ActionRow(title = stringResource(R.string.set_log_clear_title), label = stringResource(R.string.set_log_clear)) { actions.onClearLog() }
-}
-
 /**
  * 关于：版本号（点一下去 GitHub 仓库）、检查更新、界面的语言、重跑引导。
  *
@@ -388,37 +375,4 @@ private fun languageLabel(mode: AppLocale.Mode): String = when (mode) {
     AppLocale.Mode.SYSTEM -> stringResource(R.string.set_language_system)
     AppLocale.Mode.ZH -> stringResource(R.string.set_language_zh)
     AppLocale.Mode.EN -> stringResource(R.string.set_language_en)
-}
-
-/** 日志浮层：盖住整屏（在页面之外组合，App.kt） */
-@Composable
-internal fun LogOverlay(onClose: () -> Unit, text: String) {
-    Box(
-        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f))
-            .clickable { onClose() },
-        contentAlignment = Alignment.Center,
-    ) {
-        // 这一页盖住整屏（它可能盖在设置页上），近乎不透明：底下页面的字不该透上来
-        GlassSheet(modifier = Modifier.fillMaxSize(0.9f).clickable(enabled = false) {}, alpha = 0.97f) {
-            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.common_log), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                         modifier = Modifier.weight(1f))
-                    QuietButton(stringResource(R.string.common_close), onClose)
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Box(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text.ifEmpty { stringResource(R.string.main_log_empty) },
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        fontSize = 11.sp,
-                    )
-                }
-            }
-        }
-    }
 }

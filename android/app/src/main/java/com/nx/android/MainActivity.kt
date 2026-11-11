@@ -138,6 +138,8 @@ class MainActivity : ComponentActivity() {
             }
         },
         onClearLog = {
+            // 两处说的是同一份日志：文件与屏幕上的尾部一起清
+            container.port.clearLog()
             AppLog.clear()
             toast(locale.str(R.string.main_log_cleared))
         },
