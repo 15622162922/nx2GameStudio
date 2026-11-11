@@ -1,6 +1,7 @@
 # Unit tests of the port pipeline's own parts (python -m unittest discover tests). They need no game files, toolchains or device.
 import contextlib, hashlib, importlib.util, io, json, os, random, re, shutil, struct, sys, tempfile, unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -225,6 +226,24 @@ class DataPack(unittest.TestCase):
             self.assertEqual(port.data_dir(), t / 'ports' / f'{stem}-data')      # the app: the app's own folder
         finally: shutil.rmtree(t, ignore_errors=True)
 
+    def test_the_pack_can_go_to_the_removable_card(self):   # the app may put the pack on the card (NX2A_PACK_DIR): the build stays on the phone
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_card_'))
+        old = os.environ.get('NX2A_PACK_DIR')
+        try:
+            port = pipeline.Port(pipeline.Options(t))
+            port.g = game.load(NEO); port.app_name = 'NEO'; port.work_root = t / 'work'; port.o.out = t; port.o.app = True
+            stem = pipeline.app_stem(port.g, port.app_name)
+            card = t / 'card/ports'
+            os.environ['NX2A_PACK_DIR'] = str(card)
+            self.assertEqual(port.data_dir(), card / f'{stem}-data')             # the card: the app's own folder there
+            self.assertEqual(port.pack_dir_root(), card)
+            os.environ.pop('NX2A_PACK_DIR')
+            self.assertEqual(port.data_dir(), t / 'ports' / f'{stem}-data')      # without it: the phone's own storage
+        finally:
+            if old is None: os.environ.pop('NX2A_PACK_DIR', None)
+            else: os.environ['NX2A_PACK_DIR'] = old
+            shutil.rmtree(t, ignore_errors=True)
+
     def test_the_loader_is_the_app_s_own(self):   # the host dlopens the loader by name: only the app's native library folder is on the linker's path, so the loader lives there and the pack carries the hooks
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_loader_'))
         try:
@@ -423,9 +442,10 @@ class Misc(unittest.TestCase):
             work.mkdir(); (work / 'x').write_bytes(b'\0' * 2**20); pipeline.Port.check_space(p)   # a build folder already there counts
         finally: shutil.disk_usage = real
 
-    def space_port(self, folder, fam, work, app=False):   # a port-like object for the space check alone (the check reads the picked game's files and the build folder)
+    def space_port(self, folder, fam, work, app=False, pack_dir=None):   # a port-like object for the space check alone (the check reads the picked game's files and the build folder)
         from types import SimpleNamespace as NS
-        return NS(o=NS(folder=folder, app=app), work=work, fam=fam)
+        return NS(o=NS(folder=folder, app=app), work=work, fam=fam,
+                  **({'pack_dir_root': (lambda: pack_dir)} if pack_dir is not None else {}))
 
     def space_fits(self, port, free):   # does the check pass with this much free space on the disk?
         from types import SimpleNamespace as NS
@@ -436,6 +456,29 @@ class Misc(unittest.TestCase):
         except pipeline.BuildError as e: return str(e)
         finally: shutil.disk_usage = real
         return None
+
+    def test_the_space_check_asks_each_volume(self):   # the pack may go to the removable card: the two volumes carry their own share, and the one that is short is named
+        from types import SimpleNamespace as NS
+        d = Path(tempfile.mkdtemp(prefix='nx2a_test_vol_'))
+        try:
+            (d / 'g.nsp').write_bytes(b'\0' * 2**20)
+            work = d / 'build'
+            card = d / 'card/ports'
+            p = self.space_port(d, {'base': d / 'g.nsp', 'updates': [], 'dlc': []}, work, pack_dir=card)
+            real = shutil.disk_usage
+            try:
+                # the card is on another volume: the build's volume asks for the game's files, the card for the pack
+                vols = lambda path: 2 if 'card' in str(path) else 1
+                shutil.disk_usage = lambda path: NS(free=1024 if 'card' in str(path) else 2**30 + 2**20)
+                with mock.patch.object(pipeline, 'volume_of', side_effect=vols):
+                    with self.assertRaises(pipeline.BuildError) as e:
+                        pipeline.Port.check_space(p)
+                    self.assertRegex(str(e.exception), r'not enough disk space for the data pack in .*card')
+                    # both volumes have room now
+                    shutil.disk_usage = lambda path: NS(free=2**30 + 2**20)
+                    pipeline.Port.check_space(p)
+            finally: shutil.disk_usage = real
+        finally: shutil.rmtree(d, ignore_errors=True)
 
     def test_space_counts_the_picked_game_only(self):   # a folder of many games: the others are not this port's business (they once made a 1 GB game ask for 285 GB)
         d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))

@@ -82,13 +82,14 @@ class Env(private val ctx: Context) {
     }
 
     /** Starts a guest program: Python through the loader, the tool itself as it is */
-    fun guest(args: List<String>, cwd: File = tool): Process {
+    fun guest(args: List<String>, cwd: File = tool, extra: Map<String, String> = emptyMap()): Process {
         val cmd = mutableListOf(loader.absolutePath, python.absolutePath)
         cmd.addAll(args)
         val pb = ProcessBuilder(cmd).directory(cwd)
         // one stream for both: a program that fills the pipe of the one we do not read would wait forever
         pb.redirectErrorStream(true)
         pb.environment().putAll(guestEnv())
+        pb.environment().putAll(extra)
         return pb.start()
     }
 

@@ -16,6 +16,7 @@ import com.nx.android.domain.GameConfig
 import com.nx.android.domain.GameConfigJson
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
+import com.nx.android.domain.PackMover
 import com.nx.android.domain.Ported
 import org.json.JSONObject
 import java.io.File
@@ -32,12 +33,30 @@ import java.io.File
  * title ID. Deleting a game takes both away.
  */
 class LibraryState(private val prefs: PrefsStore, private val port: PortState, private val player: PlayerState,
-                   private val portsDir: File, private val workRoot: File) {
+                   private val portsDir: File, private val workRoot: File,
+                   private val cardPortsDirs: () -> List<File> = { emptyList() }) {
 
     var games by mutableStateOf(listOf<File>()); private set
 
     /** The finished port of a game this app ported (source path → pack); re-checked against the disk at every scan */
     var ports by mutableStateOf(mapOf<String, Ported>()); private set
+
+    /** 登记过的数据包路径（源文件 → 包）：卡不在时那个包够不着，路径还记得 */
+    private var lastPackPaths: Map<String, String> = HashMap()
+
+    /**
+     * 记住的包：源文件 → 路径与 title ID。
+     *
+     * 路径与 title ID 都要记：包被搬到卡上以后，原来那条路径没了，只有 title ID 能把它找回来
+     * （游戏文件的名字里未必有 title ID——下载器改过名的文件就没有）。
+     */
+    private var remembered: Map<String, Remembered> = HashMap()
+
+    /** 记住的一个包 */
+    private data class Remembered(val path: String, val title: String)
+
+    /** 正在搬移的游戏的源文件路径（搬移期间不能对它再动） */
+    private val moving = HashSet<String>()
 
     var scanning by mutableStateOf(false); private set
 
@@ -107,7 +126,18 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
         }
         try {
             val o = prefs.json(LIB_PORTS)
-            ports = o.keys().asSequence().mapNotNull { k -> FolderScanner.portFromPack(File(o.getString(k)))?.let { k to it } }.toMap()
+            ports = HashMap()
+            remembered = HashMap()
+            for (k in o.keys()) {
+                val v = o.get(k)
+                // 新格式：{"path": …, "title": …}；旧格式：一条路径
+                val path = if (v is JSONObject) v.optString("path") else v as? String ?: continue
+                val title = if (v is JSONObject) v.optString("title") else ""
+                if (path.isEmpty()) continue
+                remembered = remembered + (k to Remembered(path, title))
+                lastPackPaths = lastPackPaths + (k to path)
+                FolderScanner.portFromPack(File(path))?.let { ports = ports + (k to it) }
+            }
         } catch (e: Exception) {
         }
         try {
@@ -135,19 +165,76 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
     fun rescan() {
         scanning = true
         Thread {
+            val started = System.currentTimeMillis()
             val real = extras.map(::File).filter { it.isFile }
             var found = (if (FAKE_DATA) fakeGames() else emptyList()) + real
             found = found.distinctBy { it.absolutePath }.sortedBy { it.name.lowercase() }
-            val byTitle = FolderScanner.outIndex(portsDir)
-            val matched = HashMap(ports.filterKeys { name -> found.any { it.absolutePath == name } })
+            // 卡上的包先扫，私有的后扫：私有的那份优先（重建总是先落在那里，卡上那份可能是旧的）
+            val byTitle = HashMap<String, Ported>()
+            val byName = HashMap<String, Ported>()      // 按包名（档案派生，稳）也能找回它
+            for (d in cardPortsDirs()) {
+                val idx = FolderScanner.outIndex(d)
+                byTitle.putAll(idx)
+                idx.values.forEach { byName[it.pack.name] = it }
+            }
+            val own = FolderScanner.outIndex(portsDir)
+            byTitle.putAll(own)
+            own.values.forEach { byName[it.pack.name] = it }
+            val matched = HashMap<String, Ported>()
             for (f in found) {
-                val id = FolderScanner.titleIdIn(f.name) ?: continue
-                byTitle[id]?.let { matched[f.absolutePath] = it }
+                // 记住的那个包：路径还在就按它重新认（它可能刚被搬到卡上，路径变了）
+                val rem = remembered[f.absolutePath]
+                val fresh = rem?.let { FolderScanner.portFromPack(File(it.path)) }
+                if (fresh != null) {
+                    matched[f.absolutePath] = fresh
+                    continue
+                }
+                // 记住的那个不在了（它被搬到卡上了）：按包名在各个卷上找回它那份
+                val byPackName = rem?.let { byName[File(it.path).name] }
+                if (byPackName != null) {
+                    matched[f.absolutePath] = byPackName
+                    remembered = remembered + (f.absolutePath to Remembered(byPackName.pack.absolutePath, byPackName.titleId))
+                    continue
+                }
+                // 再按 title ID 找（游戏文件的名字里可能有）
+                val id = FolderScanner.titleIdIn(f.name) ?: rem?.title?.takeIf { it.isNotEmpty() }
+                id?.let { byTitle[it] }?.let { matched[f.absolutePath] = it }
             }
             games = found
             ports = matched
             scanning = false
+            savePorts()      // 找回的包换了地方：把它记下来
+            // 扫一遍要多久（多卷扫描不许变慢）：读清单 + stat，不读内容
+            android.util.Log.i("nx2a", "library scan: ${System.currentTimeMillis() - started} ms, " +
+                    "${byTitle.size} packs on ${portsDirs().size} volumes")
         }.start()
+    }
+
+    /** 端口目录：私有的一个，加上插着的可移动卡上的那些 */
+    fun portsDirs(): List<File> = listOf(portsDir) + cardPortsDirs()
+
+    /** App 私有存储里那个端口目录（包都在这儿，除非玩家把它搬到了卡上） */
+    fun internalPortsDir(): File = portsDir
+
+    /** 这个游戏的包现在在哪：私有的目录，还是卡上那个（重建跟着它走） */
+    fun packDirOf(f: File): File? = portOf(f)?.pack?.parentFile
+
+    /** 这个游戏在各个卷上的数据包（每个卷可能各有一份） */
+    fun packsOf(f: File): List<File> {
+        val id = titleIdOf(f)
+        // 不知道 title ID（下载器改过名的文件），就只认「记住的那个包」：
+        // 认不出就是认不出，不能把别的游戏的包算成这个游戏的（删游戏时会把它们一起删掉）
+        if (id.isNullOrEmpty()) return listOfNotNull(portOf(f)?.pack)
+        val out = ArrayList<File>()
+        for (d in portsDirs()) {
+            for (p in d.listFiles() ?: emptyArray()) {
+                if (!p.isDirectory || !p.name.endsWith("-data")) continue
+                val pid = FolderScanner.manifestTitleId(p) ?: continue
+                if (!pid.equals(id, ignoreCase = true)) continue
+                out += p
+            }
+        }
+        return out
     }
 
     fun statusOf(f: File): GameStatus {
@@ -178,14 +265,18 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
     fun remove(f: File): GameCleanup.Result {
         removalBlocked(f)?.let { return GameCleanup.Result(it) }
         val plan = planRemoval(f)
+        // 卡不在时够不着的包：先算出来（forget 之后那条登记就没了）
+        val unreachable = unreachablePacks(f)
         val result = GameCleanup.delete(plan)
         // 登记最后摘：删到一半被系统打断，游戏还在库里，玩家可以再删一次
         // 有东西没删掉时也留着登记：那点残留还在库里管得到，不至于变成没人管的孤儿
-        if (result.failed.isEmpty()) forget(f)
+        val clean = result.failed.isEmpty() && unreachable.isEmpty()
+        if (clean) forget(f)
         return GameCleanup.Result(
-            outcome = if (result.failed.isEmpty()) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
+            outcome = if (clean) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
             workspaceKnown = plan.workspaceKnown,
-            failed = result.failed,
+            // 卡不在时，卡上的那份够不着：不能当成删干净了
+            failed = result.failed + unreachable,
         )
     }
 
@@ -212,18 +303,67 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
 
     /** 删除前先看看要删什么（界面在 IO 线程上调它）：数据包 + 工作区 + 半成品包 */
     fun planRemoval(f: File): GameCleanup.Plan {
-        val pack = portOf(f)
-        return GameCleanup.plan(titleIdOf(f), pack?.pack, workRoot, portsDir,
-            keepPartials = port.running)
+        val packs = packsOf(f)
+        return GameCleanup.plan(titleIdOf(f), packs, workRoot, portsDirs(), keepPartials = port.running)
     }
 
     /** 清缓存前先看看要清什么：只有工作区与半成品包（数据包不碰） */
     fun planCache(f: File): GameCleanup.Plan =
-        GameCleanup.plan(titleIdOf(f), null, workRoot, portsDir, keepPartials = port.running)
+        GameCleanup.plan(titleIdOf(f), emptyList(), workRoot, portsDirs(), keepPartials = port.running)
 
-    /** 这个游戏的 title ID：文件名里的优先，没有就用数据包清单里的 */
+    /**
+     * 把一个游戏的包搬到另一个卷（可移动卡上 App 自己的目录），或者搬回来。
+     *
+     * 搬移的规矩在 PackMover 里：落位成功之后才删源包；失败时源包原地不动，游戏照常能玩。
+     * 搬移期间这个游戏不许再动（再搬一次或删掉它都会把那一次弄坏）。
+     *
+     * @param onProgress 进度回报（每抄完一个文件一次）：界面用它显示进度条
+     */
+    fun movePack(f: File, targetDir: File, onProgress: (PackMover.Progress) -> Unit = {}): PackMover.Result {
+        val pack = portOf(f)?.pack ?: return PackMover.Result.fail("the game has no pack")
+        if (f.absolutePath in moving) return PackMover.Result.fail("the pack is being moved already")
+        moving += f.absolutePath
+        try {
+            val r = PackMover.move(pack, targetDir, onProgress)
+            if (r.ok) {
+                val moved = File(targetDir, pack.name)
+                lastPackPaths = lastPackPaths + (f.absolutePath to moved.absolutePath)
+                // 记住的那个包换了地方：登记跟着换（否则库认不到它）
+                FolderScanner.portFromPack(moved)?.let {
+                    remembered = remembered + (f.absolutePath to Remembered(moved.absolutePath, it.titleId))
+                    ports = ports + (f.absolutePath to it)
+                }
+                savePorts()
+                rescan()
+            }
+            return r
+        } finally {
+            moving -= f.absolutePath
+        }
+    }
+
+    /** 这个游戏现在能不能搬它的数据包：正在构建 / 正在运行 / 正在搬都不能（返回原因），能搬返回 null */
+    fun moveBlocked(f: File): GameCleanup.Outcome? =
+        LibraryLogic.moveBlocked(
+            portRunning = port.running, portGameFile = port.gameFile, gamePath = f.absolutePath,
+            playerRunning = player.running, playerTitleId = player.titleId, titleId = titleIdOf(f),
+            moving = f.absolutePath in moving)
+
+    /** 卡不在时够不着的包：路径还记得，那个卷却不在了（删不到，要说实话） */
+    fun unreachablePacks(f: File): List<File> {
+        val path = lastPackPaths[f.absolutePath] ?: return emptyList()
+        val p = File(path)
+        if (p.exists()) return emptyList()
+        val root = FolderScanner.volumeRootOf(p) ?: return emptyList()
+        if (root.isDirectory) return emptyList()   // 卷在着，只是这个包没了（玩家自己删的）
+        return listOf(p)
+    }
+
+    /** 这个游戏的 title ID：文件名里的优先，没有就用数据包清单里的；包够不着时用记住的那个 */
     private fun titleIdOf(f: File): String? =
-        FolderScanner.titleIdIn(f.name) ?: portOf(f)?.titleId?.takeIf { it.isNotEmpty() }
+        FolderScanner.titleIdIn(f.name)
+            ?: portOf(f)?.titleId?.takeIf { it.isNotEmpty() }
+            ?: remembered[f.absolutePath]?.title?.takeIf { it.isNotEmpty() }
 
     /** 忘记一个游戏：它不再在库里登记，也不再有产物的登记 */
     private fun forget(f: File) {
@@ -232,17 +372,32 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
         for (p in extras) a.put(p)
         prefs.putArray(LIB_EXTRA, a)
         ports = ports - f.absolutePath
-        prefs.putJson(LIB_PORTS, JSONObject(ports.mapValues { it.value.pack.absolutePath }))
+        remembered = remembered - f.absolutePath
+        lastPackPaths = lastPackPaths - f.absolutePath
+        savePorts()      // 剩下的那些按新格式写回去（路径 + title ID）
         rescan()
     }
 
     /** A port came out done: the source and its data pack stay together */
     fun noteDone(source: String, pack: String) {
         if (source.isEmpty() || pack.isEmpty()) return
+        lastPackPaths = lastPackPaths + (source to pack)
         FolderScanner.portFromPack(File(pack))?.let {
+            remembered = remembered + (source to Remembered(pack, it.titleId))
             ports = ports + (source to it)
-            prefs.putJson(LIB_PORTS, JSONObject(ports.mapValues { p -> p.value.pack.absolutePath }))
+            savePorts()
         }
+    }
+
+    /** 把记住的那些包写回去：路径与 title ID 一起（包被搬走后，靠 title ID 或包名把它找回来） */
+    private fun savePorts() {
+        val o = JSONObject()
+        for ((source, rem) in remembered) {
+            o.put(source, JSONObject()
+                .put("path", rem.path)
+                .put("title", ports[source]?.titleId ?: rem.title))
+        }
+        prefs.putJson(LIB_PORTS, o)
     }
 
     /** The port options a game carries: its own, or the old app's globals as the defaults */

@@ -29,7 +29,7 @@ class GameCleanupTest {
         val ws = t.workspace("0100000000010000")
         val partial = t.pack("Other-data.partial")
 
-        val plan = GameCleanup.plan("0100000000010000", pack, t.work, t.ports, keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = false)
 
         assertEquals(3, plan.targets.size)
         assertTrue(plan.workspaceKnown)
@@ -48,7 +48,7 @@ class GameCleanupTest {
         val partial = t.pack("Game-data.partial")
         t.file(pack, "romfs.bin", 1024)
 
-        val plan = GameCleanup.plan("0100000000010000", pack, t.work, t.ports, keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = false)
         val result = GameCleanup.delete(plan)
 
         assertTrue(result.failed.isEmpty())
@@ -64,7 +64,7 @@ class GameCleanupTest {
         val partial = t.pack("Game-data.partial")
         val pack = t.pack("Game-data")
 
-        val plan = GameCleanup.plan("0100000000010000", pack, t.work, t.ports, keepPartials = true)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = true)
         GameCleanup.delete(plan)
 
         assertTrue(partial.exists())    // 另一个构建正在写它，不能删
@@ -79,7 +79,7 @@ class GameCleanupTest {
         val ws = t.workspace("0100000000010000")
         val partial = t.pack("Game-data.partial")
 
-        val plan = GameCleanup.plan("0100000000010000", null, t.work, t.ports, keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", emptyList(), t.work, listOf(t.ports), keepPartials = false)
         assertFalse(plan.targets.any { it.kind == GameCleanup.Kind.PACK })
         GameCleanup.delete(plan)
 
@@ -91,7 +91,7 @@ class GameCleanupTest {
     @Test
     fun `a file name without a title ID leaves the workspace unknown`() {
         val t = Tree()
-        val plan = GameCleanup.plan(null, null, t.work, t.ports, keepPartials = false)
+        val plan = GameCleanup.plan(null, emptyList(), t.work, listOf(t.ports), keepPartials = false)
         assertFalse(plan.workspaceKnown)
         assertTrue(plan.targets.isEmpty())
     }
@@ -102,5 +102,24 @@ class GameCleanupTest {
         assertEquals(File(t.work, "0100000000010000_build"),
                      GameCleanup.workspaceOf("0100000000010000", t.work))
         assertEquals(null, GameCleanup.workspaceOf(null, t.work))
+    }
+
+    /** 多个卷：私有的与卡上的包一起删，卡上搬了一半留下的半成品也清 */
+    @Test
+    fun `the packs on every volume go with the game`() {
+        val t = Tree()
+        val card = File(t.root, "card/ports").apply { mkdirs() }
+        val private = t.pack("Game-data")
+        val onCard = File(card, "Game-data").apply { mkdirs() }
+        val cardPartial = File(card, "Game-data.partial").apply { mkdirs() }
+
+        val plan = GameCleanup.plan("0100000000010000", listOf(private, onCard), t.work,
+                                    listOf(t.ports, card), keepPartials = false)
+        assertEquals(3, plan.targets.size)      // 两个包 + 卡上的半成品
+        GameCleanup.delete(plan)
+
+        assertFalse(private.exists())
+        assertFalse(onCard.exists())
+        assertFalse(cardPartial.exists())
     }
 }

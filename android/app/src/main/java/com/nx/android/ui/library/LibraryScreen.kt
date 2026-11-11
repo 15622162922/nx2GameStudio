@@ -32,8 +32,10 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.outlined.VideogameAsset
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +56,7 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -63,7 +66,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
@@ -77,10 +82,12 @@ import com.nx.android.data.GameLog
 import com.nx.android.data.Player
 import com.nx.android.data.SaveBackup
 import com.nx.android.data.SaveShare
+import com.nx.android.data.StorageVolumes
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.PackEnv
+import com.nx.android.domain.PackMover
 import com.nx.android.domain.Ported
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
@@ -90,7 +97,6 @@ import com.nx.android.ui.components.PickerMode
 import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.PickRow
 import com.nx.android.ui.components.QuietButton
-import com.nx.android.ui.components.Section
 import com.nx.android.ui.components.StatusDot
 import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.NxPalette
@@ -183,12 +189,31 @@ private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
         if (visible.isEmpty()) {
-            // 空态：只有一句提示，没有按钮——加游戏的路只有构建页那一条
-            Spacer(Modifier.weight(1f))
-            Section(stringResource(R.string.lib_empty_title)) {
-                Text(stringResource(R.string.lib_empty_hint), style = MaterialTheme.typography.bodyMedium)
+            // 空态：架子上的几个空位、一句提示、支持的格式。没有按钮——加游戏的路只有构建页那一条
+            // 竖着放不下（横屏）时也能滚
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    EmptyShelf()
+                    Spacer(Modifier.height(26.dp))
+                    Text(
+                        stringResource(R.string.lib_empty_title),
+                        style = MaterialTheme.typography.displaySmall,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.lib_empty_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(max = 340.dp),
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (f in EMPTY_FORMATS) FormatChip(f)
+                    }
+                }
             }
-            Spacer(Modifier.weight(1f))
             return@Column
         }
         Spacer(Modifier.height(10.dp))
@@ -233,6 +258,66 @@ internal fun HeroBackground(lib: LibraryState, port: PortState, sel: File?) {
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color(0xEE0E0E0F), 0.65f to Color(0x220E0E0F))))
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to NxPalette.Background)))
     }
+}
+
+/**
+ * 空态的插画：架子上几个还没放上游戏的空位。
+ *
+ * 中间那张大一些、上面有一个手柄，两边两张小一点、暗一点、歪一点——看着像架子上的空位，
+ * 而不是一张贴纸。底下垫一圈极淡的品牌橙光晕，纯黑的底不至于发闷。
+ */
+@Composable
+private fun EmptyShelf() {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(230.dp)) {
+        Box(
+            Modifier.size(210.dp).background(
+                Brush.radialGradient(listOf(NxPalette.Brand.copy(alpha = 0.15f), Color.Transparent))
+            )
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            EmptyCard(62.dp, -11f, 0.45f)
+            EmptyCard(94.dp, 0f, 1f, icon = true)
+            EmptyCard(62.dp, 11f, 0.45f)
+        }
+    }
+}
+
+/** 空位卡：和真的游戏瓦片一个形状（14dp 圆角），只是没有封面，只有暗底与细描边 */
+@Composable
+private fun EmptyCard(size: Dp, tilt: Float, alpha: Float, icon: Boolean = false) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        Modifier
+            .size(size)
+            .rotate(tilt)
+            .alpha(alpha)
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0xFF26262A), Color(0xFF16161A))))
+            .border(1.dp, NxPalette.Unbuilt.copy(alpha = 0.35f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon) {
+            Icon(Icons.Outlined.VideogameAsset, null, Modifier.size(34.dp),
+                 tint = NxPalette.Cream.copy(alpha = 0.30f))
+        }
+    }
+}
+
+/** 空态里的格式徽章：文件后缀是技术记号，两种语言里都是这四个 */
+private val EMPTY_FORMATS = listOf("NSP", "XCI", "NSZ", "XCZ")
+
+@Composable
+private fun FormatChip(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 /** 横向瓦片行：选中的放大（88 → 128），状态点跟着瓦片走 */
@@ -379,8 +464,9 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
  */
 private enum class Removal { CACHE, DELETE }
 
-/** 一次破坏性动作的请求：做什么、要删哪些东西 */
-private data class RemovalRequest(val kind: Removal, val plan: GameCleanup.Plan)
+/** 一次破坏性动作的请求：做什么、要删哪些东西、哪些够不着（卡不在时） */
+private data class RemovalRequest(val kind: Removal, val plan: GameCleanup.Plan,
+                                  val unreachable: List<File> = emptyList())
 
 /**
  * 移植配置面板：文件路径、状态与该游戏自己的选项，开始移植与安装也从这里走。
@@ -391,7 +477,6 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         f: File, actions: AppActions, onGoBuilds: () -> Unit,
                         onRequest: (PickerRequest) -> Unit, onClose: () -> Unit) {
     val locale = LocalAppLocale.current
-    BackHandler { onClose() }
     val status = lib.statusOf(f)
     // Title ID：文件名里的优先，没有就用数据包清单里的
     val titleId = FolderScanner.titleIdIn(f.name)
@@ -400,8 +485,25 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     var removal by remember { mutableStateOf<RemovalRequest?>(null) }
+    // 可移动卡（SD 卡）上 App 自己的端口目录：插着才有
+    val cardDirs = remember { StorageVolumes.removablePortsDirs(context) }
+    // 搬移：等玩家确认的目标目录（null = 没有要搬的）
+    var moveTarget by remember { mutableStateOf<File?>(null) }
+    var choosingVolume by remember { mutableStateOf(false) }
+    var moving by remember { mutableStateOf(false) }
+    // 搬移进度：卡上写入很慢，玩家要看得见还在动
+    var moveProgress by remember { mutableStateOf<PackMover.Progress?>(null) }
+    // 删除/清缓存正在进行（遮罩挡着，不让乱点）
+    var removing by remember { mutableStateOf(false) }
+    // 正在搬移/删除时：返回键不做事（别把进行中的动作打断，面板也别关）
+    BackHandler(enabled = moving || removing) { }
+    BackHandler(enabled = !(moving || removing)) { onClose() }
     // 完成的移植：数据包里带着宿主写的运行日志（log.txt）
     val ported = lib.portOf(f)
+    // 这个游戏的包现在在哪：私有目录，还是卡上
+    val packOnCard = ported?.pack?.parentFile?.let { p ->
+        cardDirs.firstOrNull { it.second.absolutePath == p.absolutePath }
+    }
     // 数据包里的存档（packs 的 saves/）：删包时它们会一起消失
     val packHasSaves = ported?.let {
         val s = File(it.pack, "saves")
@@ -422,7 +524,9 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
             val p = withContext(Dispatchers.IO) {
                 if (kind == Removal.CACHE) lib.planCache(f) else lib.planRemoval(f)
             }
-            removal = RemovalRequest(kind, p)
+            // 卡不在时够不着的包：先说清楚（不然玩家以为全删干净了）
+            val unreachable = withContext(Dispatchers.IO) { lib.unreachablePacks(f) }
+            removal = RemovalRequest(kind, p, unreachable)
         }
     }
 
@@ -430,10 +534,12 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     fun doRemoval() {
         val req = removal ?: return
         removal = null
+        removing = true
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 if (req.kind == Removal.CACHE) lib.clearCache(f) else lib.remove(f)
             }
+            removing = false
             actions.onToast(
                 when (r.outcome) {
                     GameCleanup.Outcome.DONE -> {
@@ -447,11 +553,55 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                             if (req.kind == Removal.CACHE) R.string.lib_remove_cache_workspace_unknown
                             else R.string.lib_remove_workspace_unknown)
                     }
-                    GameCleanup.Outcome.FAILED ->
-                        locale.str(R.string.lib_remove_failed_files, r.failed.joinToString { it.name })
+                    GameCleanup.Outcome.FAILED -> {
+                        // 卡上那份够不着：说清楚是卡上的那一份没删成（不能只说「删除失败」）
+                        val onCard = r.failed.filter { it.absolutePath.startsWith("/storage/") &&
+                                                       !it.absolutePath.startsWith("/storage/emulated") }
+                        if (onCard.isNotEmpty())
+                            locale.str(R.string.lib_remove_failed_card, onCard.joinToString { it.absolutePath })
+                        else
+                            locale.str(R.string.lib_remove_failed_files, r.failed.joinToString { it.name })
+                    }
                     GameCleanup.Outcome.BUSY_PORTING -> locale.str(R.string.lib_remove_busy_porting)
                     GameCleanup.Outcome.BUSY_RUNNING -> locale.str(R.string.lib_remove_busy_running)
+                    GameCleanup.Outcome.BUSY_MOVING -> locale.str(R.string.lib_pack_busy_moving)
                 }
+            )
+        }
+    }
+
+    /**
+     * 搬移数据包：到可移动卡上，或者搬回内部存储。
+     *
+     * 正在构建 / 正在运行 / 正在搬都不能搬（说清楚为什么）；没有卡时那个动作不可用。
+     * 搬完之前要确认：卡上写入很慢，拔卡就把这次搬移弄坏了。
+     */
+    fun askMove() {
+        val blocked = lib.moveBlocked(f)
+        if (blocked != null) {
+            actions.onToast(locale.str(removeBlockedText(blocked)))
+            return
+        }
+        when {
+            packOnCard != null -> moveTarget = lib.internalPortsDir()          // 搬回内部存储
+            cardDirs.isEmpty() -> actions.onToast(locale.str(R.string.lib_pack_no_card))
+            cardDirs.size == 1 -> moveTarget = cardDirs[0].second
+            else -> choosingVolume = true                                       // 多张卡：先问哪一张
+        }
+    }
+
+    /** 确认之后真的搬（后台线程，卡上写入很慢） */
+    fun doMove(target: File) {
+        moveTarget = null
+        moving = true
+        moveProgress = null
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { lib.movePack(f, target) { moveProgress = it } }
+            moving = false
+            moveProgress = null
+            actions.onToast(
+                if (r.ok) locale.str(R.string.lib_pack_moved)
+                else locale.str(R.string.lib_pack_move_failed, r.failure ?: "")
             )
         }
     }
@@ -537,6 +687,11 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                                     if (p == null) actions.onToast(locale.str(R.string.lib_artifact_missing))
                                     else shareGameLog(p)
                                 },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(locale.str(if (packOnCard != null) R.string.lib_pack_move_back else R.string.lib_pack_move_to_card)) },
+                                leadingIcon = { Icon(Icons.Filled.SdCard, null, Modifier.size(18.dp)) },
+                                onClick = { menuOpen = false; askMove() },
                             )
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text(locale.str(R.string.lib_remove_cache_action)) },
@@ -626,6 +781,57 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
         }
     }
 
+    // 搬移的确认框：写明后果（拔卡后不能玩、卸载会连同删掉它）
+    moveTarget?.let { target ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { moveTarget = null },
+            title = { Text(locale.str(if (packOnCard != null) R.string.lib_pack_move_back_title else R.string.lib_pack_move_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        locale.str(if (packOnCard != null) R.string.lib_pack_move_back_text else R.string.lib_pack_move_text),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text("· ${target.absolutePath}", style = MaterialTheme.typography.bodySmall,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { doMove(target) }) {
+                    Text(locale.str(R.string.lib_pack_move_confirm))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { moveTarget = null }) {
+                    Text(locale.str(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
+    // 多张卡：问搬到哪一张
+    if (choosingVolume) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { choosingVolume = false },
+            title = { Text(locale.str(R.string.lib_pack_choose_volume_title)) },
+            text = {
+                Column {
+                    cardDirs.forEach { (name, dir) ->
+                        androidx.compose.material3.TextButton(
+                            onClick = { choosingVolume = false; moveTarget = dir },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(name) }
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { choosingVolume = false }) {
+                    Text(locale.str(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
     removal?.let { req ->
         // 要删的东西，一样一行：数据包（带存档）、工作区、半成品包
         val items = req.plan.targets.map { t ->
@@ -660,6 +866,16 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         Text("· $it", style = MaterialTheme.typography.bodySmall,
                              color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    // 卡不在：卡上那份这次删不到，先说清楚
+                    if (req.unreachable.isNotEmpty()) {
+                        Text(locale.str(R.string.lib_remove_unreachable_card),
+                             style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        req.unreachable.forEach {
+                            Text("· ${it.absolutePath}", style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -675,12 +891,54 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
             },
         )
     }
+
+    // 全屏遮罩：搬移/删除进行中挡住整个屏幕——这些动作要一分钟上下，不能让人乱点
+    if (moving || removing) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xCC0E0E0F))
+                .clickable(enabled = false) {},   // 吃掉所有点击：下面那些按钮都按不到
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (moving) {
+                    val p = moveProgress
+                    if (p != null) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { p.fraction },
+                            modifier = Modifier.width(220.dp),
+                        )
+                    } else {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                    Text(locale.str(R.string.lib_pack_moving),
+                         style = MaterialTheme.typography.bodyMedium)
+                    // 已搬多少 / 一共多少
+                    p?.let {
+                        Text(locale.str(R.string.lib_pack_move_progress,
+                                        sizeText(it.bytes), sizeText(it.totalBytes)),
+                             style = MaterialTheme.typography.bodySmall,
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    androidx.compose.material3.CircularProgressIndicator()
+                    Text(locale.str(R.string.lib_cleanup_working),
+                         style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
 }
 
 /** 删不了的时候说清楚为什么 */
 private fun removeBlockedText(outcome: GameCleanup.Outcome): Int = when (outcome) {
     GameCleanup.Outcome.BUSY_PORTING -> R.string.lib_remove_busy_porting
     GameCleanup.Outcome.BUSY_RUNNING -> R.string.lib_remove_busy_running
+    GameCleanup.Outcome.BUSY_MOVING -> R.string.lib_pack_busy_moving
     else -> R.string.lib_remove_failed
 }
 

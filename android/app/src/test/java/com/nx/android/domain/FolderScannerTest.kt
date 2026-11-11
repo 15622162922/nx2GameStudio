@@ -123,4 +123,51 @@ class FolderScannerTest {
         assertEquals("", FolderScanner.outIndex(out)["0100000000010000"]!!.display)
         out.deleteRecursively()
     }
+
+    /** 多个卷：每个卷各扫一遍；同一个 title 在两个卷上都有时，私有目录那份说了算 */
+    @Test
+    fun `every volume is indexed and the private one wins`() {
+        val private = tmpDir()
+        val card = tmpDir()
+        fun pack(dir: File, titleId: String, name: String): File {
+            val p = File(dir, "$titleId-data")
+            File(p, "host").mkdirs()
+            File(p, "nx2a-data.json").writeText("""{"title_id":"$titleId","name":"$name"}""")
+            File(p, "host/libdmplay.so").writeText("ELF")
+            return p
+        }
+        val onCard = pack(card, "0100000000010000", "The card one")
+        val onPrivate = pack(private, "0100000000010000", "The private one")
+        pack(card, "0100000000020000", "Only on the card")
+
+        val byTitle = HashMap<String, com.nx.android.domain.Ported>()
+        byTitle.putAll(FolderScanner.outIndex(card))
+        byTitle.putAll(FolderScanner.outIndex(private))   // 私有目录后扫：它优先
+
+        assertEquals(2, byTitle.size)
+        assertEquals("The private one", byTitle["0100000000010000"]!!.name)
+        assertEquals(onPrivate, byTitle["0100000000010000"]!!.pack)
+        assertEquals(onCard, FolderScanner.outIndex(card)["0100000000010000"]!!.pack)
+        assertEquals("Only on the card", byTitle["0100000000020000"]!!.name)
+    }
+
+    /** 卡不在时，那个卷的路径还记得，但卷的根不在了——删游戏时要说实话 */
+    @Test
+    fun `the volume root of a path on a card is the card itself`() {
+        assertEquals(File("/storage/FB9A-DC19"),
+                     FolderScanner.volumeRootOf(File("/storage/FB9A-DC19/Android/data/com.nx.android/files/ports/Game-data")))
+        assertNull(FolderScanner.volumeRootOf(File("/data/user/0/com.nx.android/files/ports/Game-data")))
+    }
+
+    /** 清单里的 title ID：宿主没了也要认（删包时那个包可能已经缺了宿主） */
+    @Test
+    fun `the manifest's title id is read without the host`() {
+        val out = tmpDir()
+        val pack = File(out, "Game-data").apply { mkdirs() }
+        File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
+
+        assertEquals("0100000000010000", FolderScanner.manifestTitleId(pack))
+        assertNull(FolderScanner.manifestTitleId(File(out, "nothing")))
+        out.deleteRecursively()
+    }
 }

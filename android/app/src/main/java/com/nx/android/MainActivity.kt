@@ -89,8 +89,10 @@ class MainActivity : ComponentActivity() {
         onStartPort = { file, cfg ->
             // 没有「所有文件访问」权限就读不到游戏文件（重装 App 后会掉）：移植会死在半个 Python 栈里，先说清楚
             if (file.canRead()) {
+                // 落位跟着这个游戏的数据包走：它在可移动卡上，新包就建在那儿（内部存储的那份不动）
+                val packDir = container.library.packDirOf(file)?.absolutePath
                 PortService.start(this, file.absolutePath, container.prefs.keys,
-                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom)
+                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom, packDir)
             } else {
                 toast(locale.str(R.string.builds_needs_storage)); askStorage()
             }

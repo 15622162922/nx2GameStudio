@@ -17,10 +17,11 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         gameFile: String, keys: String,
         touch: Boolean, fps60: Boolean, experimental: Boolean,
         aliasHeadroom: Int,
+        packDir: String? = null,
         onEnd: () -> Unit,
     ): Thread {
         val args = portArgs(gameFile, keys, touch, fps60, experimental, aliasHeadroom, !BuildConfig.NX_LSFG)
-        return start(args, onEnd)
+        return start(args, onEnd, if (packDir.isNullOrBlank()) emptyMap() else mapOf("NX2A_PACK_DIR" to packDir))
     }
 
     companion object {
@@ -70,10 +71,10 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         return t
     }
 
-    private fun start(args: List<String>, onEnd: () -> Unit): Thread {
+    private fun start(args: List<String>, onEnd: () -> Unit, extra: Map<String, String> = emptyMap()): Thread {
         val t = Thread {
             try {
-                val p = env.guest(args)
+                val p = env.guest(args, extra = extra)
                 proc = p
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)

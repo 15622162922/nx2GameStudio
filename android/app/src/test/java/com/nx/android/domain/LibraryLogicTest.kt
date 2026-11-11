@@ -1,6 +1,7 @@
 package com.nx.android.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.File
 
@@ -115,5 +116,27 @@ class LibraryLogicTest {
         assertEquals(RunAction.START,
                      LibraryLogic.runAction(running = false, runningTitleId = "",
                                            portTitleId = "0100000000010000", processAlive = true))
+    }
+
+    /** 搬移：正在构建 / 正在运行 / 正在搬，都不能搬 */
+    @Test
+    fun `a pack cannot be moved while the game is busy`() {
+        val path = "/games/Game [0100000000010000].nsp"
+        assertEquals(GameCleanup.Outcome.BUSY_MOVING,
+                     LibraryLogic.moveBlocked(portRunning = false, portGameFile = "", gamePath = path,
+                                             playerRunning = false, playerTitleId = "",
+                                             titleId = "0100000000010000", moving = true))
+        assertEquals(GameCleanup.Outcome.BUSY_PORTING,
+                     LibraryLogic.moveBlocked(portRunning = true, portGameFile = path, gamePath = path,
+                                             playerRunning = false, playerTitleId = "",
+                                             titleId = "0100000000010000", moving = false))
+        assertEquals(GameCleanup.Outcome.BUSY_RUNNING,
+                     LibraryLogic.moveBlocked(portRunning = false, portGameFile = "", gamePath = path,
+                                             playerRunning = true, playerTitleId = "0100000000010000",
+                                             titleId = "0100000000010000", moving = false))
+        assertNull(
+            LibraryLogic.moveBlocked(portRunning = false, portGameFile = "", gamePath = path,
+                                     playerRunning = false, playerTitleId = "",
+                                     titleId = "0100000000010000", moving = false))
     }
 }

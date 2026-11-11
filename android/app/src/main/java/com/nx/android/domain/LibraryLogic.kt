@@ -44,6 +44,21 @@ object LibraryLogic {
             GameCleanup.Outcome.BUSY_RUNNING
         else -> null
     }
+
+    /**
+     * 这个游戏现在能不能搬它的数据包：正在构建、正在运行、正在搬，都不能搬——返回原因；能搬返回 null。
+     *
+     * 搬移期间这个游戏的包正在被写：再搬一次或删掉它，都会把那次搬移弄坏。
+     */
+    fun moveBlocked(portRunning: Boolean, portGameFile: String, gamePath: String,
+                    playerRunning: Boolean, playerTitleId: String, titleId: String?,
+                    moving: Boolean): GameCleanup.Outcome? = when {
+        moving -> GameCleanup.Outcome.BUSY_MOVING
+        portRunning && portGameFile == gamePath -> GameCleanup.Outcome.BUSY_PORTING
+        playerRunning && titleId != null && playerTitleId.equals(titleId, ignoreCase = true) ->
+            GameCleanup.Outcome.BUSY_RUNNING
+        else -> null
+    }
 }
 
 /** 点「运行」的走法：回到前台，还是全新启动 */

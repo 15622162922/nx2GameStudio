@@ -53,6 +53,30 @@ object FolderScanner {
     }
 
     /**
+     * The title ID in a pack's manifest (the manifest alone: the host may be gone, and a pack without a host
+     * is still a pack that has to be deleted).
+     */
+    fun manifestTitleId(pack: File): String? = try {
+        org.json.JSONObject(File(pack, "nx2a-data.json").readText())
+            .optString("title_id").takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * The volume a path is on: `/storage/<卷 ID>/…` → `/storage/<卷 ID>`（the removable card's root）。
+     * The card is gone when that folder is not there.
+     */
+    fun volumeRootOf(path: File): File? {
+        val p = path.absolutePath
+        if (!p.startsWith("/storage/")) return null
+        val rest = p.removePrefix("/storage/")
+        val id = rest.substringBefore('/')
+        if (id.isEmpty()) return null
+        return File("/storage/$id")
+    }
+
+    /**
      * The game's label: the name the data pack's manifest holds - the game's own name - or the file's
      * name without its brackets when there is no pack yet or the pack carries no name (an old pack).
      */

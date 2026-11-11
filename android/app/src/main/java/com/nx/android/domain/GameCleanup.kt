@@ -11,8 +11,8 @@ import java.util.Locale
  */
 object GameCleanup {
 
-    /** 删除一个游戏的结果：删掉了、被拒（正在构建 / 正在运行）、失败 */
-    enum class Outcome { DONE, BUSY_PORTING, BUSY_RUNNING, FAILED }
+    /** 删除一个游戏的结果：删掉了、被拒（正在构建 / 正在运行 / 正在搬移）、失败 */
+    enum class Outcome { DONE, BUSY_PORTING, BUSY_RUNNING, BUSY_MOVING, FAILED }
 
     data class Result(
         val outcome: Outcome,
@@ -46,15 +46,15 @@ object GameCleanup {
      * 这个游戏要删的东西。
      *
      * @param titleId 这个游戏的 title ID（文件名里的，或数据包清单里的）；null = 不知道工作区在哪
-     * @param pack 已完成的数据包（没有就是 null）
+     * @param packs 这个游戏已完成的数据包（每个卷上可能各有一份：私有的、可移动卡上的）
      * @param keepPartials 留着半成品包：另一个构建正在写它，删了就把那次构建杀了
      */
-    fun plan(titleId: String?, pack: File?, workRoot: File, portsDir: File,
+    fun plan(titleId: String?, packs: List<File>, workRoot: File, portsDirs: List<File>,
              keepPartials: Boolean): Plan {
         val targets = ArrayList<Target>()
-        pack?.takeIf { it.exists() }?.let { targets += Target(it, Kind.PACK) }
+        packs.filter { it.exists() }.forEach { targets += Target(it, Kind.PACK) }
         workspaceOf(titleId, workRoot)?.takeIf { it.exists() }?.let { targets += Target(it, Kind.WORKSPACE) }
-        if (!keepPartials) partials(portsDir).forEach { targets += Target(it, Kind.PARTIAL) }
+        if (!keepPartials) portsDirs.forEach { d -> partials(d).forEach { targets += Target(it, Kind.PARTIAL) } }
         return Plan(targets, workspaceKnown = titleId != null)
     }
 
