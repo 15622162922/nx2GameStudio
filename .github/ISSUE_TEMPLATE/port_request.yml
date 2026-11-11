@@ -1,0 +1,91 @@
+name: Port request
+description: A game does not run yet — tell us where it stops.
+title: "[Port]: "
+labels: ["port request"]
+body:
+  - type: markdown
+    value: |
+      A game is not on Android yet, or it stops somewhere. This is the request that gets it onto the list.
+
+      Some games cannot be ported at all: one whose own `main` renders with Vulkan or OpenGL (the Android
+      host replays NVN only), or one whose shaders can only be produced by running the game on a computer.
+      `python3 -m porter inspect "<game folder>"` says which is which, in one command.
+
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      placeholder: "OCTOPATH TRAVELER 0"
+    validations:
+      required: true
+
+  - type: input
+    id: title-id
+    attributes:
+      label: Title ID
+      description: "The base game's title ID, in the form 0100000000010000."
+      placeholder: "01005270232F2000"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: state
+    attributes:
+      label: Where it stops
+      options:
+        - Black screen
+        - Crash (the app closes)
+        - Freeze or hang
+        - Stops at a loading screen
+        - Starts and runs, but the graphics are wrong
+        - Starts and runs, but the game itself misbehaves
+        - The port refuses it (the tool says the game is not supported)
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did, and what happened
+      description: "Where in the game it stops, what you pressed, how long it took. The port's own options (Touch game, 60 fps, Experimental port) are worth trying too — say which you used."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: "The app's log (the game's drawer → log → share) or the port's stage logs. Redact anything that belongs to your keys or your game files. Lines starting with `[RED]` mark something unimplemented or wrong — those are the useful ones."
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: "The phone or tablet, with the GPU."
+      placeholder: "Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830, Android 16)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: inspect
+    attributes:
+      label: "Output of `python3 -m porter inspect \"<game folder>\"`"
+      description: "If you could run it, paste the output here. It says whether the game can be ported.
+"
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: I own this game's files and my own `prod.keys`, and neither is attached here.
+          required: true
+        - label: My name may be credited next to this game if the port lands.
+          required: false

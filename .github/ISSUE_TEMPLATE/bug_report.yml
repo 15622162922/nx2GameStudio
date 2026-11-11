@@ -1,0 +1,73 @@
+name: Bug report
+description: Something in the app, the tool or the runtime misbehaves.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - The phone app (library, settings, onboarding, save manager)
+        - The phone app's in-game overlay (gamepad, pause menu, frame generation)
+        - The port (the tool that makes the data pack)
+        - The runtime (the game itself: rendering, input, audio, saves)
+        - A game profile (one game's own data)
+        - The build or the release
+        - The documentation
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The app version, the tool version, or the release tag."
+      placeholder: "0.3.0-alpha05"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: "The phone or tablet, with the GPU and the Android version."
+      placeholder: "Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830, Android 16)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: "What you did, what you expected, what happened instead. Numbered steps are best."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: "The app's log (the game's drawer → log → share, or the Settings tab's log), or the port's stage logs. Redact anything that belongs to your keys or your game files."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshot or video
+      render: markdown
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: I searched the existing issues for this one.
+          required: true
+        - label: No game file, key or data pack is attached here.
+          required: true

@@ -1,0 +1,105 @@
+name: Game report
+description: A game runs on your device — say so, with the numbers.
+title: "[Game]: "
+labels: ["game report"]
+body:
+  - type: markdown
+    value: |
+      A game runs for you. This is the report that puts a game on the list and tells the next person
+      whether it is worth their evening.
+
+      **A report is a contribution.** The game's checklist line gets your name on it, and the numbers you
+      give here are what the project measures with.
+
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      description: The game's name as it appears on the Switch.
+      placeholder: "AI: THE SOMNIUM FILES"
+    validations:
+      required: true
+
+  - type: input
+    id: title-id
+    attributes:
+      label: Title ID
+      description: "The base game's title ID, in the form 0100000000010000. It is in the file name of the game's NSP, or in the app's library entry."
+      placeholder: "010089B00D09C000"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: "The phone or tablet, with the GPU. Adreno (Snapdragon) and Xclipse (Exynos 2200+) run the games; Mali and PowerVR do not."
+      placeholder: "Lenovo Legion Y700 (Snapdragon 8 Elite, Adreno 830, Android 16)"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Game version
+      description: "The update or base version you played. The app's library entry shows it."
+      placeholder: "1.0.1"
+    validations:
+      required: true
+
+  - type: input
+    id: fps
+    attributes:
+      label: Frame rate
+      description: "What the frame rate counter showed, or what you measured. Steady, or where it drops?"
+      placeholder: "60 fps steady, drops to ~45 in the opening area"
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: The nx2androidX version you are running (the app's Settings tab, or the release you downloaded).
+      placeholder: "0.3.0-alpha05"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: state
+    attributes:
+      label: State
+      description: How far the game goes.
+      options:
+        - Plays from the title, all the way through
+        - Plays, but something is missing or wrong
+        - Starts and stops (crash, black screen, freeze)
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: "Anything else: what is wrong, what you tried, the on-screen gamepad's behavior, the audio, the save."
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: "A screenshot (drag it in), a log (the game's drawer → log → share), or a video link. The log is the most useful thing you can attach."
+      render: markdown
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: I own this game's files and my own `prod.keys`, and neither is attached here.
+          required: true
+        - label: My name may be credited next to this game (in the checklist, in the profile's header, in the release notes).
+          required: true

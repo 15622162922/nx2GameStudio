@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Porting help
+    url: https://github.com/zFitness/nx2androidX/discussions/categories/q-a
+    about: Stuck on a port, or a question that fits no template? Ask here.
+  - name: Show and tell
+    url: https://github.com/zFitness/nx2androidX/discussions/categories/show-and-tell
+    about: Your footage, your device, your frame rates. Show what runs.
+  - name: Ideas
+    url: https://github.com/zFitness/nx2androidX/discussions/categories/ideas
+    about: What the app should be able to do next.

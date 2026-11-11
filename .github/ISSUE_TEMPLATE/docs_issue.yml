@@ -1,0 +1,43 @@
+name: Documentation
+description: A document is wrong, missing or out of date.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: "The file and the section. A link to the exact line is best."
+      placeholder: "docs/PORTING_GUIDE.md, step 3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is wrong
+      options:
+        - It is wrong
+        - It is out of date
+        - It is missing
+        - It is hard to follow
+        - A translation is out of step with the English
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: Detail
+      description: "What it says now, and what it should say. If you already know the fix, say it here or open the pull request yourself — a docs fix needs no more than this."
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before sending
+      options:
+        - label: No game file, key or data pack is attached here.
+          required: true
