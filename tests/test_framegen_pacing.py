@@ -81,7 +81,7 @@ int main(void) {
             c = Path(tmp) / 'check.c'
             exe = Path(tmp) / 'check'
             c.write_text(harness, encoding='utf-8')
-            result = subprocess.run([cc, '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-pthread', str(c), '-o', str(exe)],
+            result = subprocess.run([cc, '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-pthread', str(c), '-lm', '-o', str(exe)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(exe)], capture_output=True, text=True)
@@ -160,7 +160,7 @@ int main(void) {
             exe = Path(tmp) / 'check'
             c.write_text(harness, encoding='utf-8')
             result = subprocess.run([cc, '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-pthread',
-                                     '-I', str(PACER_DIR.parent), str(c), str(PACER), '-o', str(exe)],
+                                     '-I', str(PACER_DIR.parent), str(c), str(PACER), '-lm', '-o', str(exe)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             result = subprocess.run([str(exe)], capture_output=True, text=True)
@@ -214,7 +214,7 @@ int vk_fg_images(void) { return FG_IMAGES; }   // the images per game frame (1 =
             fgc.write_text(fg, encoding='utf-8')
             for images in (1, 2):
                 result = subprocess.run([cc, '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-pthread',
-                                         f'-DFG_IMAGES={images}', str(c), str(fgc), '-o', str(exe)],
+                                         f'-DFG_IMAGES={images}', str(c), str(fgc), '-lm', '-o', str(exe)],
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 result = subprocess.run([str(exe)], capture_output=True, text=True)
