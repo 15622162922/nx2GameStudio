@@ -10,20 +10,15 @@
 #
 # The APK is the run's artifact (nx2android-android-apk), and a published release gets it as an asset named
 # after the version (nx2android-v0.3.0-alpha02.apk).
+#
+# Only a tag builds: a push of the branch builds nothing. The tag is pushed right before the release is made,
+# and the build waits for that release to appear before it attaches the APK to it.
 name: Android app
 
 on:
   workflow_dispatch:   # a build of the branch, kept as the run's artifact
   push:
-    branches: [android]
-    paths:
-      - 'android/**'
-      - 'packaging/android-apk/**'
-      - 'porter/**'
-      - 'nxnative/**'
-      - '.github/workflows/android-apk.yml'
-  release:
-    types: [published]
+    tags: ['v*']      # a tag only: a branch push builds nothing
 
 permissions:
   contents: write   # the release's assets (the APK)
@@ -94,8 +89,8 @@ jobs:
         run: |
           # The name carries the version, the way the desktop bundles' names do: a release gets the tag's
           # own name, a build of the branch the version the app says.
-          if [ "${{ github.event_name }}" = "release" ]; then
-            ver="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ver="${{ github.ref_name }}"
           else
             ver="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)"
           fi
@@ -108,9 +103,19 @@ jobs:
           name: nx2android-android-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
-      - if: github.event_name == 'release'
+      - if: github.event_name == 'push'
         run: |
+          # The release is made right after the tag is pushed, so it may not be there yet: wait for it, then
+          # attach the APK to it. A release that never shows up leaves the APK in the run's artifact.
+          for i in $(seq 1 36); do
+            if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then break; fi
+            sleep 10
+          done
+          if ! gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::warning::the release ${{ github.ref_name }} is not there yet: the APK stays as this run's artifact"
+            exit 0
+          fi
           cp android/app/build/outputs/apk/release/app-release.apk "android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}"
-          gh release upload "${{ github.event.release.tag_name }}" "android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}" --clobber
+          gh release upload "${{ github.ref_name }}" "android/app/build/outputs/apk/release/${{ steps.apk.outputs.name }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}

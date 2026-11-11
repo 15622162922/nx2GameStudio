@@ -34,7 +34,7 @@
 
 - ✅ 构建 APK：`bash packaging/android-apk/build_apk.sh [debug|release]`
   （需要 gh CLI 对私有 release `NixPort/nixport-rootfs` 的读权限；下载缓存在 `packaging/android-apk/.cache`，不入库）
-- ✅ CI：`.github/workflows/android-apk.yml` —— `workflow_dispatch` 出构建产物，`release` 事件出带签名的 release APK
+- ✅ CI：`.github/workflows/android-apk.yml` —— **只有打 tag 才构建**（`workflow_dispatch` 手动出构建产物；推分支不构建）。tag 一推，构建就开始，等 release 建好后自动把 APK 附上去
 - ✅ 装机与真机调试：adb，设备信息在 `devtools/device.json`；方法见 `.claude/skills/switch-android-port`
 - ✅ 宿主/着色器改动后的重编译：`nxnative/dm/android/build.py`
 - ❌ 不要用"下载 `nx2android-<version>-windows-x64.zip`、运行桌面版"来回答 Android 上的问题
@@ -50,14 +50,17 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 
 - 预发布用 GitHub **pre-release**（`--prerelease`），正式版才成为仓库的 "Latest"；app 的更新检查读 "Latest"，
   所以已发布的正式版玩家不会被推上 alpha
-- **把一个已发布的 release 退回草稿再发布（为了重新触发一次构建）会抹掉它的预发布标记**：发布那一步
+- **构建只由 tag 触发**：推分支什么都不构建。tag 一推，构建就开始（产物从那个 tag 的提交来），
+  它会等 release 建好后把 APK 附上去（`gh release create` 紧跟着 tag 就行）。**要重新构建就把 tag 重推一次**
+  （`git tag -f` + `git push --force`），构建跟着新 tag 走
+- **把一个已发布的 release 退回草稿再发布会抹掉它的预发布标记**：发布那一步
   （`--draft=false`）不带 `--prerelease=true`，release 就变成正式版、成了 "Latest"，正式版玩家会被推上 alpha。
   这条命令要写成 `gh release edit <tag> --draft=true --prerelease=true` 再
   `gh release edit <tag> --draft=false --prerelease=true`；改完核对 `gh release view <tag> --json isPrerelease`
   （守卫也会拦不带标记的 `--draft`）
 - 步骤：提交 `chore(release): version <x.y.z>` → 打附注 tag `v<base>-alphaNN` → push 两者 →
   `gh release create v<base>-alphaNN --verify-tag --prerelease --notes-file <notes> --repo zFitness/nx2androidX`，**不带 zip**
-- app 的 `versionName` 在 `android/app/build.gradle.kts`（当前 `0.3.0-alpha04`），与 tag 去掉 `v` 一致
+- app 的 `versionName` 在 `android/app/build.gradle.kts`（当前 `0.3.0-alpha05`），与 tag 去掉 `v` 一致
 - **一次发布只带手机的 APK，别无其它**。桌面 workflow（`release-windows.yml` / `release-macos.yml`）不发版，
   只在需要时手动触发（Actions → 该 workflow → Run workflow），产物留在该次运行的 artifact 里
 - 每个 `gh` 命令都要带 `--repo zFitness/nx2androidX`（本机 gh 默认指向另一个仓库）
