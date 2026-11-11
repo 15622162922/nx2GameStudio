@@ -28,6 +28,7 @@
     <string name="common_restore">恢复</string>
     <string name="common_on">开</string>
     <string name="common_off">关</string>
+    <string name="common_unavailable">不可用</string>
     <string name="common_cancelled">已取消</string>
     <string name="common_failed">失败</string>
     <string name="common_done">已完成</string>

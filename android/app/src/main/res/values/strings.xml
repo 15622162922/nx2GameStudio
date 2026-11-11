@@ -29,6 +29,7 @@
     <string name="common_restore">Restore</string>
     <string name="common_on">On</string>
     <string name="common_off">Off</string>
+    <string name="common_unavailable">Unavailable</string>
     <string name="common_cancelled">Cancelled</string>
     <string name="common_failed">Failed</string>
     <string name="common_done">Done</string>

@@ -249,7 +249,11 @@ private fun ToggleRow(
                 .background(if (!enabled) Color.White.copy(alpha = 0.08f)
                            else if (checked) NxPalette.Ready.copy(alpha = 0.25f) else NxPalette.Unbuilt.copy(alpha = 0.25f))
                 .clickable(enabled = enabled) { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 5.dp),
-        ) { Text(if (checked) stringResource(R.string.common_on) else stringResource(R.string.common_off), fontSize = 12.sp,
+        ) { Text(when {
+                !enabled -> stringResource(R.string.common_unavailable)
+                checked -> stringResource(R.string.common_on)
+                else -> stringResource(R.string.common_off)
+            }, fontSize = 12.sp,
                 color = when {
                     !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
                     checked -> NxPalette.Ready
