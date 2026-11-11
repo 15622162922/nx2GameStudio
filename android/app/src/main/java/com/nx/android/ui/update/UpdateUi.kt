@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -70,6 +72,11 @@ fun UpdatePopup(state: UpdateState, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     AlertDialog(
         onDismissRequest = { state.postpone() },
+        // 小屏上平台默认的弹框宽度太窄（正文都是会换行的文字，弹框就贴着那个窄宽度排）。
+        // 这里让它按可用宽度铺开、两侧留 16dp 边距；大屏上封顶 520dp。
+        // 顺序要紧：边距在外、封顶在中间、铺满在内——这样弹框的窗口按内容收缩（平台居中），
+        // 卡片本身落在边距里面，宽屏上也不会被拉到 520dp 之外。
+        modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = 520.dp).fillMaxWidth(),
         title = {
             Text(stringResource(R.string.update_available, state.latest), fontWeight = FontWeight.Bold)
         },
