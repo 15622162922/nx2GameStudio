@@ -372,7 +372,9 @@ private fun OpacityRow(opacity: Int, onChange: (Int) -> Unit) {
 
 private fun pushGen(settings: FrameGenSettings, knobs: FrameGenKnobs) {
     settings.save(knobs)
-    if (knobs.on) Native.frameGenSet(true, knobs.mult, knobs.target, knobs.flow)
+    // Both ways go down to the host: the off has to reach it too, or the generation keeps running and the HUD
+    // keeps counting the generated frames
+    Native.frameGenSet(knobs.on, knobs.mult, knobs.target, knobs.flow)
 }
 
 /** 帧生成组：开关、状态、倍率、目标帧率、光流质量（即改即生效） */
