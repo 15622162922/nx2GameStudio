@@ -15,6 +15,50 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha05 - 2026-11-11
+
+### Before you update
+
+- Data packs made with an older version do not work any more. Port your games
+  again - the library marks them, and the button says "port again".
+  - The shaders are not translated again: the ones that did not change are
+    reused. Only the host's glue layer is rebuilt, so it is much faster than
+    the first port.
+  - Your game progress and your exported save backups are kept.
+  - The game's files have to be in the same folder as before.
+
+### New
+
+- Faster ports. The data pack is written to the app's own folder instead of
+  shared storage: ~200-230 MB/s instead of ~50-100 MB/s. Three Tears of the
+  Kingdom ports died at that copy step before.
+- Performance overlay over the game: FPS, frame time, CPU, GPU, memory, battery
+  temperature, power. You choose which fields show.
+- New in-game menu. It opens from the left edge with the gamepad's menu button
+  or the back gesture. Pause / resume / exit are in it.
+- The library shows the game's own name and version, not the file name.
+- "Extra address space" on the build page. It fixes "AllocateAddressRegion
+  refused (0x1803)" in some games.
+- The environment's state is on the top bar of every page. Tap it to see what
+  is missing.
+- The on-screen gamepad is drawn by the app now. The layout editor is new, and
+  the d-pad lights up the direction you press.
+- The update check opens a popup with the new version, the version you run, and
+  the release's own notes.
+
+### Fixed
+
+- The frame generation no longer slows frame-locked games down. Measured on a
+  Y700 (120 Hz): 60 -> 120 fps.
+- The frame generation can be turned off from the in-game menu. The switch only
+  turned it on before.
+- Without Lossless.dll the switch says it is not available, instead of looking
+  like an ordinary off switch.
+- Typing in a game no longer freezes and then crashes it.
+- A crash writes a log now instead of dying without one.
+- The hidden on-screen gamepad no longer blocks touches on the game.
+- After a game closed, the library no longer flashed "back to game / exit game".
+
 ## v0.3.0-alpha04 - 2026-11-10
 
 ### Added
