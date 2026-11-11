@@ -79,9 +79,15 @@ class UpdateState(private val context: Context) {
         }
         latest = release.toString()
         mine = ownText
-        notes = notesOf(tag)
+        notes = ""
         later = false
         phase = Phase.AVAILABLE
+        // 更新说明随后到：弹框不等它（网络慢的时候玩家先看到版本号，说明自己补上去）
+        scope.launch {
+            val said = notesOf(tag)
+            // 期间又查了一次、版本换了一个？旧说明不配新版本，丢掉
+            if (latest == release.toString()) notes = said
+        }
     }
 
     /**

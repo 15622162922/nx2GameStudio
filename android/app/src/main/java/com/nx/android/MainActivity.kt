@@ -74,9 +74,11 @@ class MainActivity : ComponentActivity() {
             container.env.refreshTools()
             container.drivers.ensureShipped(this)
             container.drivers.refresh(this)
-            // 有没有新版本：冷启动查一次，查不到就安静地过去（引导没走完的第一次启动不查）
-            if (container.prefs.bool(PrefsStore.OB_COMPLETED)) container.update.checkQuietly()
         }.start()
+        // 有没有新版本：冷启动查一次，查不到就安静地过去（引导没走完的第一次启动不查）。
+        // 它自己开线程（协程），所以不跟上面那条工具刷新挤在一起：那边出了岔子（未捕获的异常会
+        // 杀掉整个进程），也不能把这一查一起带走。
+        if (container.prefs.bool(PrefsStore.OB_COMPLETED)) container.update.checkQuietly()
     }
 
     /** The screens' way back to the activity's own privileges: the actions they may ask for, nothing else */

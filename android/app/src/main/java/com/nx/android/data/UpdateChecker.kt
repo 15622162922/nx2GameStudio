@@ -3,7 +3,9 @@ package com.nx.android.data
 import com.nx.android.domain.UpdateVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -18,6 +20,9 @@ import java.net.URL
 object UpdateChecker {
 
     private const val UA = "nx2android"
+
+    /** The feed of a repository is a few tens of kilobytes; more than this is not read */
+    private const val MAX_BODY = 4 shl 20
 
     /**
      * The tag of the newest release. A failure is a failure: no release yet, no network, or the page
@@ -63,12 +68,30 @@ object UpdateChecker {
         }
         try {
             if (conn.responseCode != HttpURLConnection.HTTP_OK) throw IOException("HTTP ${conn.responseCode}")
-            conn.inputStream.readBytes().toString(Charsets.UTF_8)
+            String(readCapped(conn.inputStream, MAX_BODY), Charsets.UTF_8)
         } finally {
             conn.disconnect()
         }
     } catch (e: IOException) {
         null
+    }
+
+    /**
+     * The answer, but not more than max bytes: a feed that suddenly weighs a gigabyte does not get to
+     * fill the phone's memory (the feed of a repository is a few tens of kilobytes).
+     */
+    private fun readCapped(stream: InputStream, max: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val n = stream.read(buf)
+            if (n <= 0) break
+            total += n
+            if (total > max) throw IOException("the answer is larger than $max bytes")
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
     }
 
     /** The address the request ended at - after the redirect, that is the release's tag address */
