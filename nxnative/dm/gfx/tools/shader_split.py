@@ -790,7 +790,9 @@ def adrp_targets(d, lo, hi):
     w, out = memoryview(d)[:len(d) & ~3].cast('I'), collections.defaultdict(list)
     for i, x in enumerate(w):
         if x & 0x9f000000 != 0x90000000: continue
-        rd = x & 31; page = (i * 4 & ~0xfff) + ((((x >> 5 & 0x7ffff) << 2 | x >> 29 & 3) << 44 >> 44) << 12)
+        rd = x & 31; imm = (x >> 5 & 0x7ffff) << 2 | x >> 29 & 3
+        if imm & (1 << 20): imm -= 1 << 21   # signed 21-bit page offset; Python shifts do not truncate
+        page = (i * 4 & ~0xfff) + (imm << 12)
         if not lo - 0x1000 <= page < hi: continue
         for j, y in enumerate(w[i + 1:i + 9]):
             if y & 0xffc00000 == 0x91000000 and y >> 5 & 31 == rd:
@@ -980,6 +982,19 @@ def xbc1(d, at=0):
     if out is None or len(out) != usz: raise ValueError(f'xbc1 compression {t}, {len(out or b"")} of {usz} bytes')
     return out
 
+CMPZ = b'cmp\0zlib'
+def cmp_zlib(d, off):
+    """A Firehawk effect resource's zlib stream: 'cmp\0zlib', u32 stored length, u32 length, the stream (as upstream nxnative's monolith_cmp_data). → its bytes, or None for bytes that only look like one"""
+    import zlib
+    if off + 16 > len(d): return None
+    size, raw = struct.unpack_from('<2I', d, off + 8)
+    if not size or size > len(d) - off - 16: return None
+    z = zlib.decompressobj()
+    try: data = z.decompress(d[off + 16:off + 16 + size]) + z.flush()
+    except zlib.error: return None
+    if not z.eof or len(data) != raw: red(f'cmp zlib @{off:#x}: {len(data)} bytes, not the {raw} its header gives')
+    return data
+
 def spch_shaders(d, b, label):
     """A Monolith shader archive ('HCPS', version 1010 in Xenoblade Chronicles 3; xc3_lib's Spch): u32 offset / count pairs from +8 of the SLCT offsets (8 bytes each, offset into the SLCT section
     first), an unknown table, the SLCT section, the code section (xV4, the code areas) and the control sections (0x880 each), all relative to the HCPS. An SLCT: 'SLCT', u32, u32 count / offset of
@@ -1054,6 +1069,16 @@ def ard_shaders(path, rel, ents, out):
             if HCPS in d or XBC1 in d: mono_shaders(d, f'/{rel}{name}', out)
             # GLSLC outputs: the Firehawk effect archives (.wipac, 'FirehawkAssetArchive') keep their effects' shaders as whole compiler outputs beside a few HCPS
             if b'\x91\x68\x86\x19' in d: out.extend(glslc_shaders(d, f'/{rel}{name}', need=False))
+            # ... and more of them in zlib streams of their own inside the file ('cmp\0zlib', upstream nxnative's monolith_cmp_data): 4,412 effect shaders of Xenoblade Chronicles 3
+            # (.wipac, .wiefxa), among them the particles' update (vertex 09bd50b78ed863f0, geometry 293ecebc0136519b). Without them the husks' red particles, the send-off's
+            # white ones, the glow of far items and many cutscene effects were missing, and the app captured a few of them at run time
+            if CMPZ in d:
+                for m in re.finditer(CMPZ, d):
+                    z = cmp_zlib(d, m.start())
+                    if z is None: continue
+                    lab = f'/{rel}{name}#cmp-zlib@{m.start():#x}'
+                    if HCPS in z or XBC1 in z: mono_shaders(z, lab, out)
+                    if b'\x91\x68\x86\x19' in z: out.extend(glslc_shaders(z, lab, need=False))
 
 UE_LEGACY = 'UE legacy pak'
 def ue_legacy_jobs(files, parts=64):
@@ -1078,7 +1103,7 @@ def ue_legacy_jobs(files, parts=64):
 
 _PAKS = {}
 def ue_legacy_shaders(path, rel, names, out):
-    """Files of a legacy Unreal pak (ue_legacy_jobs), each decoded block by block with the game's own decoder (DRAGON QUEST XI S: LZ5) and scanned for the shader records the engine keeps inline"""
+    """Files of a legacy Unreal pak (ue_legacy_jobs), each decoded block by block with the game's own decoder (DRAGON QUEST XI S: LZ5; zlib blocks, OCTOPATH TRAVELER's, by uepak itself) and scanned for the shader records the engine keeps inline"""
     pk = _PAKS.get(path) or _PAKS.setdefault(path, uepak.Pak(path))
     for name in names:
         d = pk.read(name, decode=oodle)
@@ -1181,6 +1206,39 @@ def unzs(path):
     if did not in ZDICTS: red(f'{path}: a frame needs zstd dictionary {did}, which Pack/ZsDic.pack.zs does not have')
     if did not in _ZD: _ZD[did] = zstd.ZstdDict(ZDICTS[did])
     return zstd.decompress(d, zstd_dict=_ZD[did])
+
+LZ4_FRAME_MAGIC = bytes.fromhex('04224d18')   # an LZ4 frame (lz4.frame); HAL's .cmp containers hold these as well as zstd frames
+
+def frame_size(f):
+    """The decompressed size a zstd or LZ4 frame header gives, or None when the header gives none.
+    zstd: frame header descriptor at +4; the size field (0, 1, 2, 4 or 8 bytes; 2 bytes count from 256) follows the window descriptor (absent in a single-segment frame) and
+    the dictionary ID (0, 1, 2 or 4 bytes). LZ4: FLG at +4, BD at +5, then an 8-byte content size when FLG bit 3 is set"""
+    if len(f) < 6: return None
+    if f[:4] == LZ4_FRAME_MAGIC: return int.from_bytes(f[6:14], 'little') if f[4] & 8 and len(f) >= 14 else None
+    fhd = f[4]
+    single = fhd >> 5 & 1
+    width = (single, 2, 4, 8)[fhd >> 6]
+    if not width: return None
+    at = 5 + (not single) + (0, 1, 2, 4)[fhd & 3]
+    return int.from_bytes(f[at:at + width], 'little') + (256 if width == 2 else 0)
+
+def unsized(d, where):
+    """HAL's .cmp container (Kirby and the Forgotten Land): a u32 decompressed size, then one zstd or LZ4 frame. → the decompressed bytes.
+    A file only looks like one when its frame header gives a size other than the prefix (Tears of the Kingdom's *.quad files: a hash, then a zstd frame of its own size):
+    it is returned unchanged. A frame that fails to decompress, or decompresses to another size than the prefix, is a red line and the file is scanned as it is"""
+    size, frame = struct.unpack_from('<I', d)[0], d[4:]
+    if frame_size(frame) not in (None, size): return d
+    try:
+        if frame[:4] == LZ4_FRAME_MAGIC:
+            import lz4.frame
+            out = lz4.frame.decompress(frame)
+        else: out = zstd_mod().decompress(frame)
+    except Exception as e: why = str(e) or type(e).__name__
+    else:
+        if len(out) == size: return out
+        why = f'{len(out)} bytes where the prefix gives {size}'
+    print(f'[RED] {where}: a size-prefixed frame did not decompress ({why}); scanned as it is', flush=True)
+    return d
 
 def unity_program(code, where, stage=None):
     """Unity's Switch program code → [(stage, control, code)]; stage = the subprogram's stage from m_ParsedForm, which only the pre-2019.3 layout needs"""
@@ -1389,6 +1447,7 @@ def scan_file(args):
         for nm, m in gfpak_members(open(path, 'rb').read(), '/' + rel): scan_blob(m, f'/{rel}{nm}', found)
         return rel, uniq_keys(found), var_pairs(found), trees
     d = unzs(path) if head[:4] == ZSTD_MAGIC else open(path, 'rb').read()   # by the magic: Paper Mario: The Thousand-Year Door names its zstd files .zst (8,726, its shaders among them)
+    if head[:4] != ZSTD_MAGIC and head[4:8] in (ZSTD_MAGIC, LZ4_FRAME_MAGIC): d = unsized(d, '/' + rel)   # a size-prefixed frame (unsized): Kirby and the Forgotten Land keeps its BNSH in 7,201 .cmp files; read raw, the split found 121 of its 27,297 shaders
     if d[:4] == b'Yaz0': d = yaz0(d)
     if d[:8] == b'UnityFS\0' or (d[8:11] == b'\0\0\0' and __import__('unityfs').is_serialized(d)):
         import unityfs
@@ -1464,7 +1523,7 @@ def main():
     big = [j for p, r in files for j in (linkdata_jobs(p, r) or [])]   # Three Houses' 6.9 GB DATA1.bin: one job per range of entries, not one read of the whole file
     pak_jobs, paks = kpka_jobs(files)   # Monster Hunter Rise's PAKs: the newest copy of each path, in ranges of entries
     tr_jobs, trp = trpfs_jobs(files)   # Pokémon Legends: Z-A's Trinity packs (data.trpfs and its index data.trpfd), decoded by the game's own Oodle in the Mac host
-    ue_jobs, uep = ue_legacy_jobs(files)   # DRAGON QUEST XI S's legacy Unreal paks, decoded by the game's own LZ5 in the Mac host
+    ue_jobs, uep = ue_legacy_jobs(files)   # legacy Unreal paks: DRAGON QUEST XI S's decoded by the game's own LZ5 in the Mac host, OCTOPATH TRAVELER's zlib by uepak
     bd_jobs, bdts = bdt_jobs(files)   # Dark Souls Remastered's dvdbnd archives: the entries of each .bdt by its .bhd5 index, in ranges
     arc_jobs, arcs = smash_arc_jobs(files)   # Super Smash Bros. Ultimate's data.arc: its current files, in ranges
     pz_jobs, pkzs = pkz_jobs(files)   # Bayonetta 3's PKZ archives, Oodle Kraken decoded by the game's own decoder in the Mac host

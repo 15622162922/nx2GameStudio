@@ -1,6 +1,6 @@
 # adb for installing a port: the device list, installing the APK, and pushing the data pack in short transfers. Big pushes over one adb connection wedge adbd on some
 # devices (a 6 GB RomFS), so small files go in batches (tar archives of up to 64 MB when there are many) and big files in 64 MB pieces that the device joins; a rerun resumes (files already at their size are skipped,
-# pieces already in place are kept). The port's own outputs are also compared by MD5: a rewriter cut changes a module without changing its size, and Unpacking's sdk cuts never
+# pieces are kept if their checksums match). The port's own outputs are also compared by MD5: a rewriter cut changes a module without changing its size, and Unpacking's sdk cuts never
 # reached the device until they were. Pushes use -Z: compressing them took adbd down.
 import contextlib, hashlib, os, re, shlex, shutil, subprocess, tarfile, tempfile, time
 from pathlib import Path
@@ -100,9 +100,42 @@ class Adb:
         if any(v in g for v in ('mali', 'powervr', 'immortalis')): return False
         return None
 
-    def free_bytes(self, path='/sdcard'):
-        out = self.shell(f'df -k {shlex.quote(path)} | tail -1', check=False).split()
+    def free_bytes(self, path='/sdcard'):   # free bytes on path's volume (its nearest folder that exists: a folder still to be made counts as its parent's), None when unknown
+        out = self.shell(f'p={shlex.quote(path)}; while [ ! -e "$p" ]; do p=$(dirname "$p"); done; df -k "$p" | tail -1', check=False).split()
         return int(out[3]) * 1024 if len(out) >= 4 and out[3].isdigit() else None
+
+    def same_volume(self, a, b):   # whether two paths (their nearest folders that exist) share a volume and its free space: stat's device number (an SD card is a volume of its own)
+        # -L: /sdcard is a symlink, and toybox stat does not follow one without it (the root file system's device number, never shared storage's)
+        out = self.shell('for p in ' + ' '.join(shlex.quote(x) for x in (a, b)) + '; do while [ ! -e "$p" ]; do p=$(dirname "$p"); done; stat -L -c %d "$p"; done', check=False).split()
+        return len(out) == 2 and out[0] == out[1]
+
+    def read_text(self, path):   # a small text file on the device, '' when it is not there
+        return self.shell(f'cat {shlex.quote(path)} 2>/dev/null; true', check=False)
+
+    def sdk(self):   # the device's API level (29: Android 10), 0 when unknown
+        v = self.prop('ro.build.version.sdk')
+        return int(v) if v.isdigit() else 0
+
+    def requests_permission(self, package, perm):   # whether the installed app's manifest asks for perm (dumpsys lists only the permissions an app asks for)
+        return perm in self.shell(f'dumpsys package {shlex.quote(package)} 2>/dev/null | grep -F {shlex.quote(perm)}; true', check=False)
+
+    def storage_access(self, package, grant=False):
+        """Whether the app may read shared storage outside its own folders (a RomFS read from a game dump's folder: install --romfs-at): All files access, the appop
+        MANAGE_EXTERNAL_STORAGE, from Android 11 (the switch Settings shows sets the app's uid mode, as `appops set --uid` does); on Android 10, which has no All files access,
+        READ_EXTERNAL_STORAGE (the APK asks for the legacy storage view there: mkapk.py). grant: have the shell grant it first, which adb may do without the player.
+        Returns (granted, what the device says)"""
+        q = shlex.quote(package)
+        if self.sdk() >= 30:
+            def mode():   # "Uid mode: MANAGE_EXTERNAL_STORAGE: allow"; "No operations." while it was never set (the default: not granted)
+                m = re.search(r'MANAGE_EXTERNAL_STORAGE: (\w+)', self.shell(f'appops get --uid {q} MANAGE_EXTERNAL_STORAGE 2>&1; true', check=False))
+                return m.group(1) if m else 'default'
+            if grant and mode() != 'allow': self.shell(f'appops set --uid {q} MANAGE_EXTERNAL_STORAGE allow 2>&1; true', check=False)
+            got = mode()
+            return got == 'allow', f'All files access (appop MANAGE_EXTERNAL_STORAGE): {got}'
+        perm = 'android.permission.READ_EXTERNAL_STORAGE'
+        if grant: self.shell(f'pm grant {q} {perm} 2>&1; true', check=False)
+        ok = f'{perm}: granted=true' in self.shell(f'dumpsys package {q} 2>/dev/null | grep -F {perm}: ; true', check=False)
+        return ok, f'{perm}: {"granted" if ok else "not granted"}'
 
     def installed(self, package):
         return f'package:{package}' in self.shell(f'pm list packages {shlex.quote(package)}', check=False).split()
@@ -192,21 +225,22 @@ class Adb:
             if sz.isdigit(): have[name[2:] if name.startswith('./') else name] = int(sz)
         return have
 
-    def remote_md5(self, rdir, rels):   # {relative path: MD5} of those files under rdir (missing ones left out)
+    def remote_md5(self, rdir, rels, **kw):   # {relative path: MD5} of those files under rdir (missing ones left out)
         out, q = {}, shlex.quote(rdir)
         for i in range(0, len(rels), 64):
-            for ln in self.shell(f'cd {q} && md5sum ' + ' '.join(shlex.quote(r) for r in rels[i:i + 64]) + ' 2>/dev/null; true').splitlines():
+            for ln in self.shell(f'cd {q} && md5sum ' + ' '.join(shlex.quote(r) for r in rels[i:i + 64]) + ' 2>/dev/null; true', **kw).splitlines():
                 h, _, name = ln.partition('  ')
                 if len(h) == 32: out[name] = h
         return out
 
-    def push_tree(self, local, remote, chunk=64 << 20, skip=(), keep=(), verify=None, progress=None, have=None):
-        """local folder → remote folder. skip: relative paths not pushed; keep: relative paths pushed only when the device has none (the player's settings);
+    def push_tree(self, local, remote, chunk=64 << 20, skip=(), keep=(), verify=None, progress=None, have=None, exclude=()):
+        """local folder → remote folder. skip: relative paths not pushed; exclude: top-level folders left out whole (the RomFS, when the app reads it from another
+        folder: install --romfs-at); keep: relative paths pushed only when the device has none (the player's settings);
         verify(rel): files whose content can change at the same size (the rewritten modules: a rewriter cut keeps the module's size), pushed again when their MD5 differs.
         progress(done_bytes, total_bytes, note) after each transfer. have: remote_sizes(remote) when the caller listed it already (a big pack takes seconds to list).
         Returns the bytes pushed"""
         local, remote = Path(local), remote.rstrip('/')
-        files = sorted((p.relative_to(local).as_posix(), p) for p in local.rglob('*') if p.is_file())
+        files = sorted((p.relative_to(local).as_posix(), p) for top in local.iterdir() if top.name not in exclude for p in (top.rglob('*') if top.is_dir() else [top]) if p.is_file())
         if have is None: have = self.remote_sizes(remote)
         same = [rel for rel, p in files if verify and verify(rel) and rel not in keep and rel not in skip and have.get(rel) == p.stat().st_size]
         rmd5 = self.remote_md5(remote, same) if same else {}
@@ -259,19 +293,38 @@ class Adb:
         return done
 
     def push_file(self, local, dst, chunk=64 << 20, progress=None):
-        """One file in pieces of chunk bytes, joined on the device; pieces already there are kept, so an interrupted push resumes. progress(done, size, note)"""
+        """One file in pieces of chunk bytes, joined on the device; matching pieces are kept after checking their MD5, so an interrupted push resumes. progress(done, size, note)"""
         local = Path(local); size = local.stat().st_size; n = max(1, (size + chunk - 1) // chunk)
         pdir = f'{os.path.dirname(dst)}/.dmpart-{hashlib.sha1(dst.encode()).hexdigest()[:12]}'   # one piece folder per file: a resumed push finds its own pieces
         self.shell(f'mkdir -p {shlex.quote(pdir)}'); pieces = self.remote_sizes(pdir)
+        same = [f'{k:05d}' for k in range(n) if pieces.get(f'{k:05d}') == min(chunk, size - k * chunk)]
+        md5 = {}
+        batch = max(1, min(8, (256 << 20) // chunk))
+        for i in range(0, len(same), batch):
+            try:
+                md5.update(self.remote_md5(pdir, same[i:i + batch], timeout=min(self.timeout, 120), retries=1))
+            except AdbError as e:
+                self.log(f'{local.name}: could not verify retained pieces ({e}); sending the unverified pieces again')
+                break   # a slow device should not pay another checksum timeout for every remaining batch
         with tempfile.TemporaryDirectory(prefix='nx2a_push_') as t, open(local, 'rb') as f:
             for k in range(n):
                 want, name = min(chunk, size - k * chunk), f'{k:05d}'
-                if pieces.get(name) != want:
+                f.seek(k * chunk); data = f.read(want)
+                if len(data) != want: raise AdbError(f'{local.name}: source changed during the push (short read); try again')
+                if pieces.get(name) != want or md5.get(name) != hashlib.md5(data).hexdigest():
                     tmp = Path(t) / 'piece.bin'
-                    f.seek(k * chunk); tmp.write_bytes(f.read(want))
+                    tmp.write_bytes(data)
                     self.run('push', '-Z', tmp, f'{pdir}/{name}', timeout=max(self.timeout, 600))
+                del data
                 if progress: progress(k * chunk + want, size, f'{local.name} piece {k + 1}/{n}')
+            if os.fstat(f.fileno()).st_size != size: raise AdbError(f'{local.name}: source changed size during the push; try again')
         q, qp = shlex.quote(dst), shlex.quote(pdir)   # join the pieces in order, then check the size
-        self.shell(f'rm -f {q} && for x in $(ls {qp} | sort); do cat {qp}/$x >> {q} || exit 1; done && rm -rf {qp}', timeout=1200)
+        # Join only this source's pieces: a shorter file or a different chunk size may leave old tail pieces in the same folder.
+        for i in range(0, n, 256):   # keep each command short even when there are many pieces
+            names = ' '.join(f'{k:05d}' for k in range(i, min(i + 256, n)))
+            start = f'rm -f {q} && ' if i == 0 else ''
+            # Retrying an interrupted append could duplicate data; a later push starts the join over.
+            self.shell(f'{start}(cd {qp} && cat {names}) >> {q}', timeout=1200, retries=1)
         got = self.shell(f'stat -c %s {q}').strip()
         if got != str(size): raise AdbError(f'{local.name}: {got} bytes on the device, expected {size}')
+        self.shell(f'rm -rf {qp}')

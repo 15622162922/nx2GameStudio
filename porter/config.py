@@ -6,6 +6,7 @@ from porter.paths import user_dir
 
 KEYS = {
     'keys': 'path of prod.keys',
+    'firmware': "folder of the console's system content files (.nca; a firmware dump's NAND SYSTEM Contents/registered), for games that read system data",
     'ndk': 'Android NDK folder (r27c)',
     'dotnet': 'dotnet executable (.NET 10: the SDK to build with, the runtime to run with)',
     'adb': 'adb executable (platform-tools)',

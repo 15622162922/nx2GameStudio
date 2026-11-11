@@ -75,19 +75,21 @@ for sh in sorted((DM / 'android/shaders').glob('*.*')):
 def srcs(*globs): return [p for g in globs for p in sorted(DM.glob(g))]
 HOST = [p for p in srcs('host/*.c') if p.name not in ('hle_movie_avc.c',)]   # VideoToolbox: dm/android/movie_avc.c instead
 GFX = srcs('gfx/*.c', 'gfx/nvn/*.c', 'gfx/tex/*.c')
-PORT = [p for p in srcs('android/compat/*.c', 'android/*.c') if not (p.name == 'gfx_null.c' and a.gfx != 'null') and not (p.name.startswith('gfx_vk') and a.gfx != 'vk') and not p.name in ('jni_android.c', 'dm_framegen.c', 'vka_shim.c')]   # one graphics backend; jni_android.c goes into --play's link, dm_framegen.c + vka_shim.c into every target's (their list below)
+PORT = [p for p in srcs('android/compat/*.c', 'android/*.c') if not (p.name == 'gfx_null.c' and a.gfx != 'null') and not (p.name.startswith('gfx_vk') and a.gfx != 'vk') and not p.name in ('jni_android.c', 'dm_framegen.c', 'vka_shim.c', 'front_android.c')]   # one graphics backend; jni_android.c goes into --play's link, dm_framegen.c + vka_shim.c into every target's (their list below); front_android.c is upstream's APK front, the player front (front_player.c) replaces it
 ASM = srcs('host/entry.S', 'gfx/nvn/nvn_entry.S', 'gfx/nvn/nvn_thunks.S')
 VPX = srcs('third_party/libvpx/**/*.c')
+ZSTD = srcs('third_party/zstd/zstddeclib.c')   # zstd's decompressor: the shader bundle's SPIR-V (gfx_vk_shader.c bundle_spv)
 
 INC = ['-include', str(DM / 'android/compat/include/darwin_compat.h'), f'-I{DM / "android/compat/include"}', f'-I{DM / "host"}', f'-I{DM / "gfx/nvn"}', f'-I{DM / "gfx/tex"}', f'-I{DM / "gfx/nvn/include"}',
-       f'-I{DM / "third_party/vulkan-headers/include"}', f'-I{gen / a.game}', f'-I{DM / "third_party/libvpx"}', f'-I{DM / "third_party/stb_vorbis"}', f'-I{DM / "android"}']
+       f'-I{DM / "third_party/vulkan-headers/include"}', f'-I{gen / a.game}', f'-I{DM / "third_party/libvpx"}', f'-I{DM / "third_party/stb_vorbis"}', f'-I{DM / "third_party/zstd"}', f'-I{DM / "android"}']
 CFLAGS = [TARGET, f'-O{a.O}'] + DBG + ['-fPIC', '-fno-omit-frame-pointer', '-ffixed-x18', '-Wall', '-Wno-unused-function', '-Wno-unused-variable', '-Wno-unused-but-set-variable',
           '-Wno-format', '-Wno-deprecated-declarations', '-Wno-gnu-folding-constant', '-Werror=implicit-function-declaration', '-Werror=return-type',
           '-Werror=incompatible-pointer-types', '-Werror=int-conversion', '-D_GNU_SOURCE', '-DDM_ANDROID=1', '-fno-strict-aliasing', '-fvisibility=hidden'] + (['-DDM_RELEASE=1'] if a.release else []) + ([] if a.no_lsfg else ['-DNX_LSFG=1'])
 VPX_FLAGS = [TARGET, '-O2'] + DBG + ['-fPIC', f'-I{DM / "third_party/libvpx"}', f'-I{DM / "third_party/libvpx/config"}', '-w']
+ZSTD_FLAGS = [TARGET, '-O2'] + DBG + ['-fPIC', '-fvisibility=hidden', '-DZSTDLIB_VISIBLE=', '-DZSTDERRORLIB_VISIBLE=', '-w']   # its API stays inside libdmhost.so
 
 import hashlib, shutil
-_stamp = obj / 'flags.stamp'; _flags = hashlib.sha256(repr((CFLAGS, INC, VPX_FLAGS, CC)).encode()).hexdigest()
+_stamp = obj / 'flags.stamp'; _flags = hashlib.sha256(repr((CFLAGS, INC, VPX_FLAGS, ZSTD_FLAGS, CC)).encode()).hexdigest()
 if not _stamp.exists() or _stamp.read_text() != _flags:   # compiler flags changed: every object is rebuilt
     shutil.rmtree(obj, ignore_errors=True); obj.mkdir(parents=True, exist_ok=True); _stamp.write_text(_flags)
 
@@ -109,7 +111,7 @@ def compile_one(s):
         if not src.exists() or src.stat().st_mtime < s.stat().st_mtime:
             subprocess.run([sys.executable, str(DM / 'android/tools/darwin2elf.py'), str(s), str(src)], check=True)
     if not dep_stale(o, d, src): return s, o, 0, ''
-    flags = VPX_FLAGS if 'third_party/libvpx' in str(rel).replace(os.sep, '/') else [TARGET] + DBG if s.suffix == '.S' else CFLAGS + INC
+    flags = VPX_FLAGS if 'third_party/libvpx' in str(rel).replace(os.sep, '/') else ZSTD_FLAGS if 'third_party/zstd' in str(rel).replace(os.sep, '/') else [TARGET] + DBG if s.suffix == '.S' else CFLAGS + INC
     r = subprocess.run([CC] + CC_EXTRA + flags + ['-MMD', '-MF', str(d), '-c', str(src), '-o', str(o)], capture_output=True, text=True, errors='replace')
     return s, o, r.returncode, r.stderr
 
@@ -127,9 +129,9 @@ all_files = HOST + GFX + PORT + ASM + srcs('android/dm_framegen.c') + (srcs('and
 PLAYS = srcs('android/jni_android.c')   # the player's JNI entry: compiled always (the errors surface here too), linked only for --play
 objs, failed = build(all_files)
 pobjs, pfailed = build(PLAYS)
-vobjs, vfailed = build(VPX)
+vobjs, vfailed = build(VPX + ZSTD)
 failed += pfailed + vfailed
-print(f'compiled {len(all_files) + len(PLAYS) + len(VPX)} sources, {len(failed)} failed' + (': ' + ', '.join(str(f.relative_to(DM)) for f in failed) if failed else ''))
+print(f'compiled {len(all_files) + len(PLAYS) + len(VPX) + len(ZSTD)} sources, {len(failed)} failed' + (': ' + ', '.join(str(f.relative_to(DM)) for f in failed) if failed else ''))
 if failed and not a.keep_going: sys.exit(1)
 if a.only_compile: sys.exit(1 if failed else 0)
 
