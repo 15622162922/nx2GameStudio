@@ -106,10 +106,18 @@ fun GlassPanel(
     }
 }
 
-/** A glass sheet that fills its box (the overlays' ground) */
+/**
+ * A glass sheet that fills its box (the overlays' ground)
+ *
+ * [alpha] is how much of the sheet's own ground shows through: the overlays that cover
+ * one small thing keep the default (the page behind stays visible), a page that covers
+ * everything asks for nearly opaque — otherwise what is behind it bleeds through and
+ * the two pages' words collide.
+ */
 @Composable
 fun GlassSheet(
     modifier: Modifier = Modifier,
+    alpha: Float = 0.78f,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
@@ -121,7 +129,7 @@ fun GlassSheet(
             Modifier
                 .matchParentSize()
                 .blur(if (Build.VERSION.SDK_INT >= 31) 20.dp else 0.dp, BlurredEdgeTreatment.Unbounded)
-                .background(NxPalette.Surface.copy(alpha = 0.78f))
+                .background(NxPalette.Surface.copy(alpha = alpha))
         )
         Box(Modifier.matchParentSize(), content = content)
     }

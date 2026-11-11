@@ -83,6 +83,7 @@ import com.nx.android.ui.onboarding.OnboardingScreen
 import com.nx.android.ui.settings.DriverScreen
 import com.nx.android.ui.settings.LogOverlay
 import com.nx.android.ui.settings.SettingsScreen
+import com.nx.android.ui.settings.SettingsSection
 import com.nx.android.ui.theme.GlassSheet
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.theme.NxTheme
@@ -98,7 +99,6 @@ import java.util.Locale
 enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
     LIBRARY(R.string.app_tab_library, Icons.Filled.SportsEsports),
     BUILDS(R.string.app_tab_builds, Icons.Filled.Inventory2),
-    SETTINGS(R.string.app_tab_settings, Icons.Filled.Settings),
 }
 
 /** The screens' way back to the activity's own privileges: what they may ask for, nothing else */
@@ -264,6 +264,9 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
                onLog: () -> Unit,
                onEnvCheck: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
+    // 设置是一整页，盖住顶栏与下面的页面：从顶栏的设置图标进来，关掉才回到底下的页面
+    var settingsOpen by remember { mutableStateOf(false) }
+    var settingsSection by remember { mutableStateOf(SettingsSection.ENVIRONMENT) }
     val port = container.port
     val lib = container.library
 
@@ -280,6 +283,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             selected = tab,
             onSelect = { tab = it.ordinal },
             onRefresh = { lib.rescan() },
+            onSettings = { settingsOpen = true },
             chip = container.envCheck.chip,
             onChip = onEnvCheck,
         )
@@ -289,8 +293,6 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest)
-                Tab.SETTINGS -> SettingsScreen(container.onboarding, container.drivers, container.update, actions,
-                    onRequest, onDrivers, onLog)
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
@@ -309,12 +311,20 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
                     onClose = { lib.selected = null })
             }
         }
+        // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
+        if (settingsOpen) {
+            SettingsScreen(container.onboarding, container.drivers, container.update, actions,
+                onRequest, onDrivers, onLog,
+                section = settingsSection, onSelectSection = { settingsSection = it },
+                onClose = { settingsOpen = false })
+        }
     }
 }
 
-/** 一行式顶栏：品牌 + 三个纯文字 tab（选中亮/未选灰）+ 环境状态胶囊 + 右侧图标与时钟（capyps5 的骨架，我们的颜色） */
+/** 一行式顶栏：品牌 + 两个纯文字 tab（选中亮/未选灰）+ 环境状态胶囊 + 右侧图标与时钟（capyps5 的骨架，我们的颜色） */
 @Composable
 private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit,
+                   onSettings: () -> Unit,
                    chip: EnvCheck.Chip, onChip: () -> Unit) {
     val time by produceState(initialValue = "") {
         val format = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -348,6 +358,9 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit
         }
         Spacer(Modifier.weight(1f))
         TopIcon(Icons.Filled.Refresh, stringResource(R.string.app_refresh_library), onRefresh)
+        Spacer(Modifier.width(6.dp))
+        // 设置：它是一整页，从这个图标进来
+        TopIcon(Icons.Filled.Settings, stringResource(R.string.app_tab_settings), onSettings)
         Spacer(Modifier.width(6.dp))
         EnvChip(chip, onChip)
         Text(time, style = MaterialTheme.typography.titleMedium,

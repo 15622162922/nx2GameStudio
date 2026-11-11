@@ -74,7 +74,8 @@ fun DriverScreen(state: DriverState, onClose: () -> Unit) {
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { onClose() },
         contentAlignment = Alignment.Center,
     ) {
-        GlassSheet(modifier = Modifier.fillMaxSize(0.9f).clickable(enabled = false) {}) {
+        // 这一页盖住整屏（它可能盖在设置页上），近乎不透明：底下页面的字不该透上来
+        GlassSheet(modifier = Modifier.fillMaxSize(0.9f).clickable(enabled = false) {}, alpha = 0.97f) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(locale.str(R.string.driver_section), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
