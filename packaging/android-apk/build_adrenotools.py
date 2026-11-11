@@ -79,7 +79,9 @@ def main():
     libs += [(f'lib{h}.so', [AT / f'src/hook/{h}.c'], ['-Wl,-z,global', f'-L{out}', '-lhook_impl']) for h in ('main_hook', 'file_redirect_hook', 'gsl_alloc_hook')]
     for name, files, extra in libs:
         o = out / name
-        cmd = [cxx] + flags + [str(f) for f in files] + ['-o', str(o), f'-Wl,-soname,{name}'] + link + extra
+        # C hooks must keep the unmangled symbol names the Android loader resolves.
+        compiler = cxx if any(f.suffix == '.cpp' for f in files) else str(bin_ / 'clang')
+        cmd = [compiler] + flags + [str(f) for f in files] + ['-o', str(o), f'-Wl,-soname,{name}'] + link + extra
         r = subprocess.run(cmd, capture_output=True, text=True, errors='replace')
         if r.returncode:
             print(r.stdout[-4000:]); print(r.stderr[-4000:])
