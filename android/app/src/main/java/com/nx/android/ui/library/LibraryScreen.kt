@@ -46,7 +46,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,8 +59,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -98,6 +95,8 @@ import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.PickRow
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.components.StatusDot
+import com.nx.android.ui.components.rememberGameIcon
+import com.nx.android.ui.components.sizeText
 import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.Dispatchers
@@ -171,14 +170,7 @@ private fun coverColors(name: String): List<Color> {
     return listOf(c(0), c(8))
 }
 
-/** 降采样读一张图，主线程之外（capyps5 rememberImage 的手法） */
-@Composable
-private fun rememberGameIcon(path: String?, maxSize: Int): androidx.compose.runtime.State<ImageBitmap?> =
-    produceState<ImageBitmap?>(initialValue = null, path) {
-        value = if (path == null) null else withContext(Dispatchers.IO) {
-            runCatching { GameIcon.decode(path, maxSize)?.asImageBitmap() }.getOrNull()
-        }
-    }
+/** 降采样读一张图，主线程之外（capyps5 rememberImage 的手法）——见 `ui/components/GameIcons.kt` */
 
 // ---- 行视图（hero） -------------------------------------------------------------------------------------------
 
@@ -1229,11 +1221,3 @@ private fun SaveRows(ported: Ported, gameName: String, player: PlayerState, acti
 /** 一棵目录树里的文件加起来多大 */
 private fun treeSize(dir: File): Long =
     if (!dir.isDirectory) 0L else dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-
-/** 一个人看得懂的大小 */
-private fun sizeText(bytes: Long): String = when {
-    bytes >= 1024L * 1024 * 1024 -> "%.1f GB".format(bytes / 1024.0 / 1024 / 1024)
-    bytes >= 1024L * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024)
-    bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
-    else -> "$bytes B"
-}

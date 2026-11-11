@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.appstate.DriverState
 import com.nx.android.appstate.OnboardingState
+import com.nx.android.appstate.StorageUsageState
 import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Drivers
@@ -77,13 +78,14 @@ import java.io.File
  * 设置页：左边一栏分区，右边一栏内容。
  *
  * 它是一整页，盖住顶栏与下面的页面（从顶栏的设置图标进来，关掉才回到底下的页面）。
- * 分区固定四个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
+ * 分区固定五个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
  * 展开，右边自己滚；分区换了，右边的滚动位置回到顶上。
  *
  * 设置的内容还是原来那些：环境的状态与准备/重置、prod.keys 的路径、Vulkan 驱动（装/删/
  * 下载/导入）、帧生成的 Lossless.dll、版本与检查更新、界面语言、重跑引导。每一项占一行
  * （见 `ui/components/SettingsRows.kt` 的行）。日志（看/分享/清空）不在这里：它在构建页
- * 的日志模块里（见 `ui/builds/BuildsScreen.kt`）。
+ * 的日志模块里（见 `ui/builds/BuildsScreen.kt`）。存储占用是第五个分区（见
+ * `ui/settings/StorageSection.kt`）：它只报数字。
  *
  * 分区是外面给的状态（[section] 与 [onSelectSection]）：关掉这一页再打开，玩家上次看的
  * 那一区还在；从别处带着一个分区进来也可以。
@@ -92,6 +94,7 @@ import java.io.File
  */
 enum class SettingsSection(@StringRes val title: Int) {
     ENVIRONMENT(R.string.env_section),
+    STORAGE(R.string.set_section_storage),
     DRIVERS(R.string.driver_section),
     DISPLAY(R.string.set_section_display),
     ABOUT(R.string.set_section_about),
@@ -99,6 +102,7 @@ enum class SettingsSection(@StringRes val title: Int) {
 
 @Composable
 fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateState,
+                   usage: StorageUsageState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit,
                    section: SettingsSection, onSelectSection: (SettingsSection) -> Unit,
@@ -140,6 +144,7 @@ fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateStat
                 ) {
                     when (section) {
                         SettingsSection.ENVIRONMENT -> EnvironmentSection(ob, actions, onRequest)
+                        SettingsSection.STORAGE -> StorageSection(usage)
                         SettingsSection.DRIVERS -> DriversSection(drivers, actions, onRequest, onDrivers)
                         SettingsSection.DISPLAY -> DisplaySection(actions, onRequest)
                         SettingsSection.ABOUT -> AboutSection(ob, update, actions)

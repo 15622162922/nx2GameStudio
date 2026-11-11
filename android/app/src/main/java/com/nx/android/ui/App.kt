@@ -312,7 +312,8 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         }
         // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
         if (settingsOpen) {
-            SettingsScreen(container.onboarding, container.drivers, container.update, actions,
+            SettingsScreen(container.onboarding, container.drivers, container.update,
+                container.storageUsage, actions,
                 onRequest, onDrivers,
                 section = settingsSection, onSelectSection = { settingsSection = it },
                 onClose = { settingsOpen = false })

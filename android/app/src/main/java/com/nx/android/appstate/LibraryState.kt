@@ -18,6 +18,7 @@ import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.PackMover
 import com.nx.android.domain.Ported
+import com.nx.android.domain.StorageUsage
 import org.json.JSONObject
 import java.io.File
 
@@ -216,6 +217,73 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
     /** App 私有存储里那个端口目录（包都在这儿，除非玩家把它搬到了卡上） */
     fun internalPortsDir(): File = portsDir
 
+    /**
+     * 记住的包路径（一个个包，不是按游戏分的）。
+     *
+     * 卡不在时那个包够不着，路径还记得——占用统计要把这种「够不着」如实说出来，
+     * 不能当成 0。
+     */
+    fun rememberedPackPaths(): List<String> = lastPackPaths.values.toList()
+
+    /**
+     * 库里每个游戏的占用来源：工作区与它的数据包。
+     *
+     * 占用统计照着这个清单去量（见 `appstate/StorageUsageState.kt`）：一项 = 一个游戏，
+     * 项里若干段 = 若干目录（工作区 / 数据包）。每个卷上可能各有一份数据包，够不着的
+     * 那份（卡不在）标成「够不着」，不当成 0。
+     */
+    fun usageItems(games: List<File>): List<StorageUsage.Item> {
+        val items = ArrayList<StorageUsage.Item>()
+        val usedIds = HashSet<String>()
+        val claimedPacks = HashSet<String>()
+        val claimedWork = HashSet<String>()
+
+        for (f in games) {
+            val title = titleIdOf(f)
+            val parts = ArrayList<StorageUsage.Part>()
+            if (!title.isNullOrEmpty()) {
+                val work = File(workRoot, "${title}_build")
+                parts += StorageUsage.Part(StorageUsage.Role.WORKSPACE, work.absolutePath)
+                claimedWork += work.absolutePath
+            }
+            for (p in packsOf(f)) {
+                parts += StorageUsage.Part(StorageUsage.Role.PACK, p.absolutePath)
+                claimedPacks += p.absolutePath
+            }
+            for (p in unreachablePacks(f)) {
+                parts += StorageUsage.Part(StorageUsage.Role.PACK, p.absolutePath, state = StorageUsage.State.UNKNOWN)
+            }
+            // 同一个 title ID 在库里出现两次时，第二个用源文件路径当标识（免得两项混成一项）
+            var id = title?.takeIf { it.isNotEmpty() } ?: f.absolutePath
+            if (!usedIds.add(id)) id = f.absolutePath
+            items += StorageUsage.Item(
+                id = id,
+                name = FolderScanner.labelFor(f, portOf(f)),
+                icon = portOf(f)?.icon?.absolutePath.orEmpty(),
+                // 快照要是不变的值：这里给一份拷贝，别把还在拼的列表挂出去
+                parts = parts.toList(),
+            )
+        }
+
+        // 兜底：占了地方却不对应库里任何游戏的东西（源文件被手动删掉后留下的包、
+        // 认不出是哪个游戏的工作区）。它们没人管，数字也该有人报。
+        val orphans = ArrayList<StorageUsage.Part>()
+        for (d in portsDirs()) {
+            for (p in d.listFiles() ?: emptyArray()) {
+                if (!p.isDirectory || p.absolutePath in claimedPacks) continue
+                orphans += StorageUsage.Part(StorageUsage.Role.PACK, p.absolutePath)
+            }
+        }
+        for (w in workRoot.listFiles() ?: emptyArray()) {
+            if (!w.isDirectory || w.absolutePath in claimedWork) continue
+            orphans += StorageUsage.Part(StorageUsage.Role.WORKSPACE, w.absolutePath)
+        }
+        if (orphans.isNotEmpty()) {
+            items += StorageUsage.Item(id = StorageUsage.ORPHAN_ID, name = "", parts = orphans.toList())
+        }
+        return items
+    }
+
     /** 这个游戏的包现在在哪：私有的目录，还是卡上那个（重建跟着它走） */
     fun packDirOf(f: File): File? = portOf(f)?.pack?.parentFile
 
@@ -360,7 +428,7 @@ class LibraryState(private val prefs: PrefsStore, private val port: PortState, p
     }
 
     /** 这个游戏的 title ID：文件名里的优先，没有就用数据包清单里的；包够不着时用记住的那个 */
-    private fun titleIdOf(f: File): String? =
+    fun titleIdOf(f: File): String? =
         FolderScanner.titleIdIn(f.name)
             ?: portOf(f)?.titleId?.takeIf { it.isNotEmpty() }
             ?: remembered[f.absolutePath]?.title?.takeIf { it.isNotEmpty() }

@@ -9,6 +9,7 @@ import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
+import com.nx.android.appstate.StorageUsageState
 import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
 import com.nx.android.data.Env
@@ -58,6 +59,9 @@ class AppContainer(app: NxApp) {
 
     /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */
     val drivers = DriverState()
+
+    /** 存储占用：设置页「存储」分区背后的状态（每个卷上构建缓存与数据包各占多少） */
+    val storageUsage = StorageUsageState(env, library)
 
     /** 有没有新版本：冷启动时查一次，弹框与设置页读同一份 */
     val update = UpdateState(app)
