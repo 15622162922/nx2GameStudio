@@ -16,7 +16,7 @@ class LibraryLogicTest {
         File(pack, "host").mkdirs()
         val host = File(pack, "host/libdmplay.so")
         if (hostExists) host.writeText("ELF")
-        return Ported(pack, host, null, "0100000000010000", "Hades II", hostFront = FolderScanner.HOST_FRONT)
+        return Ported(pack, host, null, "0100000000010000", "Hades II", hostFront = GameIdentity.HOST_FRONT)
     }
 
     private fun entry(pack: Ported? = null, work: File? = null, source: String? = null) =
@@ -24,7 +24,7 @@ class LibraryLogicTest {
 
     private fun packWith(name: String, runnable: Boolean): Ported {
         val p = port(hostExists = runnable)
-        return p.copy(hostFront = if (runnable) FolderScanner.HOST_FRONT else "old-front", name = name)
+        return p.copy(hostFront = if (runnable) GameIdentity.HOST_FRONT else "old-front", name = name)
     }
 
     @Test

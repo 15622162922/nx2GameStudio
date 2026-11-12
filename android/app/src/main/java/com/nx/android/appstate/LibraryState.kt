@@ -3,7 +3,6 @@ package com.nx.android.appstate
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameConfig
 import com.nx.android.domain.library.GameConfigRepository
@@ -12,8 +11,12 @@ import com.nx.android.domain.GameEntry
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.PackMover
+import com.nx.android.data.AppLog
 import com.nx.android.domain.Ported
 import java.io.File
+import java.util.concurrent.Executors
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The library: the games the player built, what became of each one, and each game's own port options.
@@ -37,9 +40,11 @@ import java.io.File
  * [workRoot] is the porter's work folder: the unpacked game and the shader work of every build, one folder per
  * title ID. Deleting a game takes both away.
  */
-class LibraryState(private val port: PortState, private val player: PlayerState,
+@Singleton
+class LibraryState @Inject constructor(private val port: PortState,
                    private val libraryRepository: GameLibraryRepository,
-                   private val configRepository: GameConfigRepository) {
+                   private val configRepository: GameConfigRepository,
+                   private val operations: LibraryOperationCoordinator) {
 
     /** 库里的卡：一个游戏一张 */
     var games by mutableStateOf(listOf<GameEntry>()); private set
@@ -55,7 +60,19 @@ class LibraryState(private val port: PortState, private val player: PlayerState,
     /** 构建页聚焦的游戏：库的「▶ 构建」把它带过去（NX2Apple 的 activeBuildID 对应物） */
     var buildsTarget by mutableStateOf<File?>(null)
 
-    private val moving = HashSet<String>()
+    private val scanExecutor = Executors.newSingleThreadExecutor { Thread(it, "library-scan") }
+    private val scanCoordinator = LatestScanCoordinator(
+        executor = scanExecutor,
+        scan = {
+            libraryRepository.scan().also { result ->
+                runCatching { configRepository.migrateLegacyConfigs(result) }
+                    .onFailure { AppLog.line("Library config migration failed: ${it.message}") }
+            }
+        },
+        publish = { games = it },
+        setScanning = { scanning = it },
+        onFailure = { AppLog.line("Library scan failed: ${it.message}") },
+    )
 
     /** 行视图选中一个游戏（带过滤后的列表，越界收回） */
     fun selectHero(index: Int, count: Int) {
@@ -70,15 +87,7 @@ class LibraryState(private val port: PortState, private val player: PlayerState,
      * 源文件不在了不算没这个游戏：包或工作区还在，卡就在。
      */
     fun rescan() {
-        scanning = true
-        Thread {
-            try {
-                games = libraryRepository.scan()
-                configRepository.migrateLegacyConfigs(games)
-            } finally {
-                scanning = false
-            }
-        }.start()
+        scanCoordinator.request()
     }
 
     /** 端口目录：私有的一个，加上插着的可移动卡上的那些 */
@@ -92,6 +101,8 @@ class LibraryState(private val port: PortState, private val player: PlayerState,
 
     /** 构建页拿的是源文件：按它找到那张卡的包目录（重建时新包落在那儿） */
     fun packDirOf(f: File): File? = libraryRepository.packDirOf(f, games)
+
+    fun portFromPack(file: File): Ported? = libraryRepository.portFromPack(file)
 
     /** 这个游戏在各个卷上的数据包（每个卷可能各有一份） */
     fun packsOf(e: GameEntry): List<File> = libraryRepository.packsOf(e)
@@ -120,98 +131,33 @@ class LibraryState(private val port: PortState, private val player: PlayerState,
      * 游戏源文件是玩家的，不碰。正在构建或正在运行时不动任何东西。
      */
     fun remove(e: GameEntry): GameCleanup.Result {
-        removalBlocked(e)?.let { return GameCleanup.Result(it) }
-        val plan = planRemoval(e)
-        // 卡不在时够不着的包：先算出来（forget 之后那条登记就没了）
-        val unreachable = libraryRepository.unreachablePacks(e)
-        val result = GameCleanup.delete(plan)
-        // 记忆最后摘：删到一半被系统打断，游戏还在库里，玩家可以再删一次
-        // 有东西没删掉时也留着记忆：那点残留还在库里管得到，不至于变成没人管的孤儿
-        val clean = result.failed.isEmpty() && unreachable.isEmpty()
-        if (clean) forget(e) else rescan()
-        return GameCleanup.Result(
-            outcome = if (clean) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
-            workspaceKnown = plan.workspaceKnown,
-            // 卡不在时，卡上的那份够不着：不能当成删干净了
-            failed = result.failed + unreachable,
-        )
+        val result = operations.remove(e)
+        if (result.outcome !in setOf(GameCleanup.Outcome.BUSY_PORTING, GameCleanup.Outcome.BUSY_RUNNING, GameCleanup.Outcome.BUSY_MOVING)) rescan()
+        return result
     }
 
-    /**
-     * 只清掉构建缓存：工作区与半成品包。数据包、存档、库里的登记都不动——游戏照常能玩。
-     * 正在构建或正在运行时不动任何东西。
-     */
     fun clearCache(e: GameEntry): GameCleanup.Result {
-        removalBlocked(e)?.let { return GameCleanup.Result(it) }
-        val plan = planCache(e)
-        val result = GameCleanup.delete(plan)
-        rescan()
-        return GameCleanup.Result(
-            outcome = if (result.failed.isEmpty()) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
-            workspaceKnown = plan.workspaceKnown,
-            failed = result.failed,
-        )
+        val result = operations.clearCache(e)
+        if (result.outcome !in setOf(GameCleanup.Outcome.BUSY_PORTING, GameCleanup.Outcome.BUSY_RUNNING, GameCleanup.Outcome.BUSY_MOVING)) rescan()
+        return result
     }
 
-    /** 这个游戏现在能不能删/清缓存：正在构建 / 正在运行都不能（返回原因），能删返回 null */
-    fun removalBlocked(e: GameEntry): GameCleanup.Outcome? =
-        LibraryLogic.removalBlocked(
-            portRunning = port.running, portGameFile = port.gameFile, gamePath = e.sourcePath,
-            playerRunning = player.running, playerTitleId = player.titleId, titleId = e.titleId)
+    fun removalBlocked(e: GameEntry): GameCleanup.Outcome? = operations.removalBlocked(e)
 
-    /** 删除前先看看要删什么（界面在 IO 线程上调它）：数据包 + 工作区 + 半成品包 */
-    fun planRemoval(e: GameEntry): GameCleanup.Plan {
-        val packs = libraryRepository.packsOf(e)
-        return GameCleanup.plan(e.titleId, packs, libraryRepository.workRoot(), portsDirs(), keepPartials = port.running)
-    }
+    fun planRemoval(e: GameEntry): GameCleanup.Plan = operations.planRemoval(e)
 
-    /** 清缓存前先看看要清什么：只有工作区与半成品包（数据包不碰） */
-    fun planCache(e: GameEntry): GameCleanup.Plan =
-        GameCleanup.plan(e.titleId, emptyList(), libraryRepository.workRoot(), portsDirs(), keepPartials = port.running)
+    fun planCache(e: GameEntry): GameCleanup.Plan = operations.planCache(e)
 
-    /**
-     * 把一个游戏的包搬到另一个卷（可移动卡上 App 自己的目录），或者搬回来。
-     *
-     * 搬移的规矩在 PackMover 里：落位成功之后才删源包；失败时源包原地不动，游戏照常能玩。
-     * 搬移期间这个游戏不许再动（再搬一次或删掉它都会把那一次弄坏）。
-     *
-     * @param onProgress 进度回报（每抄完一个文件一次）：界面用它显示进度条
-     */
-    fun movePack(e: GameEntry, targetDir: File, onProgress: (PackMover.Progress) -> Unit = {}): PackMover.Result {
-        val pack = e.pack?.pack ?: return PackMover.Result.fail("the game has no pack")
-        val key = e.titleId
-        if (key in moving) return PackMover.Result.fail("the pack is being moved already")
-        moving += key
-        try {
-            val r = PackMover.move(pack, targetDir, onProgress)
-            if (r.ok) {
-                libraryRepository.rememberPackPath(e.titleId, File(targetDir, pack.name).absolutePath)
-                rescan()
-            }
-            return r
-        } finally {
-            moving -= key
-        }
-    }
+    fun movePack(e: GameEntry, targetDir: File, onProgress: (PackMover.Progress) -> Unit = {}): PackMover.Result =
+        operations.movePack(e, targetDir, onProgress).also { if (it.ok) rescan() }
 
-    /** 这个游戏现在能不能搬它的数据包：正在构建 / 正在运行 / 正在搬都不能（返回原因），能搬返回 null */
-    fun moveBlocked(e: GameEntry): GameCleanup.Outcome? =
-        LibraryLogic.moveBlocked(
-            portRunning = port.running, portGameFile = port.gameFile, gamePath = e.sourcePath,
-            playerRunning = player.running, playerTitleId = player.titleId, titleId = e.titleId,
-            moving = e.titleId in moving)
+    fun moveBlocked(e: GameEntry): GameCleanup.Outcome? = operations.moveBlocked(e)
 
     /** 卡不在时够不着的包：路径还记得，那个卷却不在了（删不到，要说实话） */
     fun unreachablePacks(e: GameEntry): List<File> = libraryRepository.unreachablePacks(e)
 
     /** 这个游戏的 title ID */
     fun titleIdOf(e: GameEntry): String? = e.titleId
-
-    /** 忘记一个游戏：它不再在库里登记，也不再有产物的登记 */
-    private fun forget(e: GameEntry) {
-        libraryRepository.forget(e.titleId)
-        rescan()
-    }
 
     /** 一个构建成功了：这个游戏是从哪个源文件建的，记下来（重建时用它） */
     fun noteDone(source: String, pack: String) {
@@ -231,7 +177,7 @@ class LibraryState(private val port: PortState, private val player: PlayerState,
         val rec = port.history.firstOrNull { it.game == source } ?: return
         val from = rec.startedAt
         val to = rec.startedAt + rec.seconds * 1000 + 10_000   // 留一点余量（目录的 mtime 是最后一次写入）
-        val tid = FolderScanner.workFolderIn(libraryRepository.workRoot(), from, to) ?: return
+        val tid = libraryRepository.workFolderIn(from, to) ?: return
         libraryRepository.rememberSource(tid, source)
         rescan()
     }

@@ -114,7 +114,7 @@ class AdbWire(private val key: RSAPrivateCrtKey, private val tls: Tls, private v
                     CLSE -> { if (remoteId != 0) writeMsg(out, CLSE, localId, remoteId, ByteArray(0)); break }
                 }
             }
-            return result.toString(Charsets.UTF_8)
+            return String(result.toByteArray(), Charsets.UTF_8)
         }
     }
 

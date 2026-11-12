@@ -3,6 +3,11 @@ package com.nx.android.appstate
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.content.Context
+import com.nx.android.data.Player
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The game that plays now (one at a time): the library watches this to grey out the other games' run buttons,
@@ -10,7 +15,13 @@ import androidx.compose.runtime.setValue
  * of its own. The process going away (the game quit itself, or it crashed; the app cannot tell, and it does
  * not matter) only clears the state — the library says nothing about it.
  */
-class PlayerState(private val alive: () -> Boolean, private val pollMs: Long = 2000) {
+@Singleton
+class PlayerState private constructor(private val alive: () -> Boolean, private val pollMs: Long, marker: Unit) {
+
+    @Inject
+    constructor(@ApplicationContext context: Context) : this({ Player.playProcessAlive(context) }, 2000, Unit)
+
+    constructor(alive: () -> Boolean, pollMs: Long = 2000) : this(alive, pollMs, Unit)
 
     var running by mutableStateOf(false); private set
 

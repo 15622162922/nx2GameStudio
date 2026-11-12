@@ -1,5 +1,6 @@
 package com.nx.android.domain
 
+import com.nx.android.data.library.LibraryFileScanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -16,10 +17,10 @@ class FolderScannerTest {
 
     @Test
     fun `a title id in the file's name is read`() {
-        assertEquals("0100000000010000", FolderScanner.titleIdIn("Zelda [0100000000010000][v0].nsp"))
-        assertEquals("0100ABCDEF012345", FolderScanner.titleIdIn("Game [0100abcdef012345].xci"))
-        assertNull(FolderScanner.titleIdIn("Hades II.xci"))
-        assertNull(FolderScanner.titleIdIn("[not a title id].nsp"))
+        assertEquals("0100000000010000", GameIdentity.titleIdIn("Zelda [0100000000010000][v0].nsp"))
+        assertEquals("0100ABCDEF012345", GameIdentity.titleIdIn("Game [0100abcdef012345].xci"))
+        assertNull(GameIdentity.titleIdIn("Hades II.xci"))
+        assertNull(GameIdentity.titleIdIn("[not a title id].nsp"))
     }
 
     @Test
@@ -35,7 +36,7 @@ class FolderScannerTest {
         orphan.mkdirs()
         File(orphan, "nx2a-data.json").writeText("""{"title_id":"0100000000019999"}""")
 
-        val idx = FolderScanner.outIndex(out)
+        val idx = LibraryFileScanner.outIndex(out)
         assertEquals(2, idx.size)
         val p = idx["0100000000010000"]!!
         assertEquals("Hades II", p.name)
@@ -55,23 +56,23 @@ class FolderScannerTest {
         File(pack, "nx2a-data.json").writeText("""{"title_id":"01004AB00A260000","name":"DARK SOULS","status":"experimental"}""")
         File(pack, "host/libdmplay.so").writeText("ELF")
 
-        val p = FolderScanner.outIndex(out)["01004AB00A260000"]!!
+        val p = LibraryFileScanner.outIndex(out)["01004AB00A260000"]!!
         assertEquals("experimental", p.status)
         // a pack from before the manifest carried the status: it is not experimental
         val old = File(out, "Old-data")
         File(old, "host").mkdirs()
         File(old, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
         File(old, "host/libdmplay.so").writeText("ELF")
-        assertEquals("", FolderScanner.outIndex(out)["0100000000010000"]!!.status)
+        assertEquals("", LibraryFileScanner.outIndex(out)["0100000000010000"]!!.status)
         out.deleteRecursively()
     }
 
     @Test
     fun `a display name drops the brackets and the extension`() {
-        assertEquals("Zelda", FolderScanner.displayName(File("Zelda [0100000000010000][v0].nsp")))
-        assertEquals("Hades II", FolderScanner.displayName(File("Hades II.xci")))
+        assertEquals("Zelda", GameIdentity.displayName(File("Zelda [0100000000010000][v0].nsp")))
+        assertEquals("Hades II", GameIdentity.displayName(File("Hades II.xci")))
         // nothing left after the brackets: the file's whole name stays
-        assertEquals("(demo).nsp", FolderScanner.displayName(File("(demo).nsp")))
+        assertEquals("(demo).nsp", GameIdentity.displayName(File("(demo).nsp")))
     }
 
     @Test
@@ -82,9 +83,9 @@ class FolderScannerTest {
         File(pack, "nx2a-data.json").writeText("""{"title_id":"01001F5010DFA000","name":"Pokémon Legends: Arceus","display":"1.1.1"}""")
         File(pack, "host/libdmplay.so").writeText("ELF")
 
-        val p = FolderScanner.outIndex(out)["01001F5010DFA000"]!!
+        val p = LibraryFileScanner.outIndex(out)["01001F5010DFA000"]!!
         // the file the player downloaded says nothing about the game: the pack does
-        assertEquals("Pokémon Legends: Arceus", FolderScanner.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), p))
+        assertEquals("Pokémon Legends: Arceus", GameIdentity.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), p))
         // the game's own version comes from the pack too
         assertEquals("1.1.1", p.display)
         out.deleteRecursively()
@@ -92,7 +93,7 @@ class FolderScannerTest {
 
     @Test
     fun `a game without a pack keeps its file's name as the label`() {
-        assertEquals("xxxx", FolderScanner.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), null))
+        assertEquals("xxxx", GameIdentity.labelFor(File("/sdcard/Games/[本体v1.0.0]xxxx.nsp"), null))
     }
 
     @Test
@@ -108,8 +109,8 @@ class FolderScannerTest {
         File(blank, "host/libdmplay.so").writeText("ELF")
 
         val f = File("/sdcard/Games/[本体v1.0.0]xxxx.nsp")
-        assertEquals("xxxx", FolderScanner.labelFor(f, FolderScanner.outIndex(out)["0100000000010000"]))
-        assertEquals("xxxx", FolderScanner.labelFor(f, FolderScanner.outIndex(out)["0100000000020000"]))
+        assertEquals("xxxx", GameIdentity.labelFor(f, LibraryFileScanner.outIndex(out)["0100000000010000"]))
+        assertEquals("xxxx", GameIdentity.labelFor(f, LibraryFileScanner.outIndex(out)["0100000000020000"]))
         out.deleteRecursively()
     }
 
@@ -121,7 +122,7 @@ class FolderScannerTest {
         File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000","name":"Hades II"}""")
         File(pack, "host/libdmplay.so").writeText("ELF")
 
-        assertEquals("", FolderScanner.outIndex(out)["0100000000010000"]!!.display)
+        assertEquals("", LibraryFileScanner.outIndex(out)["0100000000010000"]!!.display)
         out.deleteRecursively()
     }
 
@@ -142,13 +143,13 @@ class FolderScannerTest {
         pack(card, "0100000000020000", "Only on the card")
 
         val byTitle = HashMap<String, com.nx.android.domain.Ported>()
-        byTitle.putAll(FolderScanner.outIndex(card))
-        byTitle.putAll(FolderScanner.outIndex(private))   // 私有目录后扫：它优先
+        byTitle.putAll(LibraryFileScanner.outIndex(card))
+        byTitle.putAll(LibraryFileScanner.outIndex(private))   // 私有目录后扫：它优先
 
         assertEquals(2, byTitle.size)
         assertEquals("The private one", byTitle["0100000000010000"]!!.name)
         assertEquals(onPrivate, byTitle["0100000000010000"]!!.pack)
-        assertEquals(onCard, FolderScanner.outIndex(card)["0100000000010000"]!!.pack)
+        assertEquals(onCard, LibraryFileScanner.outIndex(card)["0100000000010000"]!!.pack)
         assertEquals("Only on the card", byTitle["0100000000020000"]!!.name)
     }
 
@@ -156,8 +157,8 @@ class FolderScannerTest {
     @Test
     fun `the volume root of a path on a card is the card itself`() {
         assertEquals(File("/storage/FB9A-DC19"),
-                     FolderScanner.volumeRootOf(File("/storage/FB9A-DC19/Android/data/com.nx.android/files/ports/Game-data")))
-        assertNull(FolderScanner.volumeRootOf(File("/data/user/0/com.nx.android/files/ports/Game-data")))
+                     LibraryFileScanner.volumeRootOf(File("/storage/FB9A-DC19/Android/data/com.nx.android/files/ports/Game-data")))
+        assertNull(LibraryFileScanner.volumeRootOf(File("/data/user/0/com.nx.android/files/ports/Game-data")))
     }
 
     /** 清单里的 title ID：宿主没了也要认（删包时那个包可能已经缺了宿主） */
@@ -167,8 +168,8 @@ class FolderScannerTest {
         val pack = File(out, "Game-data").apply { mkdirs() }
         File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
 
-        assertEquals("0100000000010000", FolderScanner.manifestTitleId(pack))
-        assertNull(FolderScanner.manifestTitleId(File(out, "nothing")))
+        assertEquals("0100000000010000", LibraryFileScanner.manifestTitleId(pack))
+        assertNull(LibraryFileScanner.manifestTitleId(File(out, "nothing")))
         out.deleteRecursively()
     }
 
@@ -179,7 +180,7 @@ class FolderScannerTest {
         File(work, "010078D000F88000_build").mkdirs()
         File(work, "0100B99019412000_build").mkdirs()
 
-        val idx = FolderScanner.workIndex(work)
+        val idx = LibraryFileScanner.workIndex(work)
         assertEquals(2, idx.size)
         assertEquals(File(work, "010078D000F88000_build"), idx["010078D000F88000"])
         assertEquals(File(work, "0100B99019412000_build"), idx["0100B99019412000"])
@@ -189,12 +190,12 @@ class FolderScannerTest {
     /** 不是移植器建的目录不算工作区 */
     @Test
     fun `only the porter's own folders are work folders`() {
-        assertEquals("010078D000F88000", FolderScanner.titleIdInWork("010078D000F88000_build"))
-        assertNull(FolderScanner.titleIdInWork("tmp"))
-        assertNull(FolderScanner.titleIdInWork("010078D000F8800_build"))
-        assertNull(FolderScanner.titleIdInWork("Hades_build"))
+        assertEquals("010078D000F88000", GameIdentity.titleIdInWork("010078D000F88000_build"))
+        assertNull(GameIdentity.titleIdInWork("tmp"))
+        assertNull(GameIdentity.titleIdInWork("010078D000F8800_build"))
+        assertNull(GameIdentity.titleIdInWork("Hades_build"))
         // 没有工作区目录时，索引是空的
-        assertTrue(FolderScanner.workIndex(File(tmpDir(), "nothing")).isEmpty())
+        assertTrue(LibraryFileScanner.workIndex(File(tmpDir(), "nothing")).isEmpty())
     }
 
     /**
@@ -209,9 +210,9 @@ class FolderScannerTest {
         mine.setLastModified(t0 + 10_000)          // 构建期间写的
         later.setLastModified(t0 + 500_000)        // 后来那次构建写的
 
-        assertEquals("010078D000F88000", FolderScanner.workFolderIn(work, t0, t0 + 60_000))
+        assertEquals("010078D000F88000", LibraryFileScanner.workFolderIn(work, t0, t0 + 60_000))
         // 窗外的工作区不算：那次构建什么都没留下
-        assertNull(FolderScanner.workFolderIn(work, t0 + 200_000, t0 + 400_000))
+        assertNull(LibraryFileScanner.workFolderIn(work, t0 + 200_000, t0 + 400_000))
         work.deleteRecursively()
     }
 }

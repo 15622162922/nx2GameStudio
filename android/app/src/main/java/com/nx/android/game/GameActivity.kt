@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.annotation.SuppressLint
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -46,14 +47,14 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PrefsStore
-import com.nx.android.game.HudField
-import com.nx.android.ui.ProvideAppLocale
-import com.nx.android.ui.game.GameDrawer
-import com.nx.android.ui.game.HudOverlay
-import com.nx.android.ui.game.PadEditor
-import com.nx.android.ui.game.PadView
-import com.nx.android.ui.game.TextPrompt
-import com.nx.android.ui.theme.NxTheme
+import com.nx.android.game.hud.HudField
+import com.nx.android.core.ui.ProvideAppLocale
+import com.nx.android.game.overlay.GameDrawer
+import com.nx.android.game.hud.HudOverlay
+import com.nx.android.game.input.PadEditor
+import com.nx.android.game.input.PadView
+import com.nx.android.game.overlay.TextPrompt
+import com.nx.android.core.ui.theme.NxTheme
 import org.json.JSONObject
 
 /**
@@ -108,7 +109,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     /** 界面语言：toast 与抽屉里的词从这里取 */
-    private val locale: AppLocale get() = (application as NxApp).container.locale
+    private val locale: AppLocale get() = (application as NxApp).locale
 
     private var paused by mutableStateOf(false)
     private var drawerOpen by mutableStateOf(false)
@@ -412,6 +413,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
      * (dm_menu_state: -1 closed, else a panel is up), and with nothing up Back opens the drawer.
      * 游戏暂停时也一样：暂停遮罩吃掉了所有触摸（菜单按钮点不到），Back 是那时唯一能叫出抽屉的入口。
      */
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (!forwardsKeyToGame(e.keyCode)) return false   // 音量键：系统的事，游戏与宿主都不沾
         if (e.keyCode == KeyEvent.KEYCODE_BACK) {

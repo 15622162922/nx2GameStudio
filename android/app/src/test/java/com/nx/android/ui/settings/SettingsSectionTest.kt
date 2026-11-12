@@ -1,4 +1,4 @@
-package com.nx.android.ui.settings
+package com.nx.android.feature.settings
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

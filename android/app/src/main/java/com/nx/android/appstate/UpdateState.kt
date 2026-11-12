@@ -12,6 +12,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * 有没有新版本。
@@ -20,7 +23,8 @@ import kotlinx.coroutines.launch
  * 查到的新版本比 App 现在的版本新，就记下来，连同那个 release 自己的更新说明（release 的正文）。
  * 玩家点「稍后」＝这一次启动不再问；下次冷启动还会问（这是玩家自己的选择，不是永久的拒绝）。
  */
-class UpdateState(private val context: Context) {
+@Singleton
+class UpdateState @Inject constructor(@ApplicationContext private val context: Context) {
 
     enum class Phase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, FAILED }
 

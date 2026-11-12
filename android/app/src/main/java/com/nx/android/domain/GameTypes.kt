@@ -33,7 +33,7 @@ data class GameEntry(
 
     /** 卡上的名字：包清单里的游戏名；没有包就用记住的源路径中的文件名 */
     val label: String get() = pack?.name?.trim()?.takeIf { it.isNotEmpty() }
-        ?: sourcePath?.let { FolderScanner.displayName(File(it)) }
+        ?: sourcePath?.let { GameIdentity.displayName(File(it)) }
         ?: titleId
 }
 
@@ -65,6 +65,21 @@ object GameConfigJson {
         o.optBoolean("touch"), o.optBoolean("fps60"), o.optBoolean("exp"), o.optInt("alias", ALIAS_AUTO))
 }
 
+/** Moves filename-keyed legacy options to title IDs once the library can identify their games. */
+object GameConfigMigration {
+    fun migrateLegacy(configs: MutableMap<String, GameConfig>, games: List<GameEntry>): Boolean {
+        var changed = false
+        for (entry in games) {
+            if (configs.containsKey(entry.titleId)) continue
+            val sourceName = entry.sourcePath?.let { File(it).name } ?: continue
+            val config = configs.remove(sourceName) ?: continue
+            configs[entry.titleId] = config
+            changed = true
+        }
+        return changed
+    }
+}
+
 /**
  * 一个完成的移植：数据包是唯一产物（手机线不再产出 APK），宿主程序（libdmplay.so）在包里，App 的
  * 玩家把它拷进私有目录后直接运行。「已完成」以包与宿主齐备为准。
@@ -80,7 +95,7 @@ data class Ported(
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
 ) {
     /** 清单和宿主都齐备，且使用当前播放器前端，可以直接运行。 */
-    val runnable: Boolean get() = host.isFile && hostFront == FolderScanner.HOST_FRONT
+    val runnable: Boolean get() = host.isFile && hostFront == GameIdentity.HOST_FRONT
 
     /** 这个包是否需要重新移植：宿主缺失或使用了旧前端都算。 */
     val needsRePort: Boolean get() = !runnable

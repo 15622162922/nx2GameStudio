@@ -1,6 +1,7 @@
 package com.nx.android.domain
 
 import org.json.JSONObject
+import com.nx.android.data.library.PackMoverFiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,7 +36,7 @@ class PackMoverTest {
         val pack = fakePack(src)
         val manifestBytes = File(pack, "nx2a-data.json").length()
 
-        val r = PackMover.move(pack, File(dst, "ports"))
+        val r = PackMoverFiles.move(pack, File(dst, "ports"))
 
         assertTrue(r.failure ?: "", r.ok)
         val moved = File(dst, "ports/Game-data")
@@ -58,7 +59,7 @@ class PackMoverTest {
         File(pack, "saves").mkdirs()
         File(pack, "saves/backup.zip").writeText("the player's backup")
 
-        val r = PackMover.move(pack, File(dst, "ports"))
+        val r = PackMoverFiles.move(pack, File(dst, "ports"))
 
         assertTrue(r.failure ?: "", r.ok)
         val moved = File(dst, "ports/Game-data")
@@ -72,7 +73,7 @@ class PackMoverTest {
         val src = tmpDir("src"); val dst = tmpDir("dst")
         val pack = fakePack(src)
 
-        PackMover.move(pack, File(dst, "ports"))
+        PackMoverFiles.move(pack, File(dst, "ports"))
 
         assertFalse(File(dst, "ports/Game-data.partial").exists())
         assertFalse(File(dst, "ports/Game-data.saves-keep").exists())
@@ -87,7 +88,7 @@ class PackMoverTest {
         File(target, "saves").mkdirs()
         File(target, "saves/backup.zip").writeText("the player's backup")
 
-        val r = PackMover.move(pack, File(dst, "ports"))
+        val r = PackMoverFiles.move(pack, File(dst, "ports"))
 
         assertTrue(r.failure ?: "", r.ok)
         assertTrue(File(target, "saves/backup.zip").isFile)   // 导出存档留着
@@ -98,7 +99,7 @@ class PackMoverTest {
     fun `a missing pack leaves everything alone`() {
         val src = tmpDir("src"); val dst = tmpDir("dst")
 
-        val r = PackMover.move(File(src, "nothing-data"), File(dst, "ports"))
+        val r = PackMoverFiles.move(File(src, "nothing-data"), File(dst, "ports"))
 
         assertFalse(r.ok)
         assertTrue(r.failure != null)
@@ -114,7 +115,7 @@ class PackMoverTest {
         locked.writeBytes(ByteArray(16))
         locked.setReadable(false, false)
 
-        val r = PackMover.move(pack, File(dst, "ports"))
+        val r = PackMoverFiles.move(pack, File(dst, "ports"))
 
         assertFalse(r.ok)
         assertFalse(File(dst, "ports/Game-data").exists())     // 没有半成品冒充正名
@@ -127,7 +128,7 @@ class PackMoverTest {
         val src = tmpDir("src")
         val pack = fakePack(src)
 
-        val r = PackMover.move(pack, src)
+        val r = PackMoverFiles.move(pack, src)
 
         assertTrue(r.ok)
         assertTrue(pack.exists())
@@ -141,7 +142,7 @@ class PackMoverTest {
         val total = 1024L + 2048 + 512 + File(pack, "nx2a-data.json").length()
 
         val seen = ArrayList<PackMover.Progress>()
-        val r = PackMover.move(pack, File(dst, "ports")) { seen.add(it) }
+        val r = PackMoverFiles.move(pack, File(dst, "ports")) { seen.add(it) }
 
         assertTrue(r.failure ?: "", r.ok)
         assertTrue("the progress should be reported per file", seen.size >= 4)

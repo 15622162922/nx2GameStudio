@@ -9,7 +9,7 @@ import com.nx.android.data.PrefsStore.Companion.LIB_PACKS
 import com.nx.android.data.PrefsStore.Companion.LIB_PORTS
 import com.nx.android.data.PrefsStore.Companion.LIB_SOURCES
 import com.nx.android.data.StorageVolumes
-import com.nx.android.domain.FolderScanner
+import com.nx.android.domain.GameIdentity
 import com.nx.android.domain.GameEntry
 import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.Ported
@@ -37,26 +37,27 @@ class GameLibraryRepositoryImpl @Inject constructor(
 
     init { loadMemories() }
 
+    @Synchronized
     override fun scan(): List<GameEntry> {
         val started = System.currentTimeMillis()
         val byTitle = HashMap<String, Ported>()
         val byTitleInternal = HashMap<String, Boolean>()
         val removable = StorageVolumes.removablePortsDirs(context).map { it.second }
         for (dir in removable) {
-            for ((titleId, candidate) in FolderScanner.outIndex(dir)) {
+        for ((titleId, candidate) in LibraryFileScanner.outIndex(dir)) {
                 val chosen = LibraryLogic.preferPack(byTitle[titleId], byTitleInternal[titleId] == true,
                     candidate, candidateInternal = false)
                 byTitle[titleId] = chosen.first
                 byTitleInternal[titleId] = chosen.second
             }
         }
-        for ((titleId, candidate) in FolderScanner.outIndex(paths.ports)) {
+        for ((titleId, candidate) in LibraryFileScanner.outIndex(paths.ports)) {
             val chosen = LibraryLogic.preferPack(byTitle[titleId], byTitleInternal[titleId] == true,
                 candidate, candidateInternal = true)
             byTitle[titleId] = chosen.first
             byTitleInternal[titleId] = chosen.second
         }
-        val work = FolderScanner.workIndex(paths.work)
+        val work = LibraryFileScanner.workIndex(paths.work)
         val result = LibraryLogic.merge(byTitle, work, sources)
         byTitle.forEach { (titleId, pack) -> packPaths[titleId] = pack.pack.absolutePath }
         savePackPaths()
@@ -74,6 +75,7 @@ class GameLibraryRepositoryImpl @Inject constructor(
      * 项里若干段 = 若干目录（工作区 / 数据包）。每个卷上可能各有一份数据包，够不着的
      * 那份（卡不在）标成「够不着」，不当成 0。
      */
+    @Synchronized
     override fun usageItems(games: List<GameEntry>): List<StorageUsage.Item> {
         val items = ArrayList<StorageUsage.Item>()
         val claimedPacks = HashSet<String>()
@@ -123,6 +125,11 @@ class GameLibraryRepositoryImpl @Inject constructor(
 
     override fun internalPortsDir(): File = paths.ports
     override fun workRoot(): File = paths.work
+    override fun existingWorkspace(titleId: String): File? =
+        com.nx.android.domain.GameCleanup.workspaceOf(titleId, paths.work)?.takeIf(File::exists)
+    override fun partialPacks(): List<File> = portsDirs().flatMap(LibraryFileScanner::partials)
+    override fun workFolderIn(from: Long, to: Long): String? = LibraryFileScanner.workFolderIn(paths.work, from, to)
+    override fun portFromPack(pack: File): Ported? = LibraryFileScanner.portFromPack(pack)
     override fun packDirOf(entry: GameEntry): File? = entry.pack?.pack?.parentFile
     override fun packDirOf(source: File, games: List<GameEntry>): File? =
         games.firstOrNull { it.sourcePath == source.absolutePath }?.pack?.pack?.parentFile
@@ -132,34 +139,38 @@ class GameLibraryRepositoryImpl @Inject constructor(
         for (dir in portsDirs()) {
             for (pack in dir.listFiles() ?: emptyArray()) {
                 if (!pack.isDirectory || !pack.name.endsWith("-data")) continue
-                val titleId = FolderScanner.manifestTitleId(pack) ?: continue
+                val titleId = LibraryFileScanner.manifestTitleId(pack) ?: continue
                 if (titleId.equals(entry.titleId, ignoreCase = true)) packs += pack
             }
         }
         return packs
     }
 
+    @Synchronized
     override fun unreachablePacks(entry: GameEntry): List<File> {
         val path = packPaths[entry.titleId] ?: return emptyList()
         val pack = File(path)
         if (pack.exists()) return emptyList()
-        val volumeRoot = FolderScanner.volumeRootOf(pack) ?: return emptyList()
+        val volumeRoot = LibraryFileScanner.volumeRootOf(pack) ?: return emptyList()
         return if (volumeRoot.isDirectory) emptyList() else listOf(pack)
     }
 
+    @Synchronized
     override fun rememberPackPath(titleId: String, path: String) {
         packPaths[titleId] = path
         savePackPaths()
     }
 
+    @Synchronized
     override fun rememberSource(titleId: String, source: String) {
         sources[titleId] = source
         saveSources()
     }
 
+    @Synchronized
     override fun noteDone(source: String, pack: String): String? {
         if (source.isEmpty() || pack.isEmpty()) return null
-        val ported = FolderScanner.portFromPack(File(pack)) ?: return null
+        val ported = LibraryFileScanner.portFromPack(File(pack)) ?: return null
         sources[ported.titleId] = source
         packPaths[ported.titleId] = ported.pack.absolutePath
         saveSources()
@@ -167,6 +178,7 @@ class GameLibraryRepositoryImpl @Inject constructor(
         return ported.titleId
     }
 
+    @Synchronized
     override fun forget(titleId: String) {
         sources.remove(titleId)
         packPaths.remove(titleId)

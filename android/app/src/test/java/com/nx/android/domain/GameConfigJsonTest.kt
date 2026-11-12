@@ -32,4 +32,25 @@ class GameConfigJsonTest {
         assertEquals(ALIAS_AUTO, GameConfig().aliasHeadroom)
         assertEquals(0, GameConfig().copy(aliasHeadroom = 0).aliasHeadroom)
     }
+
+    @Test
+    fun `legacy filename config migrates to title ID while explicit title config wins`() {
+        val legacy = GameConfig(touch = true, fps60 = true)
+        val explicit = GameConfig(experimental = true)
+        val configs = mutableMapOf(
+            "game.nsp" to legacy,
+            "0100000000010000" to explicit,
+        )
+        val games = listOf(
+            GameEntry("0100000000010000", null, null, "/storage/first.nsp"),
+            GameEntry("0100000000020000", null, null, "/storage/game.nsp"),
+        )
+
+        val changed = GameConfigMigration.migrateLegacy(configs, games)
+
+        assertTrue(changed)
+        assertEquals(explicit, configs["0100000000010000"])
+        assertEquals(legacy, configs["0100000000020000"])
+        assertFalse(configs.containsKey("game.nsp"))
+    }
 }

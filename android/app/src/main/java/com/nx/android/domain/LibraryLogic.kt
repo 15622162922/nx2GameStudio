@@ -15,7 +15,7 @@ object LibraryLogic {
      * Renamed files have no claim here; the porter will confirm their content when the build starts.
      */
     fun sourceMatchesTitle(candidateName: String, expectedTitleId: String): Boolean {
-        val claimed = FolderScanner.titleIdIn(candidateName) ?: return true
+        val claimed = GameIdentity.titleIdIn(candidateName) ?: return true
         return claimed.equals(expectedTitleId, ignoreCase = true)
     }
 

@@ -4,15 +4,16 @@ import android.os.StatFs
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.nx.android.data.Env
+import com.nx.android.core.storage.AppPaths
 import com.nx.android.domain.StorageUsage
-import com.nx.android.domain.GameEntry
 import com.nx.android.domain.library.GameLibraryRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * 「存储」分区背后的状态：库里每个游戏占了多少（工作区 + 数据包），以及一共占了多少。
@@ -26,9 +27,10 @@ import java.util.concurrent.Executors
  *   已测得的那一段留下当下界；
  * - 结果落盘（`files/usage.json`），当天再进直接用，不重��。
  */
-class StorageUsageState(
-    private val env: Env,
-    private val games: () -> List<GameEntry>,
+@Singleton
+class StorageUsageState @Inject constructor(
+    private val paths: AppPaths,
+    private val library: LibraryState,
     private val libraryRepository: GameLibraryRepository,
 ) {
 
@@ -68,7 +70,7 @@ class StorageUsageState(
      * 取数要读各个卷的端口目录（认包），所以它跑在后台线程上。
      */
     suspend fun prepare() {
-        val gameSnapshot = games()                  // 主线程读：库里的清单
+        val gameSnapshot = library.visible()        // 主线程读：库里的清单
         val items = withContext(background) { libraryRepository.usageItems(gameSnapshot) }
         val previous = snapshot.items.associateBy { it.id }
         snapshot = snapshot.copy(
@@ -116,7 +118,7 @@ class StorageUsageState(
         snapshot = result
     }
 
-    private fun snapshotFile(): File = File(env.files, "usage.json")
+    private fun snapshotFile(): File = File(paths.files, "usage.json")
 
     companion object {
         /**

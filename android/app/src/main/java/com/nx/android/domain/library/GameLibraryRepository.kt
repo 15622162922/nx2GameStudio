@@ -10,7 +10,11 @@ interface GameLibraryRepository {
     fun portsDirs(): List<File>
     fun internalPortsDir(): File
     fun workRoot(): File
+    fun existingWorkspace(titleId: String): File?
+    fun partialPacks(): List<File>
     fun usageItems(games: List<GameEntry>): List<StorageUsage.Item>
+    fun workFolderIn(from: Long, to: Long): String?
+    fun portFromPack(pack: File): Ported?
     fun packDirOf(entry: GameEntry): File?
     fun packDirOf(source: File, games: List<GameEntry>): File?
     fun packsOf(entry: GameEntry): List<File>

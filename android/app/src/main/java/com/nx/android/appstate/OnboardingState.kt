@@ -7,9 +7,10 @@ import androidx.compose.runtime.setValue
 import com.nx.android.R
 import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
-import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
 import com.nx.android.data.PrefsStore
+import com.nx.android.domain.environment.EnvironmentSetup
+import com.nx.android.domain.environment.GuestProcessLauncher
 import com.nx.android.data.PrefsStore.Companion.OB_COMPLETED
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
@@ -17,7 +18,10 @@ import com.nx.android.domain.DoctorOutput
 import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
+import com.nx.android.feature.environment.EnvCheckState
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The guided setup's state: the step the player is on, what each step gathered, and where "later" lands next
@@ -25,10 +29,15 @@ import java.io.File
  * storage permission, the environment's unpack, the doctor's keys check — and remembers everything across
  * restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
  */
-class OnboardingState(private val prefs: PrefsStore, private val env: Env, private val locale: AppLocale,
-                      private val storageOk: () -> Boolean,
-                      /** The environment changed: the top bar's chip reads the facts again */
-                      private val onEnvChanged: () -> Unit = {}) {
+@Singleton
+class OnboardingState @Inject constructor(
+    private val prefs: PrefsStore,
+    private val env: EnvironmentSetup,
+    private val guestLauncher: GuestProcessLauncher,
+    private val locale: AppLocale,
+    private val envCheck: EnvCheckState,
+) {
+    @Volatile var storageOk: Boolean = false
 
     companion object {
         /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
@@ -118,12 +127,12 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         Thread {
             env.reset()
             refreshEnv()
-            onEnvChanged()
+            envCheck.refresh()
         }.start()
     }
 
     fun facts(): ObFacts = ObFacts(
-        storageOk = storageOk(), freeGB = freeGB(), neededGB = NEEDED_GB,
+        storageOk = storageOk, freeGB = freeGB(), neededGB = NEEDED_GB,
         envReady = envReady, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
     )
 
@@ -155,7 +164,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
                 AppLog.line(locale.str(R.string.onb_prepare_failed, e.message))
             }
             refreshEnv()
-            onEnvChanged()
+            envCheck.refresh()
         }.start()
     }
 
@@ -222,7 +231,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         keysChecking = true
         keysDetail = ""
         val buf = StringBuilder()
-        PortRunner(env, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
+        PortRunner(env, guestLauncher, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
             keysChecking = false
             // the port reads the file: a file that cannot be read is not good keys
             if (!readable(p)) {

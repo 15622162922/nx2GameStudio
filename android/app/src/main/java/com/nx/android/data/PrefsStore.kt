@@ -46,6 +46,7 @@ class PrefsStore @Inject constructor(@ApplicationContext ctx: Context) {
         const val PORT_RUNNING = "port.running"
         const val PORT_STARTED_AT = "port.startedAt"
         const val PORT_HISTORY = "port.history"
+        const val PORT_COMPLETED = "port.completed"
         // the performance HUD: the two lines and what the performance one shows
         const val HUD_STATS = "hud.stats"
         const val HUD_DEVICE = "hud.device"

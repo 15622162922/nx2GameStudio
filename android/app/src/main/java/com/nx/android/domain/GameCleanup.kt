@@ -49,12 +49,11 @@ object GameCleanup {
      * @param packs 这个游戏已完成的数据包（每个卷上可能各有一份：私有的、可移动卡上的）
      * @param keepPartials 留着半成品包：另一个构建正在写它，删了就把那次构建杀了
      */
-    fun plan(titleId: String?, packs: List<File>, workRoot: File, portsDirs: List<File>,
-             keepPartials: Boolean): Plan {
+    fun plan(titleId: String?, packs: List<File>, workspace: File?, partials: List<File>): Plan {
         val targets = ArrayList<Target>()
-        packs.filter { it.exists() }.forEach { targets += Target(it, Kind.PACK) }
-        workspaceOf(titleId, workRoot)?.takeIf { it.exists() }?.let { targets += Target(it, Kind.WORKSPACE) }
-        if (!keepPartials) portsDirs.forEach { d -> partials(d).forEach { targets += Target(it, Kind.PARTIAL) } }
+        packs.forEach { targets += Target(it, Kind.PACK) }
+        workspace?.let { targets += Target(it, Kind.WORKSPACE) }
+        partials.forEach { targets += Target(it, Kind.PARTIAL) }
         return Plan(targets, workspaceKnown = titleId != null)
     }
 
@@ -64,25 +63,5 @@ object GameCleanup {
         return File(workRoot, "${titleId.uppercase(Locale.US)}_build")
     }
 
-    /** 半成品包：ports/ 下的 *.partial（打包被打断留下的，永远没有重试价值） */
-    fun partials(portsDir: File): List<File> =
-        portsDir.listFiles()
-            ?.filter { it.isDirectory && it.name.endsWith(".partial") }
-            ?.sortedBy { it.name }
-            ?: emptyList()
 
-    /**
-     * 删掉它们。
-     *
-     * 不量体积：一个工作区几个 GB、几十万文件，遍历文件树要好几秒，弹框会卡。空间是删掉就回来的，
-     * 玩家要的是「删干净」，不是「先报个数」。
-     */
-    fun delete(plan: Plan): Deleted {
-        val failed = ArrayList<File>()
-        for (t in plan.targets) {
-            val gone = try { !t.file.exists() || t.file.deleteRecursively() } catch (e: Exception) { false }
-            if (!gone) failed += t.file
-        }
-        return Deleted(failed, plan.workspaceKnown)
-    }
 }

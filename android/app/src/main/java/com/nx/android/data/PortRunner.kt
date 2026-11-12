@@ -2,6 +2,8 @@ package com.nx.android.data
 
 import com.nx.android.BuildConfig
 import com.nx.android.R
+import com.nx.android.domain.environment.EnvironmentSetup
+import com.nx.android.domain.environment.GuestProcessLauncher
 import java.io.File
 
 /**
@@ -9,7 +11,12 @@ import java.io.File
  * behavior (one stream for stdout and stderr, the porter's events by line, cancel stops the porter and the
  * tools it started). Every run is one thread; the output goes to [onLine] from that thread.
  */
-class PortRunner(private val env: Env, private val locale: AppLocale, private val onLine: (String) -> Unit) {
+class PortRunner(
+    private val environmentSetup: EnvironmentSetup,
+    private val guestLauncher: GuestProcessLauncher,
+    private val locale: AppLocale,
+    private val onLine: (String) -> Unit,
+) {
 
     @Volatile private var proc: Process? = null
 
@@ -60,7 +67,7 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         val t = Thread {
             try {
                 onLine(locale.str(R.string.runner_checking_tools))
-                env.patchInterpreters()
+                environmentSetup.patchInterpreters()
                 onLine(locale.str(R.string.runner_interpreter_patched))
             } catch (e: Exception) {
                 onLine(locale.str(R.string.runner_interpreter_patch_failed, e.message))
@@ -74,7 +81,7 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
     private fun start(args: List<String>, onEnd: () -> Unit, extra: Map<String, String> = emptyMap()): Thread {
         val t = Thread {
             try {
-                val p = env.guest(args, extra = extra)
+                val p = guestLauncher.guest(args, extra = extra)
                 proc = p
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)

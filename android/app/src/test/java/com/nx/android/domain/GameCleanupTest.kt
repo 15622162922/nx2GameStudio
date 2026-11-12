@@ -1,5 +1,6 @@
 package com.nx.android.domain
 
+import com.nx.android.data.library.GameCleanupFiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,7 +30,7 @@ class GameCleanupTest {
         val ws = t.workspace("0100000000010000")
         val partial = t.pack("Other-data.partial")
 
-        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), ws, listOf(partial))
 
         assertEquals(3, plan.targets.size)
         assertTrue(plan.workspaceKnown)
@@ -48,8 +49,8 @@ class GameCleanupTest {
         val partial = t.pack("Game-data.partial")
         t.file(pack, "romfs.bin", 1024)
 
-        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = false)
-        val result = GameCleanup.delete(plan)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), ws, listOf(partial))
+        val result = GameCleanupFiles.delete(plan)
 
         assertTrue(result.failed.isEmpty())
         assertFalse(pack.exists())
@@ -64,8 +65,8 @@ class GameCleanupTest {
         val partial = t.pack("Game-data.partial")
         val pack = t.pack("Game-data")
 
-        val plan = GameCleanup.plan("0100000000010000", listOf(pack), t.work, listOf(t.ports), keepPartials = true)
-        GameCleanup.delete(plan)
+        val plan = GameCleanup.plan("0100000000010000", listOf(pack), null, emptyList())
+        GameCleanupFiles.delete(plan)
 
         assertTrue(partial.exists())    // 另一个构建正在写它，不能删
         assertFalse(pack.exists())
@@ -79,9 +80,9 @@ class GameCleanupTest {
         val ws = t.workspace("0100000000010000")
         val partial = t.pack("Game-data.partial")
 
-        val plan = GameCleanup.plan("0100000000010000", emptyList(), t.work, listOf(t.ports), keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", emptyList(), ws, listOf(partial))
         assertFalse(plan.targets.any { it.kind == GameCleanup.Kind.PACK })
-        GameCleanup.delete(plan)
+        GameCleanupFiles.delete(plan)
 
         assertTrue(pack.exists())       // 数据包与存档不动
         assertFalse(ws.exists())
@@ -91,7 +92,7 @@ class GameCleanupTest {
     @Test
     fun `a file name without a title ID leaves the workspace unknown`() {
         val t = Tree()
-        val plan = GameCleanup.plan(null, emptyList(), t.work, listOf(t.ports), keepPartials = false)
+        val plan = GameCleanup.plan(null, emptyList(), null, emptyList())
         assertFalse(plan.workspaceKnown)
         assertTrue(plan.targets.isEmpty())
     }
@@ -113,10 +114,9 @@ class GameCleanupTest {
         val onCard = File(card, "Game-data").apply { mkdirs() }
         val cardPartial = File(card, "Game-data.partial").apply { mkdirs() }
 
-        val plan = GameCleanup.plan("0100000000010000", listOf(private, onCard), t.work,
-                                    listOf(t.ports, card), keepPartials = false)
+        val plan = GameCleanup.plan("0100000000010000", listOf(private, onCard), null, listOf(cardPartial))
         assertEquals(3, plan.targets.size)      // 两个包 + 卡上的半成品
-        GameCleanup.delete(plan)
+        GameCleanupFiles.delete(plan)
 
         assertFalse(private.exists())
         assertFalse(onCard.exists())

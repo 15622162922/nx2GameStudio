@@ -1,25 +1,8 @@
 package com.nx.android
 
 import android.app.Application
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.nx.android.appstate.LibraryState
-import com.nx.android.appstate.OnboardingState
-import com.nx.android.appstate.PlayerState
-import com.nx.android.appstate.PortState
-import com.nx.android.appstate.StorageUsageState
-import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
-import com.nx.android.data.Env
-import com.nx.android.data.Player
-import com.nx.android.data.PrefsStore
 import com.nx.android.data.PhantomFix
-import com.nx.android.domain.drivers.DriverRepository
-import com.nx.android.domain.library.GameConfigRepository
-import com.nx.android.domain.library.GameLibraryRepository
-import com.nx.android.core.storage.AppPaths
-import com.nx.android.ui.env.EnvCheckState
 import com.nx.android.app.AppProcess
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -33,68 +16,10 @@ class NxApp : Application() {
 
     val isMainProcess: Boolean by lazy(LazyThreadSafetyMode.NONE) { AppProcess.isMainProcess(this) }
 
-    @Inject
-    lateinit var appPaths: AppPaths
+    @Inject lateinit var locale: AppLocale
 
-    @Inject
-    lateinit var driverRepository: DriverRepository
-
-    @Inject
-    lateinit var prefsStore: PrefsStore
-
-    @Inject
-    lateinit var gameLibraryRepository: GameLibraryRepository
-
-    @Inject
-    lateinit var gameConfigRepository: GameConfigRepository
-
-    val container by lazy {
-        AppContainer(this, appPaths, driverRepository, prefsStore, gameLibraryRepository, gameConfigRepository)
+    override fun onCreate() {
+        super.onCreate()
+        if (isMainProcess) PhantomFix.attach(this, locale)
     }
-}
-
-/**
- * 手动依赖注入（仓库零框架传统下的官方等价物）：依赖只从这里往下流，上层拿构造好的对象，不找全局。
- * 存储权限是唯一由 Activity 喂进来的状态（只有 Activity 能感知它的变化），这里持有、UI 观察。
- */
-class AppContainer(
-    app: NxApp,
-    paths: AppPaths,
-    val drivers: DriverRepository,
-    val prefs: PrefsStore,
-    libraryRepository: GameLibraryRepository,
-    configRepository: GameConfigRepository,
-) {
-
-    val paths = paths
-    val env = Env(app, paths)
-
-    /** 界面语言：玩家选的那个（没选就是跟随系统）。屏幕用 stringResource 读词，没有屏幕的地方用它的 str() */
-    val locale = AppLocale(app, prefs)
-
-    /** 子进程限制的修复：它要自己读系统设置，也要用它自己的话（通知里没有屏幕） */
-    init { if (app.isMainProcess) PhantomFix.attach(app, locale) }
-
-    /** 所有文件访问权限：MainActivity 在 onResume 时更新 */
-    var storageOk by mutableStateOf(false)
-
-    val port = PortState(prefs, locale)
-
-    /** 顶栏的环境状态胶囊：两个便宜的事实，加上按需跑的工具自检 */
-    val envCheck = EnvCheckState(env, prefs, locale, app)
-
-    val onboarding = OnboardingState(prefs, env, locale, storageOk = { storageOk },
-        onEnvChanged = { envCheck.refresh() })
-
-    /** 正在玩的游戏（:play 进程的存在与否，两秒一查） */
-    val player = PlayerState(alive = { Player.playProcessAlive(app) })
-
-    // 游戏库：私有目录 + 插着的可移动卡上的端口目录（卡不在时那个列表是空的）
-    val library = LibraryState(port, player, libraryRepository, configRepository)
-
-    /** 存储占用：设置页「存储」分区背后的状态（每个卷上构建缓存与数据包各占多少） */
-    val storageUsage = StorageUsageState(env, { library.visible() }, libraryRepository)
-
-    /** 有没有新版本：冷启动时查一次，弹框与设置页读同一份 */
-    val update = UpdateState(app)
 }

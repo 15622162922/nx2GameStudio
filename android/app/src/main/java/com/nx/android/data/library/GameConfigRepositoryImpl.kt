@@ -7,6 +7,7 @@ import com.nx.android.data.PrefsStore.Companion.LEGACY_TOUCH
 import com.nx.android.data.PrefsStore.Companion.LIB_CONFIGS
 import com.nx.android.domain.GameConfig
 import com.nx.android.domain.GameConfigJson
+import com.nx.android.domain.GameConfigMigration
 import com.nx.android.domain.GameEntry
 import com.nx.android.domain.library.GameConfigRepository
 import dagger.Binds
@@ -32,18 +33,12 @@ class GameConfigRepositoryImpl @Inject constructor(
         } catch (_: Exception) { }
     }
 
+    @Synchronized
     override fun migrateLegacyConfigs(games: List<GameEntry>) {
-        var changed = false
-        for (entry in games) {
-            if (configs.containsKey(entry.titleId)) continue
-            val sourceName = entry.sourcePath?.let { File(it).name } ?: continue
-            val config = configs.remove(sourceName) ?: continue
-            configs[entry.titleId] = config
-            changed = true
-        }
-        if (changed) save()
+        if (GameConfigMigration.migrateLegacy(configs, games)) save()
     }
 
+    @Synchronized
     override fun migrateSourceConfig(sourcePath: String, titleId: String) {
         val config = configs[sourcePath] ?: return
         if (!configs.containsKey(titleId)) configs[titleId] = config
@@ -51,11 +46,14 @@ class GameConfigRepositoryImpl @Inject constructor(
         save()
     }
 
+    @Synchronized
     override fun forTitle(titleId: String): GameConfig = configs[titleId] ?: legacyConfig()
 
+    @Synchronized
     override fun forSource(sourcePath: String, titleId: String?): GameConfig =
         titleId?.let(::forTitle) ?: configs[sourcePath] ?: legacyConfig()
 
+    @Synchronized
     override fun set(titleId: String?, sourcePath: String?, config: GameConfig) {
         val key = titleId ?: sourcePath ?: return
         configs[key] = config

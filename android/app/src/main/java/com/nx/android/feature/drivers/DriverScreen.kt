@@ -31,13 +31,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nx.android.R
 import com.nx.android.domain.drivers.DriverRelease
 import com.nx.android.domain.drivers.DriverNote
-import com.nx.android.ui.LocalAppLocale
-import com.nx.android.ui.components.Hint
-import com.nx.android.ui.components.QuietButton
-import com.nx.android.ui.components.StatusDot
-import com.nx.android.ui.failureText
-import com.nx.android.ui.theme.GlassSheet
-import com.nx.android.ui.theme.NxPalette
+import com.nx.android.core.ui.LocalAppLocale
+import com.nx.android.core.ui.components.Hint
+import com.nx.android.core.ui.components.QuietButton
+import com.nx.android.core.ui.components.StatusDot
+import com.nx.android.core.ui.failureText
+import com.nx.android.core.ui.theme.GlassSheet
+import com.nx.android.core.ui.theme.NxPalette
 
 @Composable
 fun DriverRoute(onClose: () -> Unit, viewModel: DriverViewModel = hiltViewModel()) {

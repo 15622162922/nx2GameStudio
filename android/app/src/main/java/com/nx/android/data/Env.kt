@@ -6,6 +6,15 @@ import java.io.File
 import java.io.IOException
 import java.util.zip.GZIPInputStream
 import com.nx.android.core.storage.AppPaths
+import com.nx.android.domain.environment.EnvironmentSetup
+import com.nx.android.domain.environment.GuestProcessLauncher
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The environment the porter runs in.
@@ -15,7 +24,8 @@ import com.nx.android.core.storage.AppPaths
  * no /lib and the guest is not a chroot, so they are started through the rootfs's dynamic loader, and the programs
  * the porter starts itself (the compiler, the .NET runtime) get their interpreter path rewritten to the app's own rootfs.
  */
-class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx)) {
+@Singleton
+class Env @Inject constructor(@ApplicationContext private val ctx: Context, private val paths: AppPaths) : EnvironmentSetup, GuestProcessLauncher {
 
     companion object {
         const val TAG = "Nx2aEnv"
@@ -46,14 +56,14 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
     val interpPath = "${rootfs.absolutePath}/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
 
     /** The environment is ready when the rootfs, the tool and the compiler are there */
-    val ready: Boolean
+    override val ready: Boolean
         get() = python.exists() && File(tool, "porter").isDirectory && File(tool, "toolchain/clang/bin/clang").exists()
 
     /** The .NET runtime (the extractor and the shader translator are C# and run on it): where the porter looks for it */
     val dotnet: File get() = File(nxHome, "toolchains/dotnet/dotnet")
 
     /** The environment every guest program gets */
-    fun guestEnv(): MutableMap<String, String> {
+    override fun guestEnv(): MutableMap<String, String> {
         home.mkdirs(); tmp.mkdirs(); nxHome.mkdirs()
         return mutableMapOf(
             "PATH" to "${tool}/toolchain/clang/bin:${tool}/toolchain/bin:${rootfs}/usr/bin",
@@ -83,6 +93,8 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
     }
 
     /** Starts a guest program: Python through the loader, the tool itself as it is */
+    override fun guest(args: List<String>, extra: Map<String, String>): Process = guest(args, tool, extra)
+
     fun guest(args: List<String>, cwd: File = tool, extra: Map<String, String> = emptyMap()): Process {
         val cmd = mutableListOf(loader.absolutePath, python.absolutePath)
         cmd.addAll(args)
@@ -101,7 +113,7 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
      *
      * @param onStep what is being unpacked, for the screen
      */
-    fun unpack(onStep: (String) -> Unit) {
+    override fun unpack(onStep: (String) -> Unit) {
         var rootfsDone = false
         try {
             unpackNow(onStep) { rootfsDone = true }
@@ -167,7 +179,7 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
     private val marker: File get() = File(files, ".nx2a-unpacked")
 
     /** Throws the environment away: the next unpack does everything again */
-    fun reset() {
+    override fun reset() {
         marker.delete()
         File(files, ".nx2a-tool").delete()
         File(files, ".nx2a-toolchain").delete()
@@ -198,7 +210,7 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
     }
 
     /** What the check said (the screen shows it) */
-    var lastCheck: String = ""
+    override var lastCheck: String = ""
         private set
 
     /**
@@ -248,7 +260,7 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
      * start, so that an app update brings the new ones: a phone that has an older prebuilt translator would try
      * to build one itself, and wait for a network that is not there.
      */
-    fun refreshTools() {
+    override fun refreshTools() {
         if (!ready) return      // the environment is not there yet: the unpack brings everything
         // Without the payload there are no modes to write, and the assets hold no tree to copy either:
         // a copy now would strip the execute bit off the tools (the assets have no permissions). A build
@@ -338,7 +350,7 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
      * Rewrites the interpreter of the programs that are started directly (the compiler, the .NET runtime): Android
      * has no /lib, and the rootfs the payload carries was built for another app's path.
      */
-    fun patchInterpreters() {
+    override fun patchInterpreters() {
         Log.i(TAG, "python3.13 before patching: ${python.length()} bytes")
         val script = File(tool, "tools/patch_interp.py")
         if (!script.exists()) return
@@ -402,4 +414,16 @@ class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx))
         }
         Log.i(TAG, "permissions restored for $n file(s)")
     }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class EnvironmentDataModule {
+    @Binds
+    @Singleton
+    abstract fun bindEnvironmentSetup(impl: Env): EnvironmentSetup
+
+    @Binds
+    @Singleton
+    abstract fun bindGuestProcessLauncher(impl: Env): GuestProcessLauncher
 }
