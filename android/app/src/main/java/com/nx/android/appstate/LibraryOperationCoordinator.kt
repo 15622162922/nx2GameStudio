@@ -16,9 +16,27 @@ import javax.inject.Singleton
 class LibraryOperationCoordinator @Inject constructor(
     private val port: PortState,
     private val player: PlayerState,
+    private val runtime: RuntimeUpdateState,
     private val repository: GameLibraryRepository,
 ) {
     private val moving = HashSet<String>()
+
+    fun beginBuild(game: String): Boolean = synchronized(moving) {
+        if (moving.isNotEmpty() || port.running || player.running || runtime.running) return@synchronized false
+        port.begin(game)
+        true
+    }
+
+    fun beginRuntimeUpdate(pack: String, name: String): Boolean = synchronized(moving) {
+        if (moving.isNotEmpty() || port.running || player.running || runtime.running) return@synchronized false
+        runtime.begin(pack, name)
+    }
+
+    fun beginPlay(titleId: String, name: String): Boolean = synchronized(moving) {
+        if (moving.isNotEmpty() || port.running || player.running || runtime.running) return@synchronized false
+        player.start(titleId, name)
+        true
+    }
 
     fun remove(entry: GameEntry): GameCleanup.Result = synchronized(moving) {
         removalBlockedLocked(entry)?.let { return@synchronized GameCleanup.Result(it) }
@@ -79,17 +97,19 @@ class LibraryOperationCoordinator @Inject constructor(
     }
 
     private fun removalBlockedLocked(entry: GameEntry): GameCleanup.Outcome? {
+        if (runtime.running) return GameCleanup.Outcome.BUSY_PORTING
         if (entry.titleId in moving) return GameCleanup.Outcome.BUSY_MOVING
         return LibraryLogic.removalBlocked(
             portRunning = port.running, portGameFile = port.gameFile, gamePath = entry.sourcePath,
-            playerRunning = player.running, playerTitleId = player.titleId, titleId = entry.titleId,
+            playerRunning = player.running, playerTitleId = player.titleId, titleId = entry.titleId, packPath = entry.pack?.pack?.absolutePath,
         )
     }
 
     private fun moveBlocked(entry: GameEntry, includeMoving: Boolean): GameCleanup.Outcome? = synchronized(moving) {
+        if (runtime.running) return@synchronized GameCleanup.Outcome.BUSY_PORTING
         LibraryLogic.moveBlocked(
             portRunning = port.running, portGameFile = port.gameFile, gamePath = entry.sourcePath,
-            playerRunning = player.running, playerTitleId = player.titleId, titleId = entry.titleId,
+            playerRunning = player.running, playerTitleId = player.titleId, titleId = entry.titleId, packPath = entry.pack?.pack?.absolutePath,
             moving = includeMoving && entry.titleId in moving,
         )
     }

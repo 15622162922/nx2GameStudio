@@ -206,18 +206,15 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         val pack = intent.getStringExtra(EXTRA_PACK)
         val host = intent.getStringExtra(EXTRA_HOST)
         if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast(locale.str(R.string.game_no_game_to_run)); endProcess(); return }
-        try {
-            System.load(host)
-        } catch (t: Throwable) {
-            toast(locale.str(R.string.game_cannot_load_host, t.message))
+        if (com.nx.android.data.library.LibraryFileScanner.portFromPack(java.io.File(pack))?.runnable != true) {
+            toast(locale.str(R.string.game_needs_report))
             endProcess()
             return
         }
-        // 旧版宿主编的包：老的前端没有 frontCaps 这个入口（调用即抛），这个包要用当前版本重新移植
-        val caps = runCatching { Native.frontCaps() }.getOrNull()
-        // 性能 HUD 的计数也要新宿主：老宿主还在画面上自己画帧率计数器，两处帧率不是一回事
-        if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0 || caps and Native.FRONT_CAPS_PERF == 0) {
-            toast(locale.str(R.string.game_needs_report))
+        try {
+            System.load(host)
+        } catch (t: Throwable) {
+            toast(locale.str(R.string.game_cannot_load_host, t.message) + "\n" + locale.str(R.string.runtime_play_failed))
             endProcess()
             return
         }

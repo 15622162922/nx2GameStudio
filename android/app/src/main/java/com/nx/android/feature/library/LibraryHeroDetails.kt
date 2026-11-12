@@ -96,7 +96,7 @@ internal fun HeroDetails(
                     Text(
                         when {
                             building -> stringResource(R.string.lib_view_builds)
-                            stale -> stringResource(R.string.lib_report_again)
+                            stale -> stringResource(R.string.runtime_update)
                             running -> stringResource(R.string.set_run_onboarding)
                             else -> stringResource(R.string.common_build)
                         },

@@ -49,7 +49,6 @@ class PortService : Service() {
         const val EXP = "exp"
         const val ALIAS = "alias";
         const val PACK_DIR = "packDir"
-
         // The Intent's extras: the port's parameters, handed over from the UI to the service
         // Intent 的 extra：移植的参数，从界面交到服务手里
 
@@ -79,6 +78,8 @@ class PortService : Service() {
             ctx.startService(Intent(ctx, PortService::class.java).setAction(ACTION_CANCEL))
         }
     }
+
+    @Inject lateinit var operations: com.nx.android.appstate.LibraryOperationCoordinator
 
     private var runner: PortRunner? = null
     private lateinit var nm: NotificationManager
@@ -114,37 +115,58 @@ class PortService : Service() {
         // The cancel comes as a plain Intent: kill the porter first, then mark the state, then end the service
         // 取消是一条普通 Intent：先杀掉移植器，再标记状态，最后结束服务
         if (intent?.action == ACTION_CANCEL) {
-            runner?.cancel()
+            val cancelled = runner
+            runner = null
             port.cancel()
+            cancelled?.cancel()
             port.history.firstOrNull()?.let(completionCoordinator::complete)
             stopShown()
             stopSelf(startId)
             return START_NOT_STICKY
         }
         val game = intent?.getStringExtra(GAME) ?: return stop()
+        if (port.running) return START_NOT_STICKY
+        if (com.nx.android.data.Player.playProcessAlive(this)) {
+            startForeground(1, notification())
+            stopShown()
+            return stop()
+        }
         val keys = intent.getStringExtra(KEYS) ?: return stop()
         // The state goes up before the foreground notification: the UI turns at once
         // 状态先起来，再挂前台通知：界面立刻转向
-        port.begin(game)
-        startForeground(1, notification())
-        runner = PortRunner(environmentSetup, guestLauncher, locale) { line ->
-            port.onLine(line)
-            nm.notify(1, notification())
+        if (!operations.beginBuild(game)) {
+            startForeground(1, notification())
+            stopShown()
+            return stop()
         }
-        // The porter runs on its own thread; the block below is what happens when it ends
-        // 移植器跑在自己的线程上；下面这个 block 是它结束时要做的事
+        startForeground(1, notification())
+        val handler = android.os.Handler(mainLooper)
+        lateinit var taskRunner: PortRunner
+        taskRunner = PortRunner(environmentSetup, guestLauncher, locale) { line ->
+            handler.post {
+                if (runner === taskRunner && port.running) {
+                    port.onLine(line)
+                    nm.notify(1, notification())
+                }
+            }
+        }
+        runner = taskRunner
+        val onEnd: () -> Unit = {
+            handler.post {
+                if (runner === taskRunner) {
+                    port.finish()
+                    port.history.firstOrNull()?.let(completionCoordinator::complete)
+                    nm.notify(1, notification())
+                    stopShown()
+                    stopSelf()
+                }
+            }
+        }
         runner!!.port(
             game, keys, intent.getBooleanExtra(TOUCH, false),
             intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
-            intent.getIntExtra(ALIAS, ALIAS_AUTO), intent.getStringExtra(PACK_DIR)
-        ) {
-            port.finish()
-            port.history.firstOrNull()?.let(completionCoordinator::complete)
-            nm.notify(1, notification())
-            stopShown()   // the notification stays (the result), the service goes
-            // 通知留着（显示结果），服务走掉
-            stopSelf()
-        }
+            intent.getIntExtra(ALIAS, ALIAS_AUTO), intent.getStringExtra(PACK_DIR), onEnd
+        )
         return START_NOT_STICKY
     }
 

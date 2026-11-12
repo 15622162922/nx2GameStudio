@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from porter import config, datapack, dumps, fpslocker, install, paths, profiles, toolchain
+from porter.revision import PLAYER_API_REVISION
 from porter.adb import NO_ADB, Adb, AdbError
 from porter.paths import DM, NXNATIVE
 from porter.upstream import BuildError, PROG, android_profile, game, nacp, nsp, profile_guess, say, trinity
@@ -283,6 +284,9 @@ class Port:
     # ---- the whole port ----
     def run(self):
         o = self.o
+        expected = os.environ.get('NX2A_PLAYER_API_REVISION')
+        if expected is not None and expected != str(PLAYER_API_REVISION):
+            raise BuildError('The porting environment does not match this app. Refresh the environment before porting.')
         o.folder = Path(o.folder).expanduser().resolve()
         o.game = None
         if o.folder.is_file():    # the game file that was picked: its folder holds the updates and the DLC
@@ -846,6 +850,8 @@ class Port:
         files = {**self.fps_files, **font_files, **cjk_files}
         host = icon = None; drivers = []
         if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
+            for filename in ('game.tsv', 'android.tsv'):
+                files[f'profile/{self.g.id}/{filename}'] = self.g.dir / filename
             host = 'host/libdmplay.so'
             files[host] = self.so
             if theme := self.theme_files(): files.update(theme)

@@ -269,8 +269,8 @@
     <string name="drawer_paused_overlay">已暂停 — 点按继续</string>
     <string name="game_no_game_to_run">没有要运行的游戏</string>
     <string name="game_cannot_load_host">无法载入游戏程序：%1$s</string>
-    <string name="game_needs_report">这个数据包是用旧版宿主移植的，请重新移植后再运行（需要游戏原文件；游戏进度不受影响）</string>
-    <string name="lib_needs_report">需要重新移植</string>
+    <string name="game_needs_report">请先在游戏库更新此游戏的运行库，再尝试运行。</string>
+    <string name="lib_needs_report">需要更新运行库</string>
     <string name="lib_report_again">重新移植</string>
     <string name="builds_start_title">开始一次移植</string>
     <string name="builds_start_hint">选择一个游戏文件开始移植；同目录的更新与 DLC 会自动带上。构建完成后它会在游戏库里出现。</string>
@@ -446,4 +446,13 @@
     <string name="update_up_to_date">已经是最新版本了。</string>
     <string name="update_failed">检查失败：没有网络，或者够不着 release 页。</string>
     <string name="update_download">去下载</string>
+    <string name="runtime_update">更新运行库</string>
+    <string name="runtime_update_failed">运行库更新失败。可重试，或使用原始游戏文件完整重新移植；存档会保留。</string>
+    <string name="runtime_play_failed">游戏未能正常运行。可在游戏详情中使用原始游戏文件完整重新移植；存档会保留。</string>
+    <string name="runtime_busy">请先关闭正在运行的游戏，或等待当前构建完成。</string>
+    <string name="runtime_updating">正在更新游戏运行库，可能需要几分钟。</string>
+    <string name="runtime_updated">运行库已更新。</string>
+    <string name="runtime_retry">重试</string>
+    <string name="runtime_full_port">完整重新移植</string>
+    <string name="runtime_interrupted">运行库更新已中断。可重试，或使用原始游戏文件完整重新移植；游戏数据会保留。</string>
 </resources>

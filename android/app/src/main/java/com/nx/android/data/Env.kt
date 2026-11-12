@@ -81,6 +81,7 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
             // the build folder: Android does not let the app run a program on the shared storage, so the
             // port's own tools and the unpacked game live in the app's own folder
             "NX2A_WORK" to work.absolutePath,
+            "NX2A_PLAYER_API_REVISION" to com.nx.android.domain.PlayerApiRevision.CURRENT.toString(),
             "PYTHONUNBUFFERED" to "1",
             "PYTHONIOENCODING" to "utf-8",
             "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT" to "1",
@@ -93,9 +94,14 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
     }
 
     /** Starts a guest program: Python through the loader, the tool itself as it is */
-    override fun guest(args: List<String>, extra: Map<String, String>): Process = guest(args, tool, extra)
+    @Synchronized
+    override fun guest(args: List<String>, extra: Map<String, String>): Process {
+        refreshTools()
+        check(!buildIdChanged()) { "Runtime tools are not ready. Prepare the environment and retry." }
+        return startGuest(args, tool, extra)
+    }
 
-    fun guest(args: List<String>, cwd: File = tool, extra: Map<String, String> = emptyMap()): Process {
+    private fun startGuest(args: List<String>, cwd: File = tool, extra: Map<String, String> = emptyMap()): Process {
         val cmd = mutableListOf(loader.absolutePath, python.absolutePath)
         cmd.addAll(args)
         val pb = ProcessBuilder(cmd).directory(cwd)
@@ -196,7 +202,7 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
      * The failure says what is wrong, instead of leaving it to the next step.
      */
     private fun check() {
-        val p = guest(listOf("-c", "import sys, lz4.block, capstone, os; " +
+        val p = startGuest(listOf("-c", "import sys, lz4.block, capstone, os; " +
                 "print('guest ok', sys.version.split()[0], 'storage', 'yes' if os.access('/sdcard', os.R_OK) else 'no')"))
         val out = p.inputStream.bufferedReader().readText()
         p.waitFor()
@@ -256,12 +262,13 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
 
     /**
      * The tools that are small and change with the app: the prebuilt C# tools (the extractor, the shader
-     * translator), the porter's own scripts and the shared scripts they use. They are copied again on every
-     * start, so that an app update brings the new ones: a phone that has an older prebuilt translator would try
+     * translator), the porter's own scripts and the shared scripts they use. A changed payload is fully
+     * deployed and checked before any build can start: a phone that has an older prebuilt translator would try
      * to build one itself, and wait for a network that is not there.
      */
+    @Synchronized
     override fun refreshTools() {
-        if (!ready) return      // the environment is not there yet: the unpack brings everything
+        if (!python.exists()) return // The initial environment setup supplies the rootfs.
         // Without the payload there are no modes to write, and the assets hold no tree to copy either:
         // a copy now would strip the execute bit off the tools (the assets have no permissions). A build
         // without the payload leaves the tree alone.
@@ -280,20 +287,15 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
                 Log.i(TAG, "the assets are newer than the tree: it goes and comes again")
                 wipeTree()
                 copyAssets("tool", tool)
-                storeBuildId()
+                File(tool, "toolchain").deleteRecursively()
+                copyAssets("toolchain", File(tool, "toolchain"))
             } else {
-                copyAssets("tool/tools", File(tool, "tools"))
-                copyAssets("tool/porter", File(tool, "porter"))
-                copyAssets("tool/nxnative/scripts", File(tool, "nxnative/scripts"))
-                copyAssets("tool/nxnative/dm/tools", File(tool, "nxnative/dm/tools"))
-                // the sources the port compiles: the host (dm/android), its gfx tools and the host's core
-                copyAssets("tool/nxnative/dm/android", File(tool, "nxnative/dm/android"))
-                copyAssets("tool/nxnative/dm/gfx", File(tool, "nxnative/dm/gfx"))
-                copyAssets("tool/nxnative/dm/host", File(tool, "nxnative/dm/host"))
+                return
             }
             fixGlobalization()
             patchInterpreters()
             check()
+            storeBuildId()
             Log.i(TAG, "the tools were refreshed")
         } catch (e: Exception) {
             Log.e(TAG, "the tools were not refreshed: ${e.message}")
@@ -301,8 +303,7 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
     }
 
     /**
-     * The tree goes: everything the assets bring again. The build tools stay: they are big (285 MB) and
-     * they are not what the stamp is about.
+     * Remove old sources before deployment. The compiler tree is replaced separately.
      */
     private fun wipeTree() {
         for (child in tool.listFiles() ?: emptyArray()) {
@@ -353,7 +354,7 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
     override fun patchInterpreters() {
         Log.i(TAG, "python3.13 before patching: ${python.length()} bytes")
         val script = File(tool, "tools/patch_interp.py")
-        if (!script.exists()) return
+        if (!script.exists()) throw IOException("The interpreter patch tool is missing")
         val targets = listOf(File(tool, "toolchain"), File(rootfs, "usr/bin"), File(rootfs, "usr/sbin"),
                               File(nxHome, "toolchains"), File(tool, "tools/nx_extract"))
             .filter { it.exists() }
@@ -370,10 +371,11 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
                 val p = pb.start()
                 val code = p.waitFor()
                 val tail = log.readText().lines().lastOrNull { it.isNotBlank() } ?: ""
+                if (code != 0) throw IOException("Interpreter patch failed for ${t.name}: exit $code")
                 Log.i(TAG, "patch ${t.absolutePath}: exit $code $tail")
             } catch (e: Exception) {
                 Log.e(TAG, "patch ${t.absolutePath}: ${e.message}")
-                // a tree that cannot be patched is a tree whose programs cannot run: the doctor says so
+                throw IOException("The build tools could not be prepared", e)
             }
             Log.i(TAG, "python3.13 after patching: ${python.length()} bytes")
         }
@@ -393,7 +395,7 @@ class Env @Inject constructor(@ApplicationContext private val ctx: Context, priv
         val sdk = File(nxHome, "toolchains/dotnet")
         if (!script.exists() || !sdk.isDirectory) return
         try {
-            val p = guest(listOf(script.absolutePath, sdk.absolutePath))
+            val p = startGuest(listOf(script.absolutePath, sdk.absolutePath))
             val out = p.inputStream.bufferedReader().readText()
             p.waitFor()
             Log.i(TAG, "globalization: ${out.trim()}")

@@ -131,6 +131,7 @@ data class AppActions(
     val onShareLog: () -> Unit,
     val onClearLog: () -> Unit,
     val readLog: () -> String,
+    val onUpdateRuntime: (File, String) -> Unit = { _, _ -> },
 )
 
 /** The app's root: the guided setup until it is done, the main shell after */
@@ -153,6 +154,7 @@ fun AppRoot(
     environmentSetup: EnvironmentSetup,
     actions: AppActions,
     startTab: Int,
+    runtime: com.nx.android.appstate.RuntimeUpdateState,
 ) {
     NxTheme {
         // 界面语言：整棵树读同一份资源，玩家在设置里换语言时这里跟着换
@@ -176,7 +178,7 @@ fun AppRoot(
             if (onboardingUiState.active) {
                 OnboardingScreen(onboardingViewModel, actions) { pickerReq = it }
             } else {
-                MainScreen(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, startTab,
+                MainScreen(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, startTab, runtime,
                     onRequest = { pickerReq = it },
                     onDrivers = { driversOpen = true },
                     onLog = { logOpen = true },
@@ -290,6 +292,7 @@ private fun OpenSourceNoticeDialog(onClose: () -> Unit, onRepo: () -> Unit) {
 fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: LibraryState,
                player: PlayerState, onboarding: OnboardingState, drivers: DriverRepository,
                environmentSetup: EnvironmentSetup, actions: AppActions, startTab: Int,
+               runtime: com.nx.android.appstate.RuntimeUpdateState,
                onRequest: (PickerRequest) -> Unit,
                onDrivers: () -> Unit,
                onLog: () -> Unit,
@@ -306,6 +309,29 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
     val environmentCheckViewModel: EnvironmentCheckViewModel = hiltViewModel()
     val environmentCheckUiState by environmentCheckViewModel.uiState.collectAsStateWithLifecycle()
     val installedDrivers by drivers.drivers.collectAsStateWithLifecycle()
+
+    com.nx.android.feature.runtime.RuntimeUpdateDialog(runtime,
+        onRetry = { actions.onUpdateRuntime(File(runtime.pack), runtime.name) },
+        onFinished = { actions.onToast(locale.str(R.string.runtime_updated)) },
+        onRePort = {
+            val pack = File(runtime.pack)
+            val entry = lib.visible().firstOrNull { it.pack?.pack == pack }
+            val titleId = entry?.titleId ?: com.nx.android.data.library.LibraryFileScanner.portFromPack(pack)?.titleId
+            runtime.dismiss()
+            fun choose(file: File) {
+                if (titleId != null && !com.nx.android.domain.LibraryLogic.sourceMatchesTitle(file.name, titleId)) {
+                    actions.onToast(locale.str(R.string.lib_source_mismatch))
+                } else {
+                    lib.buildsTarget = file
+                    lib.selected = null
+                    tab = Tab.BUILDS.ordinal
+                }
+            }
+            val source = entry?.source
+            if (source != null) choose(source)
+            else onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS, File("/storage"),
+                locale.str(R.string.builds_choose_game_file), onPicked = { choose(it) }))
+        })
 
     // 选中游戏的背景铺满整块屏幕：顶栏透明画在图上，三个 tab 共用这层背景
     Box(Modifier.fillMaxSize()) {

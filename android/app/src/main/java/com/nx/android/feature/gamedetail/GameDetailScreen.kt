@@ -126,7 +126,7 @@ private fun experimentalTag(ported: Ported?): String? =
 
 @Composable
 private fun reportTag(ported: Ported?): String? =
-    if (ported?.needsRePort == true) stringResource(R.string.lib_needs_report) else null
+    if (ported?.needsRuntimeUpdate == true) stringResource(R.string.lib_needs_report) else null
 
 private fun versionTag(ported: Ported?): String? =
     ported?.display?.trim()?.takeIf { it.isNotEmpty() }
@@ -456,10 +456,10 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                         val locked = player.running && player.titleId != ported.titleId
                         if (locked) Hint(locale.str(R.string.lib_close_current_game, player.name))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            // 旧版宿主编的包：运行按钮变成「重新移植」（重新移植这个游戏，用当前版本的宿主）
-                            if (ported.needsRePort) {
-                                CapsuleButton(locale.str(R.string.lib_report_again), {
-                                    build()
+                            // An incompatible player interface offers a runtime update first.
+                            if (ported.needsRuntimeUpdate) {
+                                CapsuleButton(locale.str(R.string.runtime_update), {
+                                    actions.onRun(ported.pack, e.label)
                                 }, modifier = Modifier.weight(1f), enabled = !locked)
                             } else {
                                 CapsuleButton(locale.str(R.string.builds_run_action), {
@@ -473,7 +473,13 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                     }
                 }
                 else -> {
-                    // All discovered but non-runnable cards share the same rebuild path.
+                    if (ported != null) {
+                        Hint(locale.str(R.string.lib_needs_report))
+                        CapsuleButton(locale.str(R.string.runtime_update), {
+                            actions.onRun(ported.pack, e.label)
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !port.running && !player.running)
+                        Spacer(Modifier.height(8.dp))
+                    }
                     Hint(if (e.work != null && e.pack == null) locale.str(R.string.lib_residual_hint)
                          else locale.str(R.string.lib_needs_build_hint))
                     Spacer(Modifier.height(8.dp))

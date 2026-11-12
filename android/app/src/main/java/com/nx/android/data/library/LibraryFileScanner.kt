@@ -78,13 +78,14 @@ object LibraryFileScanner {
             return null
         }
         val id = man.optString("title_id")
-        if (id.isEmpty()) return null
+        if (!id.matches(Regex("[0-9A-Fa-f]{16}"))) return null
         val host = File(pack, man.optString("host", "host/libdmplay.so"))
+        if (!host.canonicalFile.toPath().startsWith(pack.canonicalFile.toPath())) return null
         return Ported(pack = pack, host = host,
                       icon = File(pack, "icon.png").takeIf { it.isFile },
                       titleId = id, name = man.optString("name"),
                       status = man.optString("status"),
-                      hostFront = man.optString("host_front"),
+                      playerApiRevision = (man.opt("player_api_revision") as? Int)?.takeIf { it > 0 } ?: 0,
                       display = man.optString("display"))
     }
 

@@ -1,0 +1,142 @@
+"""Runtime updates use saved profiles and activate one complete component set without touching game data."""
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from porter import runtime_update
+from porter.revision import PLAYER_API_REVISION
+
+
+class RuntimeUpdateTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.pack = self.root / 'Game-data'
+        self.pack.mkdir()
+        self.title = '0100000000010000'
+        self.manifest = self.pack / 'nx2a-data.json'
+        self.manifest.write_text(json.dumps({'title_id': self.title, 'name': 'Game',
+            'host': 'host/libdmplay.so', 'host_front': 2, 'player_api_revision': 0}))
+        for name in ('host/libdmplay.so', 'mods/main', 'shaders/a', 'romfs/file', 'dlc/a',
+                     'saves/slot', 'settings.txt', 'drivers/custom.so'):
+            p = self.pack / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b'preserve me')
+        profile = self.pack / 'profile' / self.title
+        profile.mkdir(parents=True)
+        (profile / 'game.tsv').write_text('effective game profile with adjusted memory')
+        (profile / 'android.tsv').write_text('effective android profile')
+        self.dm = self.root / 'tool' / 'nxnative' / 'dm'
+        (self.dm / 'android').mkdir(parents=True)
+        self.build = self.dm / 'android' / 'build.py'
+        self.build.write_text('''import os, pathlib, sys, struct
+args = sys.argv
+assert '--play' in args and '--release' in args
+assert os.environ['DM_GAMES_FIRST'] == '1'
+profile = pathlib.Path(os.environ['DM_GAMES_DIR']) / os.environ['DM_GAME']
+assert (profile / 'game.tsv').read_text() == 'effective game profile with adjusted memory'
+assert (profile / 'android.tsv').read_text() == 'effective android profile'
+assert not list(profile.glob('*.h'))
+out = pathlib.Path(args[args.index('--out')+1]); out.mkdir()
+header = bytearray(64); header[:6] = b'\\x7fELF\\x02\\x01'; struct.pack_into('<H', header, 18, 183)
+(out / 'libdmplay.so').write_bytes(header)
+for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', 'libgsl_alloc_hook.so'):
+    (out / name).write_bytes(header)
+''')
+        self.before = {str(p.relative_to(self.pack)): p.read_bytes() for p in self.pack.rglob('*') if p.is_file()}
+        self.addCleanup(patch.stopall)
+        patch.object(runtime_update, 'DM', self.dm).start()
+        patch.object(runtime_update.config, 'load', return_value={}).start()
+        patch.object(runtime_update.toolchain, 'find_ndk', return_value=(self.root / 'ndk', 'test')).start()
+        patch.dict(os.environ, {'NX2A_WORK': str(self.root / 'work'),
+                   'NX2A_PLAYER_API_REVISION': str(PLAYER_API_REVISION)}).start()
+
+    def rebuild(self):
+        return runtime_update.rebuild(self.pack, no_lsfg=True, jobs=1, emit=lambda _: None)
+
+    def assert_preserved(self, manifest=True):
+        for name, data in self.before.items():
+            if manifest or name != 'nx2a-data.json':
+                self.assertEqual((self.pack / name).read_bytes(), data, name)
+
+    def test_update_without_source_keys_or_old_work(self):
+        self.assertFalse((self.root / 'work').exists())
+        result = self.rebuild()
+        self.assertEqual(result['data'], str(self.pack.resolve()))
+        updated = json.loads(self.manifest.read_text())
+        self.assertEqual(updated['player_api_revision'], PLAYER_API_REVISION)
+        self.assertNotIn('host_front', updated)
+        host = self.pack / updated['host']
+        self.assertTrue(host.parent.name.startswith('.runtime-'))
+        self.assertTrue(all((host.parent / name).is_file() for name in runtime_update.HOOKS))
+        self.assert_preserved(manifest=False)
+
+    def test_missing_profile_does_not_fall_back_to_current_game(self):
+        (self.pack / 'profile' / self.title / 'android.tsv').unlink()
+        with self.assertRaisesRegex(ValueError, 'no saved game profile'):
+            self.rebuild()
+        self.assertEqual(self.manifest.read_bytes(), self.before['nx2a-data.json'])
+        self.assertEqual(list(self.pack.glob('.runtime-*')), [])
+
+    def test_failed_compilation_keeps_every_original_byte(self):
+        self.build.write_text('raise SystemExit(1)')
+        with self.assertRaisesRegex(RuntimeError, 'Runtime compilation failed'):
+            self.rebuild()
+        self.assert_preserved()
+        self.assertEqual(list(self.pack.glob('.runtime-*')), [])
+
+    def test_interrupted_activation_and_retry(self):
+        with patch.object(runtime_update.os, 'replace', side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.rebuild()
+        self.assert_preserved()
+        # A hard-killed process may leave an unreferenced stage; it cannot become active by discovery.
+        orphan = self.pack / '.runtime-orphan'
+        orphan.mkdir()
+        (orphan / 'libdmplay.so').write_bytes(b'incomplete')
+        self.rebuild()
+        self.assertNotIn('orphan', json.loads(self.manifest.read_text())['host'])
+        self.assert_preserved(manifest=False)
+
+    def test_cancellation_immediately_after_commit_keeps_activated_components(self):
+        replace = os.replace
+        def commit_then_cancel(source, destination):
+            replace(source, destination)
+            raise KeyboardInterrupt()
+        with patch.object(runtime_update.os, 'replace', side_effect=commit_then_cancel):
+            with self.assertRaises(KeyboardInterrupt):
+                self.rebuild()
+        manifest = json.loads(self.manifest.read_text())
+        host = self.pack / manifest['host']
+        self.assertTrue(host.is_file())
+        self.assertTrue(all((host.parent / name).is_file() for name in runtime_update.HOOKS))
+        self.assert_preserved(manifest=False)
+
+    def test_payload_revision_mismatch_fails_before_compilation(self):
+        with patch.dict(os.environ, {'NX2A_PLAYER_API_REVISION': str(PLAYER_API_REVISION + 1)}):
+            with self.assertRaisesRegex(ValueError, 'tools do not match'):
+                self.rebuild()
+        self.assert_preserved()
+
+    def test_invalid_compiler_output_is_not_activated(self):
+        self.build.write_text(self.build.read_text() + "\n(out / 'libdmplay.so').write_bytes(b'invalid')\n")
+        with self.assertRaisesRegex(ValueError, 'ARM64'):
+            self.rebuild()
+        self.assert_preserved()
+
+    def test_profile_cannot_escape_pack(self):
+        path = self.pack / 'profile' / self.title / 'game.tsv'
+        path.unlink()
+        outside = self.root / 'outside.tsv'
+        outside.write_text('outside')
+        path.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, 'no saved game profile'):
+            self.rebuild()
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -79,6 +79,11 @@ python3 "$here/build_adrenotools.py" --out "$cache/assets/tool/tools/adrenotools
     || die "the driver loader did not build: a Vulkan driver the player picks would not load"
 [[ -f "$cache/jniLibs/arm64-v8a/libadrenotools.so" ]] || die "the driver loader is not in the app's native library folder"
 
+# Finalize after the C# tools and hooks have joined the tree, so same-size changes are included.
+if [[ -z $payload_flag ]]; then
+    python3 "$here/build_assets.py" --out "$cache/assets" --finalize
+fi
+
 # 4. the APK
 echo ">> the APK"
 cd "$root/android"

@@ -1,6 +1,7 @@
 package com.nx.android.feature.library
 
 import com.nx.android.domain.GameEntry
+import com.nx.android.domain.PlayerApiRevision
 import com.nx.android.domain.GameIdentity
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.Ported
@@ -42,7 +43,7 @@ internal fun previewEntry(
         titleId = titleId,
         name = name,
         status = profileStatus,
-        hostFront = if (stale) "player-old" else GameIdentity.HOST_FRONT,
+        playerApiRevision = if (stale) 0 else PlayerApiRevision.CURRENT,
         display = display,
     ) else null,
     work = null,

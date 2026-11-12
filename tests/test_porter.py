@@ -145,15 +145,15 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
-    def test_the_manifest_says_which_front_the_host_has(self):   # the app compares it with the front it needs: a pack from another front has to be ported again
+    def test_the_manifest_records_player_api_revision(self):
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
         try:
             (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
             (t / 'romfs').mkdir(); (t / 'shaders.dmsv').write_bytes(b'DMSV')
             p = profiles.load(NEO)
             man = datapack.build(t / 'out-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv')
-            self.assertEqual(man['host_front'], datapack.HOST_FRONT)
-            self.assertEqual(datapack.read_manifest(t / 'out-data')['host_front'], datapack.HOST_FRONT)
+            self.assertEqual(man['player_api_revision'], datapack.PLAYER_API_REVISION)
+            self.assertEqual(datapack.read_manifest(t / 'out-data')['player_api_revision'], datapack.PLAYER_API_REVISION)
         finally:
             shutil.rmtree(t, ignore_errors=True)
 

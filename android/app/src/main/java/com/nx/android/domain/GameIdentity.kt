@@ -4,7 +4,6 @@ import java.io.File
 
 /** Pure naming and identity rules shared by library and build features. */
 object GameIdentity {
-    const val HOST_FRONT = "player-hud"
     const val WORK_SUFFIX = "_build"
 
     fun titleIdIn(name: String): String? =

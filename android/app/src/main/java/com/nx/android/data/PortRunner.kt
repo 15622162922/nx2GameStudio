@@ -18,6 +18,7 @@ class PortRunner(
     private val onLine: (String) -> Unit,
 ) {
 
+    @Volatile private var cancelled = false
     @Volatile private var proc: Process? = null
 
     fun port(
@@ -81,8 +82,13 @@ class PortRunner(
     private fun start(args: List<String>, onEnd: () -> Unit, extra: Map<String, String> = emptyMap()): Thread {
         val t = Thread {
             try {
+                if (cancelled) return@Thread
                 val p = guestLauncher.guest(args, extra = extra)
                 proc = p
+                if (cancelled) {
+                    p.destroyForcibly()
+                    return@Thread
+                }
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)
                 if (code != 0) onLine(locale.str(R.string.runner_exit_code, code))
@@ -99,6 +105,7 @@ class PortRunner(
 
     /** Stops the porter and the tools it started (they are the app's own processes, stopped one by one) */
     fun cancel() {
+        cancelled = true
         try { proc?.destroyForcibly() } catch (e: Exception) {
         }
         proc = null

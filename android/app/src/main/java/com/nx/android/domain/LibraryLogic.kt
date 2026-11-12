@@ -38,7 +38,7 @@ object LibraryLogic {
      * 还没有源文件的记忆，只能看工作区）。
      */
     private fun building(entry: GameEntry, portGameFile: String, workStartedAt: Long): Boolean {
-        if (portGameFile.isNotEmpty() && entry.sourcePath == portGameFile) return true
+        if (portGameFile.isNotEmpty() && (entry.sourcePath == portGameFile || entry.pack?.pack?.absolutePath == portGameFile)) return true
         val work = entry.work ?: return false
         return workStartedAt > 0 && work.lastModified() >= workStartedAt
     }
@@ -84,8 +84,9 @@ object LibraryLogic {
      * 正在运行的那个游戏，包里的存档正被写着，删了会坏掉正在玩的这一局。
      */
     fun removalBlocked(portRunning: Boolean, portGameFile: String, gamePath: String?,
-                       playerRunning: Boolean, playerTitleId: String, titleId: String?): GameCleanup.Outcome? = when {
-        portRunning && portGameFile == gamePath -> GameCleanup.Outcome.BUSY_PORTING
+                       playerRunning: Boolean, playerTitleId: String, titleId: String?,
+                       packPath: String? = null): GameCleanup.Outcome? = when {
+        portRunning && (portGameFile == gamePath || portGameFile == packPath) -> GameCleanup.Outcome.BUSY_PORTING
         playerRunning && titleId != null && playerTitleId.equals(titleId, ignoreCase = true) ->
             GameCleanup.Outcome.BUSY_RUNNING
         else -> null
@@ -98,9 +99,9 @@ object LibraryLogic {
      */
     fun moveBlocked(portRunning: Boolean, portGameFile: String, gamePath: String?,
                     playerRunning: Boolean, playerTitleId: String, titleId: String?,
-                    moving: Boolean): GameCleanup.Outcome? = when {
+                    moving: Boolean, packPath: String? = null): GameCleanup.Outcome? = when {
         moving -> GameCleanup.Outcome.BUSY_MOVING
-        portRunning && portGameFile == gamePath -> GameCleanup.Outcome.BUSY_PORTING
+        portRunning && (portGameFile == gamePath || portGameFile == packPath) -> GameCleanup.Outcome.BUSY_PORTING
         playerRunning && titleId != null && playerTitleId.equals(titleId, ignoreCase = true) ->
             GameCleanup.Outcome.BUSY_RUNNING
         else -> null

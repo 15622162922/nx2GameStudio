@@ -9,6 +9,21 @@ import java.io.File
 /** The card's status: the running build, the data pack (its host inside makes the game done), and what is left of a failed build */
 class LibraryLogicTest {
 
+    @Test
+    fun `runtime update marks its pack as building without a source association`() {
+        val pack = port(hostExists = true)
+        assertEquals(GameStatus.PORTING, LibraryLogic.statusOf(entry(pack = pack), true, pack.pack.absolutePath, 0))
+    }
+
+    @Test
+    fun `runtime updates block deletion and movement of their pack without source files`() {
+        val path = "/ports/Game-data"
+        assertEquals(GameCleanup.Outcome.BUSY_PORTING,
+            LibraryLogic.removalBlocked(true, path, null, false, "", "0100000000010000", packPath = path))
+        assertEquals(GameCleanup.Outcome.BUSY_PORTING,
+            LibraryLogic.moveBlocked(true, path, null, false, "", "0100000000010000", false, packPath = path))
+    }
+
     private fun tmpDir(): File = File.createTempFile("nx2a-port", "").let { f -> f.delete(); f.mkdirs(); f }
 
     private fun port(hostExists: Boolean): Ported {
@@ -16,7 +31,7 @@ class LibraryLogicTest {
         File(pack, "host").mkdirs()
         val host = File(pack, "host/libdmplay.so")
         if (hostExists) host.writeText("ELF")
-        return Ported(pack, host, null, "0100000000010000", "Hades II", hostFront = GameIdentity.HOST_FRONT)
+        return Ported(pack, host, null, "0100000000010000", "Hades II", playerApiRevision = PlayerApiRevision.CURRENT)
     }
 
     private fun entry(pack: Ported? = null, work: File? = null, source: String? = null) =
@@ -24,7 +39,7 @@ class LibraryLogicTest {
 
     private fun packWith(name: String, runnable: Boolean): Ported {
         val p = port(hostExists = runnable)
-        return p.copy(hostFront = if (runnable) GameIdentity.HOST_FRONT else "old-front", name = name)
+        return p.copy(playerApiRevision = if (runnable) PlayerApiRevision.CURRENT else 0, name = name)
     }
 
     @Test
@@ -51,6 +66,14 @@ class LibraryLogicTest {
         assertEquals(GameStatus.NEEDS_BUILD,
                      LibraryLogic.statusOf(entry(pack = port(hostExists = false)),
                                           portRunning = false, portGameFile = "", workStartedAt = 0L))
+    }
+
+    @Test
+    fun `a missing or different player interface revision requires a runtime update`() {
+        val current = port(hostExists = true)
+        assertTrue(current.runnable)
+        assertTrue(current.copy(playerApiRevision = 0).needsRuntimeUpdate)
+        assertTrue(current.copy(playerApiRevision = PlayerApiRevision.CURRENT + 1).needsRuntimeUpdate)
     }
 
     /** 正在构建的那个游戏：构建中 */

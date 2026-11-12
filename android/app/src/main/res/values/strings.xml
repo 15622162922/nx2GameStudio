@@ -270,8 +270,8 @@
     <string name="drawer_paused_overlay">Paused - tap to continue</string>
     <string name="game_no_game_to_run">No game to run</string>
     <string name="game_cannot_load_host">The game program could not be loaded: %1$s</string>
-    <string name="game_needs_report">This data pack was ported with an older front end. Port it again to play - the game file is needed, your progress is safe.</string>
-    <string name="lib_needs_report">Needs porting again</string>
+    <string name="game_needs_report">Update this game’s runtime from the library before playing.</string>
+    <string name="lib_needs_report">Runtime update required</string>
     <string name="lib_report_again">Port again</string>
     <string name="builds_start_title">Start a port</string>
     <string name="builds_start_hint">Pick a game file to start a port; the updates and the DLC next to it are taken along. It appears in the library when the build is done.</string>
@@ -447,4 +447,13 @@
     <string name="update_up_to_date">You are on the newest version.</string>
     <string name="update_failed">The check failed: no network, or the release page could not be reached.</string>
     <string name="update_download">Get it</string>
+    <string name="runtime_update">Update runtime</string>
+    <string name="runtime_update_failed">The runtime could not be updated. Retry, or port the entire game again using its original files. Your saves are kept.</string>
+    <string name="runtime_play_failed">The game could not run correctly. You can try porting it again from its original files in game details. Your saves are kept.</string>
+    <string name="runtime_busy">Close the running game or wait for the current build to finish.</string>
+    <string name="runtime_updating">Updating the game runtime. This may take a few minutes.</string>
+    <string name="runtime_updated">Runtime updated.</string>
+    <string name="runtime_retry">Retry</string>
+    <string name="runtime_full_port">Port entire game again</string>
+    <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the entire game again using its original files. Your game data is kept.</string>
 </resources>

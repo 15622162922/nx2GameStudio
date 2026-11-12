@@ -48,6 +48,8 @@
             android:name=".PortService"
             android:exported="false" />
 
+        <service android:name=".RuntimeUpdateService" android:exported="false" />
+
         <!-- The player: one game at a time, in a process of its own — a crash (or the game's own exit, which
              ends the process) takes the game down, not the app or a port that is running.
              The game page is a page of the app's own task: it sits on top of the library page, so the launcher

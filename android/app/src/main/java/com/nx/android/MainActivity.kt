@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var prefs: PrefsStore
     @Inject lateinit var library: LibraryState
     @Inject lateinit var player: PlayerState
+    @Inject lateinit var operations: com.nx.android.appstate.LibraryOperationCoordinator
+    @Inject lateinit var runtime: com.nx.android.appstate.RuntimeUpdateState
     @Inject lateinit var port: PortState
     @Inject lateinit var onboarding: OnboardingState
     @Inject lateinit var environmentSetup: com.nx.android.domain.environment.EnvironmentSetup
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
         // 玩家看不见，但游戏结束后它就在那儿）。判据直接问进程，不看 PlayerState.running：那个靠 2 秒
         // 轮询，App 的进程刚起来时还是 false。
         if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
-        setContent { AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, launchTab) }
+        setContent { AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, launchTab, runtime) }
         // the small tools come with the app: an update brings new ones, and the phone has to get them
         // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
         Thread {
@@ -108,7 +110,9 @@ class MainActivity : ComponentActivity() {
         onSetKeys = { prefs.writeKeys(it); envCheck.refresh() },
         onStartPort = { file, cfg ->
             // 没有「所有文件访问」权限就读不到游戏文件（重装 App 后会掉）：移植会死在半个 Python 栈里，先说清楚
-            if (file.canRead()) {
+            if (port.running || runtime.running || player.running || Player.playProcessAlive(this)) {
+                toast(locale.str(R.string.runtime_busy))
+            } else if (file.canRead()) {
                 // 落位跟着这个游戏的数据包走：它在可移动卡上，新包就建在那儿（内部存储的那份不动）
                 val packDir = library.packDirOf(file)?.absolutePath
                 PortService.start(this, file.absolutePath, prefs.keys,
@@ -128,19 +132,29 @@ class MainActivity : ComponentActivity() {
                     portTitleId = ported.titleId,
                     processAlive = Player.playProcessAlive(this),
                 )
-                if (action == RunAction.RESUME) {
+                if (port.running || runtime.running) {
+                    toast(locale.str(R.string.runtime_busy))
+                } else if (ported.needsRuntimeUpdate) {
+                    if (player.running || Player.playProcessAlive(this)) toast(locale.str(R.string.runtime_busy))
+                    else updateRuntime(pack, name)
+                } else if (action == RunAction.RESUME) {
                     com.nx.android.game.GameActivity.resume(this)
                 } else {
-                    player.start(ported.titleId, name)
+                    prefs.put(PrefsStore.PLAYER_LAST_START, System.currentTimeMillis().toString())
+                    if (!operations.beginPlay(ported.titleId, name)) {
+                        toast(locale.str(R.string.runtime_busy))
+                        return@let
+                    }
                     Player.run(this, ported, name) { ok ->
                         if (!ok) {
                             player.stop()
-                            toast(locale.str(R.string.main_cannot_run_no_host, pack.name))
+                            toast(locale.str(R.string.main_cannot_run_no_host, pack.name) + "\n" + locale.str(R.string.runtime_play_failed))
                         }
                     }
                 }
             } ?: toast(locale.str(R.string.main_cannot_run_not_a_pack, pack.name))
         },
+        onUpdateRuntime = { pack, name -> updateRuntime(pack, name) },
         onStopGame = {
             player.stop()
             com.nx.android.game.GameActivity.stop(this)
@@ -166,11 +180,41 @@ class MainActivity : ComponentActivity() {
         readLog = { AppLog.text(2000) },
     )
 
+    private fun updateRuntime(pack: File, name: String) {
+        if (Player.playProcessAlive(this) || !operations.beginRuntimeUpdate(pack.absolutePath, name)) {
+            toast(locale.str(R.string.runtime_busy))
+            return
+        }
+        try {
+            RuntimeUpdateService.start(this)
+        } catch (error: Exception) {
+            AppLog.line("[RED] Runtime update could not start: ${error.message}")
+            runtime.finish(false)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         onboarding.storageOk = storageGranted()   // the permission may have been given in the background
         // 回到前台：顶栏胶囊的两个事实重读一遍（玩家可能在后台改了文件）
         envCheck.refresh()
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val started = prefs.str(PrefsStore.PLAYER_LAST_START).toLongOrNull() ?: 0L
+            if (started > 0 && !Player.playProcessAlive(this)) {
+                val manager = getSystemService(android.app.ActivityManager::class.java)
+                val crash = runCatching {
+                    manager.getHistoricalProcessExitReasons(packageName, 0, 16).any {
+                        it.processName.endsWith(Player.PROCESS_SUFFIX) && it.timestamp >= started &&
+                            (it.reason == android.app.ApplicationExitInfo.REASON_CRASH ||
+                             it.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE)
+                    }
+                }.getOrDefault(false)
+                if (crash) {
+                    prefs.put(PrefsStore.PLAYER_LAST_START, null)
+                    toast(locale.str(R.string.runtime_play_failed))
+                }
+            }
+        }
     }
 
     /**

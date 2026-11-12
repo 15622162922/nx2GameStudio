@@ -44,6 +44,8 @@ class PrefsStore @Inject constructor(@ApplicationContext ctx: Context) {
         const val OSS_NOTICE_SHOWN = "oss.notice.shown"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
+        const val RUNTIME_PENDING_PACK = "runtime.pendingPack"
+        const val PLAYER_LAST_START = "player.lastStart"
         const val PORT_STARTED_AT = "port.startedAt"
         const val PORT_HISTORY = "port.history"
         const val PORT_COMPLETED = "port.completed"

@@ -56,6 +56,11 @@ def _parser():
                     help='build the host without the frame generation (the lsfg/ code): the host is then smaller and the frame generation '
                          'reports "not in this build" (dm/android/build.py --no-lsfg)')
     po.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'), help='json: one JSON event per line, for the GUI')
+    rt = sub.add_parser('rebuild-runtime', help='rebuild a pack runtime without the original game files')
+    rt.add_argument('pack')
+    rt.add_argument('--no-lsfg', action='store_true')
+    rt.add_argument('--jobs', type=int, default=os.cpu_count() or 8)
+    rt.add_argument('--progress', choices=('json', 'lines'), default='lines')
     ins = sub.add_parser('install', help='install a port made earlier'); ins.add_argument('data', help='the data pack folder (<App>-data)'); ins.add_argument('--apk', help='the APK (default: <App>.apk beside the pack)')
     ins.add_argument('--device', default=''); ins.add_argument('--replace-signer', action='store_true'); ins.add_argument('--progress', default='auto', choices=('auto', 'bar', 'lines', 'json', 'off'))
     dv = sub.add_parser('devices', help='the devices adb sees'); dv.add_argument('--json', action='store_true')
@@ -152,6 +157,23 @@ def cmd_port(a):
     return _with_progress(a.progress, lambda: pipeline.emit_result(pipeline.Port(opts).run()))
 
 
+def cmd_rebuild_runtime(a):
+    from porter.runtime_update import rebuild
+    def emit(message):
+        if a.progress == 'json': print(json.dumps({'ev': 'say', 'msg': message}), flush=True)
+        else: print(message, flush=True)
+    try:
+        if a.progress == 'json': print(json.dumps({'ev': 'stage', 'k': 1, 'n': 1, 'name': 'Update runtime'}), flush=True)
+        result = rebuild(a.pack, no_lsfg=a.no_lsfg, jobs=a.jobs, emit=emit)
+        if a.progress == 'json': print(json.dumps({'ev': 'result', **result}), flush=True)
+        else: emit('Runtime updated: ' + result['data'])
+        return 0
+    except KeyboardInterrupt:
+        emit('[RED] Runtime update cancelled. Check the game status before retrying.'); return 130
+    except Exception as error:
+        emit(f'[RED] {error}'); return 1
+
+
 def cmd_install(a):
     from porter import config, datapack, install, toolchain
     from porter.upstream import BuildError, PROG
@@ -236,4 +258,4 @@ def cmd_saves(a):
 def main(argv):
     if hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(encoding='utf-8', errors='replace')   # game names and progress bars on a Windows console
     a = _parser().parse_args(argv)
-    return {'doctor': cmd_doctor, 'profiles': cmd_profiles, 'inspect': cmd_inspect, 'port': cmd_port, 'install': cmd_install, 'devices': cmd_devices, 'tools': cmd_tools, 'config': cmd_config, 'saves': cmd_saves}[a.cmd](a)
+    return {'doctor': cmd_doctor, 'profiles': cmd_profiles, 'inspect': cmd_inspect, 'port': cmd_port, 'rebuild-runtime': cmd_rebuild_runtime, 'install': cmd_install, 'devices': cmd_devices, 'tools': cmd_tools, 'config': cmd_config, 'saves': cmd_saves}[a.cmd](a)

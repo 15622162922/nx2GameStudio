@@ -91,12 +91,12 @@ data class Ported(
     val titleId: String,   // 清单里的 title id（存档、私有目录都按它分）
     val name: String = "", // 清单里的游戏名
     val status: String = "", // 清单里的档案状态（playable / wip / boots / experimental）：experimental 的移植提醒玩家它还没被正式调通
-    val hostFront: String = "", // 清单里的宿主前端（"player"）：别的值（没有这个字段 = 旧版宿主）要用当前版本重新移植
+    val playerApiRevision: Int = 0, // Missing or invalid revisions require a runtime update.
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
 ) {
-    /** 清单和宿主都齐备，且使用当前播放器前端，可以直接运行。 */
-    val runnable: Boolean get() = host.isFile && hostFront == GameIdentity.HOST_FRONT
+    /** The pack has its host and was built for the current player interface revision. */
+    val runnable: Boolean get() = host.isFile && playerApiRevision == PlayerApiRevision.CURRENT
 
-    /** 这个包是否需要重新移植：宿主缺失或使用了旧前端都算。 */
-    val needsRePort: Boolean get() = !runnable
+    /** Missing host or a different/legacy revision requires a runtime update. */
+    val needsRuntimeUpdate: Boolean get() = !runnable
 }

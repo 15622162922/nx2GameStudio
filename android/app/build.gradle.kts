@@ -35,6 +35,21 @@ val nx2aKeystore = File(envOf("NX2A_KEYSTORE") ?: "${System.getProperty("user.ho
 // behaviour: the code is linked. The license is the same either way (GPL-3.0-or-later, android/NOTICE.md).
 val nxLsfg = (project.findProperty("nxLsfg") as String?)?.toBooleanStrictOrNull() ?: true
 
+// One revision source for the APK and its bundled porter.
+val playerApiRevision = Regex("(?m)^PLAYER_API_REVISION = ([1-9][0-9]*)$")
+    .find(rootProject.file("../porter/revision.py").readText())!!.groupValues[1].toInt()
+val revisionSources = layout.buildDirectory.dir("generated/playerApiRevision")
+val generatePlayerApiRevision by tasks.registering {
+    inputs.file(rootProject.file("../porter/revision.py"))
+    outputs.dir(revisionSources)
+    doLast {
+        val target = revisionSources.get().file("com/nx/android/domain/PlayerApiRevision.java").asFile
+        target.parentFile.mkdirs()
+        target.writeText("package com.nx.android.domain;\n\npublic final class PlayerApiRevision { public static final int CURRENT = $playerApiRevision; private PlayerApiRevision() {} }\n")
+    }
+}
+tasks.named("preBuild").configure { dependsOn(generatePlayerApiRevision) }
+
 android {
     namespace = "com.nx.android"
     compileSdk = 37
@@ -69,6 +84,7 @@ android {
 
     sourceSets {
         getByName("main") {
+            java.srcDir(revisionSources.get().asFile)
             // The payload (rootfs, toolchain, the tool's tree): built by packaging/android-apk/build_assets.py.
             // -PnoPayload leaves it out: a quick build of the app itself, for a phone that already has the
             // environment unpacked (the unpacked tree is in the app's own folder, so it survives the update).
