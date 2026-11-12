@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,16 +24,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nx.android.R
 import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
+import com.nx.android.core.ui.PreviewSurface
 import com.nx.android.core.ui.components.CapsuleButton
-import com.nx.android.core.ui.components.Hint
 import com.nx.android.core.ui.components.QuietButton
-import com.nx.android.core.ui.components.Section
-import com.nx.android.core.ui.components.StatusDot
 import com.nx.android.core.ui.theme.NxPalette
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
@@ -46,14 +42,56 @@ import com.nx.android.feature.filepicker.PickerRequest
 /**
  * The guided setup, five steps: the permission and the space, the environment's unpack, the keys, the games'
  * folder, done. The gates are OnboardingLogic's; this view only draws and sends intents.
+ *
+ * 这一层是有状态的（它读 ViewModel，把动作接上）；画的那部分在 [OnboardingContent] 里，是无状态的，
+ * 所以预览可以拿假状态单独看它。
  */
 @Composable
 fun OnboardingScreen(viewModel: OnboardingViewModel, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val can = OnboardingLogic.canAct(uiState.step, uiState.facts)
+    val locale = LocalAppLocale.current
 
     // the back key walks the flow backwards, it does not leave the app
     BackHandler(enabled = uiState.step > ObStep.WELCOME) { viewModel.back() }
+
+    OnboardingContent(
+        uiState = uiState,
+        actions = OnboardingActions(
+            onNext = { viewModel.next() },
+            onBack = { viewModel.back() },
+            onOpenLibrary = { viewModel.openLibrary() },
+            onAskStorage = { actions.onAskStorage() },
+            onUnpack = { viewModel.unpack() },
+            // the picker's own title is a word of the app's language: it is read here, not in the step
+            onChooseKeysFile = {
+                onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), uiState.keysStartDir,
+                    locale.str(R.string.onb_choose_prod_keys),
+                    onPicked = { f -> viewModel.chooseKeys(f.path) }))
+            },
+            onKeysSkippedChange = { if (it) viewModel.skipKeys() else viewModel.unskipKeys() },
+        ),
+    )
+}
+
+/** 页面上的动作：下一步、上一步、进入游戏库、要权限、解包、选 keys、跳过 keys */
+internal data class OnboardingActions(
+    val onNext: () -> Unit,
+    val onBack: () -> Unit,
+    val onOpenLibrary: () -> Unit,
+    val onAskStorage: () -> Unit,
+    val onUnpack: () -> Unit,
+    val onChooseKeysFile: () -> Unit,
+    val onKeysSkippedChange: (Boolean) -> Unit,
+)
+
+/**
+ * 引导页画的那一层：头（走到哪一步）、那一步、尾（上一步与这一步的主动作）。
+ *
+ * 无状态——只有 [uiState] 与动作；闸门（这一步能不能往下走）是纯函数算的。
+ */
+@Composable
+internal fun OnboardingContent(uiState: OnboardingUiState, actions: OnboardingActions) {
+    val can = OnboardingLogic.canAct(uiState.step, uiState.facts)
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
            verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -90,9 +128,9 @@ fun OnboardingScreen(viewModel: OnboardingViewModel, actions: AppActions, onRequ
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (uiState.step) {
-                    ObStep.WELCOME -> WelcomeStep(uiState.facts, actions)
-                    ObStep.ENV -> EnvStep(uiState, viewModel)
-                    ObStep.KEYS -> KeysStep(uiState, viewModel, actions, onRequest)
+                    ObStep.WELCOME -> WelcomeStep(uiState.facts, actions.onAskStorage)
+                    ObStep.ENV -> EnvStep(uiState, actions.onUnpack)
+                    ObStep.KEYS -> KeysStep(uiState, actions.onChooseKeysFile, actions.onKeysSkippedChange)
                     ObStep.DONE -> DoneStep()
                 }
             }
@@ -102,12 +140,12 @@ fun OnboardingScreen(viewModel: OnboardingViewModel, actions: AppActions, onRequ
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (uiState.step > ObStep.WELCOME) {
-                QuietButton(stringResource(R.string.common_back), { viewModel.back() })
+                QuietButton(stringResource(R.string.common_back), actions.onBack)
             }
             Spacer(Modifier.weight(1f))
             CapsuleButton(
                 text = primaryLabel(uiState.step, can),
-                onClick = { if (uiState.step == ObStep.DONE) viewModel.openLibrary() else viewModel.next() },
+                onClick = { if (uiState.step == ObStep.DONE) actions.onOpenLibrary() else actions.onNext() },
                 enabled = can,
             )
         }
@@ -130,119 +168,38 @@ private fun primaryLabel(s: ObStep, can: Boolean): String = when (s) {
     ObStep.DONE -> stringResource(R.string.onb_enter_library)
 }
 
-// ---- the steps -----------------------------------------------------------------------------------------------
-
+/** 预览：第一步（权限与空间） */
+@Preview(name = "Step, welcome", widthDp = 1280, heightDp = 800, showBackground = true)
 @Composable
-private fun WelcomeStep(facts: com.nx.android.domain.ObFacts, actions: AppActions) {
-    Section(stringResource(R.string.onb_storage_access)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatusDot(if (facts.storageOk) NxPalette.Ready else NxPalette.Danger)
-            Text(
-                if (facts.storageOk) stringResource(R.string.onb_storage_granted)
-                else stringResource(R.string.onb_storage_why),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            if (!facts.storageOk) QuietButton(stringResource(R.string.onb_grant_access), { actions.onAskStorage() })
-        }
-        Hint(stringResource(R.string.onb_grant_access_where))
-    }
-    Section(stringResource(R.string.onb_disk_space)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatusDot(if (facts.freeGB >= facts.neededGB) NxPalette.Ready else NxPalette.Danger)
-            Text(
-                stringResource(R.string.onb_free_space, facts.freeGB),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Hint(if (facts.freeGB < facts.neededGB) stringResource(R.string.onb_space_short) else stringResource(R.string.onb_space_enough))
+private fun OnboardingWelcomePreview() {
+    PreviewSurface {
+        OnboardingContent(previewState(ObStep.WELCOME), previewActions())
     }
 }
 
+/** 预览：第二步（环境还没准备好，主动作是灰的） */
+@Preview(name = "Step, environment", widthDp = 1280, heightDp = 800, showBackground = true)
 @Composable
-private fun EnvStep(uiState: OnboardingUiState, viewModel: OnboardingViewModel) {
-    val ready = uiState.envReady
-    Section(stringResource(R.string.onb_runtime)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (uiState.unpacking) {
-                CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
-            } else {
-                StatusDot(if (ready) NxPalette.Ready else NxPalette.Building)
-            }
-            Text(
-                when {
-                    ready -> stringResource(R.string.env_ready)
-                    uiState.unpacking -> stringResource(R.string.onb_unpacking, uiState.unpackStep)
-                    else -> stringResource(R.string.onb_no_env)
-                },
-                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f),
-            )
-            if (!ready && !uiState.unpacking) QuietButton(stringResource(R.string.onb_prepare_env), { viewModel.unpack() })
-        }
-        if (uiState.unpacking) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().height(5.dp), color = NxPalette.Building)
-        }
-        if (uiState.unpackError.isNotEmpty()) {
-            Text(
-                stringResource(R.string.onb_prepare_failed, uiState.unpackError),
-                color = NxPalette.Danger,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Hint(stringResource(R.string.onb_retry_hint))
-        }
-    }
-    Hint(stringResource(R.string.onb_unpack_once))
-}
-
-@Composable
-private fun KeysStep(uiState: OnboardingUiState, viewModel: OnboardingViewModel, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
-    val locale = LocalAppLocale.current
-    Section(stringResource(R.string.onb_prod_keys)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatusDot(
-                when {
-                    uiState.keysOk -> NxPalette.Ready
-                    uiState.keysChecking -> NxPalette.Building
-                    uiState.keysPath.isNotBlank() -> NxPalette.Danger
-                    else -> NxPalette.Unbuilt
-                }
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    uiState.keysPath.ifEmpty { stringResource(R.string.onb_no_keys_file) },
-                    style = MaterialTheme.typography.bodyMedium, maxLines = 2,
-                )
-                if (uiState.keysDetail.isNotEmpty()) {
-                    Hint(uiState.keysDetail)
-                }
-            }
-            if (uiState.keysChecking) {
-                CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp, color = NxPalette.Cream)
-            } else {
-                QuietButton(stringResource(R.string.onb_choose_file), onClick = {
-                    onRequest(PickerRequest(PickerMode.FILE, setOf("keys"), uiState.keysStartDir, locale.str(R.string.onb_choose_prod_keys),
-                        onPicked = { f -> viewModel.chooseKeys(f.path) }))
-                })
-            }
-        }
-        Hint(stringResource(R.string.onb_keys_common_places))
-    }
-    if (!uiState.keysOk && !uiState.keysChecking) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = uiState.keysSkipped, onCheckedChange = { if (it) viewModel.skipKeys() else viewModel.unskipKeys() })
-            Text(stringResource(R.string.onb_skip_keys), style = MaterialTheme.typography.bodyMedium)
-        }
+private fun OnboardingEnvPreview() {
+    PreviewSurface {
+        OnboardingContent(previewState(ObStep.ENV), previewActions())
     }
 }
 
+/** 预览：第三步（keys） */
+@Preview(name = "Step, keys", widthDp = 1280, heightDp = 800, showBackground = true)
 @Composable
-private fun DoneStep() {
-    Section(stringResource(R.string.onb_done)) {
-        Text(
-            stringResource(R.string.onb_done_text) + "\n" +
-                stringResource(R.string.onb_done_next),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Hint(stringResource(R.string.onb_skipped_steps))
+private fun OnboardingKeysPreview() {
+    PreviewSurface {
+        OnboardingContent(previewState(ObStep.KEYS), previewActions())
+    }
+}
+
+/** 预览：最后一步（进入游戏库） */
+@Preview(name = "Step, done", widthDp = 1280, heightDp = 800, showBackground = true)
+@Composable
+private fun OnboardingDonePreview() {
+    PreviewSurface {
+        OnboardingContent(previewState(ObStep.DONE), previewActions())
     }
 }

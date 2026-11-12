@@ -323,7 +323,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
         UpdatePopup(updateViewModel)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryRoute(libraryViewModel, port, player, installedDrivers, actions,
+                Tab.LIBRARY -> LibraryRoute(libraryViewModel, port, player, actions,
                     onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsRoute(buildsViewModel, prefs.keys, environmentSetup.ready, actions, onRequest, onLog)
             }

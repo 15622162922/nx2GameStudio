@@ -122,6 +122,9 @@ android {
         implementation(platform("androidx.compose:compose-bom:2026.09.00"))
         implementation("androidx.compose.ui:ui")
         implementation("androidx.compose.ui:ui-tooling-preview")
+        // The preview runtime: the IDE's Compose Preview renders the @Preview functions with it (debug only,
+        // it never goes into the APK)
+        debugImplementation("androidx.compose.ui:ui-tooling")
         implementation("androidx.compose.material3:material3")
         implementation("androidx.compose.material:material-icons-extended")
         implementation("androidx.activity:activity-compose:1.13.0")
@@ -161,12 +164,6 @@ val legacyFeatureDataImports = setOf(
     "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.Player",
     "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.SaveShare",
     "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.StorageVolumes",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.GameIcon",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.GameLog",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.Player",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.SaveBackup",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.SaveShare",
-    "feature/library/LibraryScreen.kt|com.nx.android.data.StorageVolumes",
     "feature/settings/SettingsScreen.kt|com.nx.android.data.AppLocale",
     "feature/settings/SettingsScreen.kt|com.nx.android.data.LosslessDll",
 )
