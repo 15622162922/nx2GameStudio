@@ -14,6 +14,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import com.nx.android.domain.porting.PortPhase
 import javax.inject.Inject
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -28,6 +31,8 @@ import com.nx.android.data.AppLog
 import com.nx.android.data.AppVersion
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
+import com.nx.android.data.porting.BuildSessionRepository
+import androidx.core.content.FileProvider
 import com.nx.android.data.library.LibraryFileScanner
 import com.nx.android.domain.GameIdentity
 import com.nx.android.domain.LibraryLogic
@@ -36,6 +41,8 @@ import com.nx.android.app.AppActions
 import com.nx.android.app.AppRoot
 import java.io.File
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The shell: it owns what only an activity can own — the storage permission, the system pickers — and puts
@@ -49,6 +56,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TAB = "tab"   // the notification's tap lands on the builds page
+        const val EXTRA_BUILD_ID = "buildId"
     }
 
     @Inject lateinit var locale: AppLocale
@@ -58,6 +66,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var operations: com.nx.android.appstate.LibraryOperationCoordinator
     @Inject lateinit var runtime: com.nx.android.appstate.RuntimeUpdateState
     @Inject lateinit var port: PortState
+    @Inject lateinit var buildSessions: BuildSessionRepository
     @Inject lateinit var onboarding: OnboardingState
     @Inject lateinit var environmentSetup: com.nx.android.domain.environment.EnvironmentSetup
     @Inject lateinit var drivers: com.nx.android.domain.drivers.DriverRepository
@@ -67,6 +76,7 @@ class MainActivity : ComponentActivity() {
     /** 界面语言：toast 与分享面板的标题从这里取词 */
     /** Which tab the screen opens on (the notification's tap says the builds page) */
     var launchTab = 0
+    private var launchBuildId by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,16 +89,19 @@ class MainActivity : ComponentActivity() {
         onboarding.storageOk = storageGranted()
         onboarding.batteryOk = batteryUnrestricted()
         launchTab = intent?.getIntExtra(EXTRA_TAB, 0) ?: 0
+        launchBuildId = intent?.getStringExtra(EXTRA_BUILD_ID).orEmpty()
         if (!prefs.bool(PrefsStore.OB_COMPLETED)) onboarding.open()
         AppLog.init(this)
         port.attach()   // a port the system killed shows up as interrupted
+        port.history.filter { !it.legacy && it.phase in setOf(PortPhase.DONE, PortPhase.FAILED, PortPhase.CANCELLED, PortPhase.INTERRUPTED) }
+            .forEach(portCompletionCoordinator::complete)
         if (port.phase == PortPhase.INTERRUPTED)
-            port.history.firstOrNull()?.let(portCompletionCoordinator::complete)
+            port.history.firstOrNull { it.phase == PortPhase.INTERRUPTED }?.let(portCompletionCoordinator::complete)
         // 游戏在跑：游戏页是这个任务里压在库页上面的那一页——先把它顶到前面，再画库页（库页画在它下面，
         // 玩家看不见，但游戏结束后它就在那儿）。判据直接问进程，不看 PlayerState.running：那个靠 2 秒
         // 轮询，App 的进程刚起来时还是 false。
         if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
-        setContent { AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, launchTab, runtime) }
+        setContent { AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, launchTab, runtime, launchBuildId) }
         // the small tools come with the app: an update brings new ones, and the phone has to get them
         // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
         Thread {
@@ -174,12 +187,50 @@ class MainActivity : ComponentActivity() {
             }
         },
         onClearLog = {
-            // 两处说的是同一份日志：文件与屏幕上的尾部一起清
-            port.clearLog()
             AppLog.clear()
             toast(locale.str(R.string.main_log_cleared))
         },
         readLog = { AppLog.text(2000) },
+        onShareBuildLog = { id ->
+            lifecycleScope.launch {
+                val session = port.history.firstOrNull { it.id == id }
+                when {
+                    session == null || !session.logAvailable -> toast(locale.str(R.string.builds_log_unavailable))
+                    buildSessions.logLength(id) == 0L -> toast(locale.str(R.string.builds_log_empty))
+                    else -> {
+                        val safeName = File(session.game).nameWithoutExtension.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                        val shareDir = File(cacheDir, "shared-build-logs")
+                        val snapshot = File(shareDir, "$safeName-${id.take(8)}.txt")
+                        val copied = withContext(Dispatchers.IO) {
+                            shareDir.listFiles()?.filter { it.isFile && it.lastModified() < System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000 }
+                                ?.forEach { it.delete() }
+                            buildSessions.copyLogSnapshot(id, snapshot)
+                        }
+                        if (copied) {
+                            val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", snapshot)
+                            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            startActivity(Intent.createChooser(send, locale.str(R.string.builds_log_share)))
+                        } else toast(locale.str(R.string.builds_log_unavailable))
+                    }
+                }
+            }
+        },
+        readBuildLog = { id, offset, length -> buildSessions.readLog(id, offset, length) },
+        buildLogLength = { id -> buildSessions.logLength(id) },
+        isBuildActive = { id -> port.history.firstOrNull { it.id == id }?.phase == PortPhase.RUNNING },
+        emptyBuildLogMessage = { id ->
+            val session = port.history.firstOrNull { it.id == id }
+            locale.str(when {
+                session == null || !session.logAvailable -> R.string.builds_log_unavailable
+                session.phase == PortPhase.RUNNING -> R.string.builds_log_waiting
+                session.legacy -> R.string.builds_log_legacy
+                else -> R.string.builds_log_empty
+            })
+        },
+        titleBuildLog = { id -> port.history.firstOrNull { it.id == id }?.let {
+            "${File(it.game).name} · ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.startedAt))}"
+        } ?: locale.str(R.string.common_log) },
     )
 
     private fun updateRuntime(pack: File, name: String) {
@@ -226,6 +277,11 @@ class MainActivity : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra(EXTRA_BUILD_ID).orEmpty().isNotEmpty()) {
+            launchTab = intent.getIntExtra(EXTRA_TAB, 0)
+            launchBuildId = intent.getStringExtra(EXTRA_BUILD_ID).orEmpty()
+        }
         if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
     }
 

@@ -5,21 +5,24 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.widget.Toast
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
 import com.nx.android.domain.porting.PortPhase
+import com.nx.android.domain.GameConfig
+import com.nx.android.domain.ALIAS_AUTO
 import javax.inject.Inject
 import com.nx.android.R
 import com.nx.android.appstate.PortState
 import com.nx.android.appstate.porting.PortCompletionCoordinator
 import com.nx.android.data.AppLocale
+import com.nx.android.data.AppLog
 import com.nx.android.data.PortRunner
 import com.nx.android.domain.environment.EnvironmentSetup
 import com.nx.android.domain.environment.GuestProcessLauncher
-import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.GameIdentity
 import java.io.File
 
@@ -116,10 +119,11 @@ class PortService : Service() {
         // 取消是一条普通 Intent：先杀掉移植器，再标记状态，最后结束服务
         if (intent?.action == ACTION_CANCEL) {
             val cancelled = runner
+            val cancelledId = port.buildId
             runner = null
             port.cancel()
             cancelled?.cancel()
-            port.history.firstOrNull()?.let(completionCoordinator::complete)
+            port.history.firstOrNull { it.id == cancelledId }?.let(completionCoordinator::complete)
             stopShown()
             stopSelf(startId)
             return START_NOT_STICKY
@@ -134,39 +138,61 @@ class PortService : Service() {
         val keys = intent.getStringExtra(KEYS) ?: return stop()
         // The state goes up before the foreground notification: the UI turns at once
         // 状态先起来，再挂前台通知：界面立刻转向
-        if (!operations.beginBuild(game)) {
+        val cfg = GameConfig(
+            touch = intent.getBooleanExtra(TOUCH, false),
+            fps60 = intent.getBooleanExtra(FPS60, false),
+            experimental = intent.getBooleanExtra(EXP, false),
+            aliasHeadroom = intent.getIntExtra(ALIAS, ALIAS_AUTO),
+        )
+        val began = try { operations.beginBuild(game, cfg) } catch (e: Exception) {
+            AppLog.line("[RED] Build history could not be saved: ${e.message}")
+            Toast.makeText(this, locale.str(R.string.build_history_unavailable), Toast.LENGTH_LONG).show()
+            return stop()
+        }
+        if (!began) {
             startForeground(1, notification())
             stopShown()
             return stop()
         }
+        val taskId = port.buildId
         startForeground(1, notification())
         val handler = android.os.Handler(mainLooper)
         lateinit var taskRunner: PortRunner
         taskRunner = PortRunner(environmentSetup, guestLauncher, locale) { line ->
             handler.post {
-                if (runner === taskRunner && port.running) {
+                if (runner === taskRunner && port.running && port.buildId == taskId) {
                     port.onLine(line)
                     nm.notify(1, notification())
                 }
             }
         }
         runner = taskRunner
-        val onEnd: () -> Unit = {
-            handler.post {
-                if (runner === taskRunner) {
-                    port.finish()
-                    port.history.firstOrNull()?.let(completionCoordinator::complete)
-                    nm.notify(1, notification())
-                    stopShown()
-                    stopSelf()
+        try {
+            taskRunner.port(
+                game, keys, intent.getBooleanExtra(TOUCH, false),
+                intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
+                intent.getIntExtra(ALIAS, ALIAS_AUTO), intent.getStringExtra(PACK_DIR),
+            ) {
+                handler.post {
+                    if (runner === taskRunner) {
+                        port.finish()
+                        port.history.firstOrNull { it.id == taskId }?.let(completionCoordinator::complete)
+                        nm.notify(1, notification())
+                        stopShown()
+                        stopSelf()
+                    }
                 }
             }
+        } catch (error: Exception) {
+            runner = null
+            taskRunner.cancel()
+            port.onLine("[RED] Build executor could not start: ${error.message}")
+            port.finish()
+            port.history.firstOrNull { it.id == taskId }?.let(completionCoordinator::complete)
+            Toast.makeText(this, locale.str(R.string.build_executor_unavailable), Toast.LENGTH_LONG).show()
+            stopShown()
+            stopSelf(startId)
         }
-        runner!!.port(
-            game, keys, intent.getBooleanExtra(TOUCH, false),
-            intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
-            intent.getIntExtra(ALIAS, ALIAS_AUTO), intent.getStringExtra(PACK_DIR), onEnd
-        )
         return START_NOT_STICKY
     }
 
@@ -196,6 +222,7 @@ class PortService : Service() {
         val tap = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, 1)
+                .putExtra(MainActivity.EXTRA_BUILD_ID, port.buildId)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

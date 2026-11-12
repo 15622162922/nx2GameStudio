@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
@@ -62,6 +63,7 @@ fun EnvChecklistDialog(
     portRunning: Boolean,
     onPrepareEnv: () -> Unit,
     onPickKeys: () -> Unit,
+    onRunOnboarding: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -140,7 +142,10 @@ fun EnvChecklistDialog(
                     } else {
                         QuietButton(stringResource(R.string.env_check_recheck), viewModel::runDoctor, enabled = canRun(state, portRunning))
                     }
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    // The checklist fixes one thing at a time; the setup walks through all of it (the permission,
+                    // the space, the battery) with the reasons behind it. It is the way out when a row here has none.
+                    QuietButton(stringResource(R.string.set_rerun_onboarding), onRunOnboarding)
                     // the button is off for a reason, and the reason is written down
                     val why = when {
                         portRunning -> stringResource(R.string.env_check_busy)
@@ -149,7 +154,8 @@ fun EnvChecklistDialog(
                     }
                     if (why.isNotEmpty()) {
                         Text(why, style = MaterialTheme.typography.labelSmall,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp,
+                             textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = 10.dp))
                     }
                 }
             }

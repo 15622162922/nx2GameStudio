@@ -28,6 +28,52 @@ class EnvCheckTest {
     }
 
     @Test
+    fun `the chip is a hint when the child-process limit is on`() {
+        assertEquals(
+            EnvCheck.Chip.HINT,
+            EnvCheck.chip(envReady = true, keysOk = true, phantom = PhantomCheck.Status.ON),
+        )
+    }
+
+    @Test
+    fun `the chip is a hint when the child-process limit cannot be read`() {
+        assertEquals(
+            EnvCheck.Chip.HINT,
+            EnvCheck.chip(envReady = true, keysOk = true, phantom = PhantomCheck.Status.UNKNOWN),
+        )
+    }
+
+    @Test
+    fun `the chip is ready when the child-process limit is off`() {
+        assertEquals(
+            EnvCheck.Chip.READY,
+            EnvCheck.chip(envReady = true, keysOk = true, phantom = PhantomCheck.Status.OFF),
+        )
+        assertEquals(
+            EnvCheck.Chip.READY,
+            EnvCheck.chip(envReady = true, keysOk = true, phantom = PhantomCheck.Status.NOT_NEEDED),
+        )
+    }
+
+    @Test
+    fun `the chip does not flash while the child-process limit is being read`() {
+        // null: the answer is not here yet, so the chip says what it knows
+        assertEquals(EnvCheck.Chip.READY, EnvCheck.chip(envReady = true, keysOk = true, phantom = null))
+    }
+
+    @Test
+    fun `the chip is not ready when something is missing, whatever the limit says`() {
+        assertEquals(
+            EnvCheck.Chip.NOT_READY,
+            EnvCheck.chip(envReady = true, keysOk = false, phantom = PhantomCheck.Status.ON),
+        )
+        assertEquals(
+            EnvCheck.Chip.NOT_READY,
+            EnvCheck.chip(envReady = false, keysOk = true, phantom = PhantomCheck.Status.ON),
+        )
+    }
+
+    @Test
     fun `a row that passed is ok`() {
         val r = rows("""[{"name": "Python", "ok": true, "detail": "3.13.5", "required": true}]""").first()
         assertEquals(EnvCheck.Level.OK, r.level)

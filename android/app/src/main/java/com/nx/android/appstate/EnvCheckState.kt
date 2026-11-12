@@ -54,8 +54,16 @@ class EnvCheckState @Inject constructor(
     /** The facts have been read: before that, the chip says it is checking */
     var known by mutableStateOf(false); private set
 
-    /** The chip's verdict */
-    var chip by mutableStateOf(EnvCheck.Chip.CHECKING); private set
+    /**
+     * The chip's verdict: the two cheap facts and the child-process limit's state.
+     *
+     * It is read out of the facts instead of being kept, because the limit's state arrives later than the
+     * other two (it is read on a thread of its own): a kept value would go stale and the chip would stay
+     * green after the limit was found to be on.
+     */
+    val chip: EnvCheck.Chip
+        get() = if (!known) EnvCheck.Chip.CHECKING
+        else EnvCheck.chip(envReady, keysOk, if (phantomKnown) phantom else null)
 
     /** The doctor is running */
     var running by mutableStateOf(false); private set
@@ -84,7 +92,6 @@ class EnvCheckState @Inject constructor(
         keysPath = prefs.keys
         keysOk = keysPath.isNotBlank() && File(keysPath).isFile()
         known = true
-        chip = EnvCheck.chip(envReady, keysOk)
         refreshPhantom()
     }
 

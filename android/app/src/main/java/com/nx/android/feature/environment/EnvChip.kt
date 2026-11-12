@@ -27,13 +27,16 @@ import com.nx.android.core.ui.theme.NxPalette
  * The top bar's environment state: a dot and a word.
  *
  * The chip is always there, so the player sees whether the app can be used without going anywhere. It is red
- * when the environment or the keys are not in place, and tapping it opens the checklist.
+ * when the environment or the keys are not in place, amber when everything is in place but Android's limit on
+ * the app's child processes is on (the app works, but a port can be stopped halfway), and tapping it opens the
+ * checklist.
  */
 @Composable
 fun EnvChip(chip: EnvCheck.Chip, onClick: () -> Unit) {
     val (text, tint) = when (chip) {
         EnvCheck.Chip.CHECKING -> stringResource(R.string.env_chip_checking) to NxPalette.Unbuilt
         EnvCheck.Chip.READY -> stringResource(R.string.env_chip_ready) to NxPalette.Ready
+        EnvCheck.Chip.HINT -> stringResource(R.string.env_chip_ready) to NxPalette.Building
         EnvCheck.Chip.NOT_READY -> stringResource(R.string.env_chip_not_ready) to NxPalette.Danger
     }
     Row(
