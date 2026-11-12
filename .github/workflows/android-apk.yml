@@ -87,9 +87,9 @@ jobs:
       - name: the APK's name
         id: apk
         run: |
-          # The name carries the version, the way the desktop bundles' names do: a release gets the tag's
-          # own name, a build of the branch the version the app says.
-          if [ "${{ github.event_name }}" = "push" ]; then
+          # The name carries the version, the way the desktop bundles' names do: a build of a tag gets the
+          # tag's own name, a build of the branch the version the app says.
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             ver="${{ github.ref_name }}"
           else
             ver="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)"
@@ -103,7 +103,7 @@ jobs:
           name: nx2android-android-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
-      - if: github.event_name == 'push'
+      - if: startsWith(github.ref, 'refs/tags/')
         run: |
           # The release is made right after the tag is pushed, so it may not be there yet: wait for it, then
           # attach the APK to it. A release that never shows up leaves the APK in the run's artifact.

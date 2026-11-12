@@ -50,8 +50,8 @@ class AppNameTest {
 
     @Test
     fun noScreenWritesTheNameDown() {
-        assertFalse("the header does not write the name down", src("ui/App.kt").contains("append(\"nx2\""))
-        assertFalse("the header does not write the name down", src("ui/App.kt").contains("append(\"android\""))
+        assertFalse("the header does not write the name down", src("app/AppRoot.kt").contains("append(\"nx2\""))
+        assertFalse("the header does not write the name down", src("app/AppRoot.kt").contains("append(\"android\""))
         assertFalse("the notification does not write the name down", src("PortService.kt").contains("\"nx2android\""))
     }
 }

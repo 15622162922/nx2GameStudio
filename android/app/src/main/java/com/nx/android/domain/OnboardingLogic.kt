@@ -12,6 +12,12 @@ data class ObFacts(
     val keysPath: String,
     val keysOk: Boolean,
     val keysSkipped: Boolean,
+    /**
+     * The app is exempt from the power saving. It is a fact the screens show but no gate reads: the long
+     * background work is stopped halfway without it, but some ROMs never report it as granted, and a
+     * check that blocks the setup on those phones is worse than a hint.
+     */
+    val batteryOk: Boolean = false,
 )
 
 /**
@@ -19,6 +25,13 @@ data class ObFacts(
  * under it. Free of Android, so the tests run on the JVM.
  */
 object OnboardingLogic {
+
+    /** Restore a persisted step only for a setup the player deferred, then re-check its prerequisites. */
+    fun resume(savedStep: String, deferred: Boolean, facts: ObFacts): ObStep {
+        if (savedStep.isEmpty() || !deferred) return ObStep.WELCOME
+        val parsed = runCatching { ObStep.valueOf(savedStep) }.getOrDefault(ObStep.WELCOME)
+        return revalidate(parsed, facts)
+    }
 
     fun canAdvance(step: ObStep, f: ObFacts): Boolean = when (step) {
         ObStep.WELCOME -> f.storageOk && f.freeGB >= f.neededGB

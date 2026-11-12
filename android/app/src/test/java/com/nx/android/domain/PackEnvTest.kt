@@ -1,4 +1,4 @@
-package com.nx.android.domain
+package com.nx.android.data.playback
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -18,9 +18,9 @@ class PackEnvTest {
         File(p, "drivers.txt").writeText("libvulkan_freedreno.so\nlibvulkan_turnip.so\n")
         File(p, "drivers").mkdirs()
         File(p, "drivers/libvulkan_freedreno.so").writeText("DRV")
-        assertEquals(listOf("en-US" to "English", "ja" to "日本語", "zh-Hans" to "简体中文"), PackEnv.languages(p))
+        assertEquals(listOf("en-US" to "English", "ja" to "日本語", "zh-Hans" to "简体中文"), PackEnvStore.languages(p))
         // a driver the pack does not carry is not offered
-        assertEquals(listOf("libvulkan_freedreno.so"), PackEnv.drivers(p))
+        assertEquals(listOf("libvulkan_freedreno.so"), PackEnvStore.drivers(p))
         p.deleteRecursively()
     }
 
@@ -28,24 +28,24 @@ class PackEnvTest {
     fun `set writes the two rows, the others keep their places`() {
         val p = pack()
         File(p, "env.txt").writeText("# Written by nx2android's porter\nDM_LANG=en-US\nDM_AOC_DIR=/sdcard/x/aoc\nDM_ROOT=/sdcard/x\n")
-        PackEnv.set(p, "ja", "libvulkan_freedreno.so")
-        val (lang, drv) = PackEnv.current(p)
+        PackEnvStore.set(p, "ja", "libvulkan_freedreno.so")
+        val (lang, drv) = PackEnvStore.current(p)
         assertEquals("ja", lang); assertEquals("libvulkan_freedreno.so", drv)
         val body = File(p, "env.txt").readText()
         assertTrue(body.contains("DM_AOC_DIR=/sdcard/x/aoc"))
         assertTrue(body.contains("# Written by nx2android's porter"))
         // a removal: back to the system's driver, the language row goes too with null
-        PackEnv.set(p, "zh-Hans", null)
-        val (lang2, drv2) = PackEnv.current(p)
+        PackEnvStore.set(p, "zh-Hans", null)
+        val (lang2, drv2) = PackEnvStore.current(p)
         assertEquals("zh-Hans", lang2); assertNull(drv2)
         p.deleteRecursively()
     }
 
     @Test
     fun `a pack without env answers empty`() {
-        val (lang, drv) = PackEnv.current(pack())
+        val (lang, drv) = PackEnvStore.current(pack())
         assertNull(lang); assertNull(drv)
-        assertEquals(0, PackEnv.languages(pack()).size)
+        assertEquals(0, PackEnvStore.languages(pack()).size)
     }
 
     @Test
@@ -62,7 +62,7 @@ class PackEnvTest {
                 installed[0],
                 "libvulkan_freedreno.so" to "libvulkan_freedreno.so",
             ),
-            PackEnv.driverChoices(p, installed),
+            PackEnvStore.driverChoices(p, installed),
         )
         p.deleteRecursively()
     }
@@ -73,7 +73,7 @@ class PackEnvTest {
         File(p, "drivers.txt").writeText("libvulkan_freedreno.so\n")
         File(p, "drivers").mkdirs()
         File(p, "drivers/libvulkan_freedreno.so").writeText("DRV")
-        val choices = PackEnv.driverChoices(p, listOf("/app/files/drivers/x/libvulkan_freedreno.so" to "Turnip Gen8 V39"))
+        val choices = PackEnvStore.driverChoices(p, listOf("/app/files/drivers/x/libvulkan_freedreno.so" to "Turnip Gen8 V39"))
         assertEquals(3, choices.size)
         assertEquals("/app/files/drivers/x/libvulkan_freedreno.so", choices[1].first)
         assertEquals("libvulkan_freedreno.so", choices[2].first)

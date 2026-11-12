@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.annotation.SuppressLint
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -46,14 +47,14 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PrefsStore
-import com.nx.android.game.HudField
-import com.nx.android.ui.ProvideAppLocale
-import com.nx.android.ui.game.GameDrawer
-import com.nx.android.ui.game.HudOverlay
-import com.nx.android.ui.game.PadEditor
-import com.nx.android.ui.game.PadView
-import com.nx.android.ui.game.TextPrompt
-import com.nx.android.ui.theme.NxTheme
+import com.nx.android.game.hud.HudField
+import com.nx.android.core.ui.ProvideAppLocale
+import com.nx.android.game.overlay.GameDrawer
+import com.nx.android.game.hud.HudOverlay
+import com.nx.android.game.input.PadEditor
+import com.nx.android.game.input.PadView
+import com.nx.android.game.overlay.TextPrompt
+import com.nx.android.core.ui.theme.NxTheme
 import org.json.JSONObject
 
 /**
@@ -108,7 +109,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     /** 界面语言：toast 与抽屉里的词从这里取 */
-    private val locale: AppLocale get() = (application as NxApp).container.locale
+    private val locale: AppLocale get() = (application as NxApp).locale
 
     private var paused by mutableStateOf(false)
     private var drawerOpen by mutableStateOf(false)
@@ -205,18 +206,15 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         val pack = intent.getStringExtra(EXTRA_PACK)
         val host = intent.getStringExtra(EXTRA_HOST)
         if (pack.isNullOrEmpty() || host.isNullOrEmpty()) { toast(locale.str(R.string.game_no_game_to_run)); endProcess(); return }
-        try {
-            System.load(host)
-        } catch (t: Throwable) {
-            toast(locale.str(R.string.game_cannot_load_host, t.message))
+        if (com.nx.android.data.library.LibraryFileScanner.portFromPack(java.io.File(pack))?.runnable != true) {
+            toast(locale.str(R.string.game_needs_report))
             endProcess()
             return
         }
-        // 旧版宿主编的包：老的前端没有 frontCaps 这个入口（调用即抛），这个包要用当前版本重新移植
-        val caps = runCatching { Native.frontCaps() }.getOrNull()
-        // 性能 HUD 的计数也要新宿主：老宿主还在画面上自己画帧率计数器，两处帧率不是一回事
-        if (caps == null || caps and Native.FRONT_CAPS_PLAYER == 0 || caps and Native.FRONT_CAPS_PERF == 0) {
-            toast(locale.str(R.string.game_needs_report))
+        try {
+            System.load(host)
+        } catch (t: Throwable) {
+            toast(locale.str(R.string.game_cannot_load_host, t.message) + "\n" + locale.str(R.string.runtime_play_failed))
             endProcess()
             return
         }
@@ -412,6 +410,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
      * (dm_menu_state: -1 closed, else a panel is up), and with nothing up Back opens the drawer.
      * 游戏暂停时也一样：暂停遮罩吃掉了所有触摸（菜单按钮点不到），Back 是那时唯一能叫出抽屉的入口。
      */
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (!forwardsKeyToGame(e.keyCode)) return false   // 音量键：系统的事，游戏与宿主都不沾
         if (e.keyCode == KeyEvent.KEYCODE_BACK) {

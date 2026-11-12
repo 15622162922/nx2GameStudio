@@ -1,5 +1,6 @@
 package com.nx.android.data
 
+import com.nx.android.data.drivers.Drivers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

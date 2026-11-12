@@ -7,7 +7,36 @@ import java.io.File
 val GAME_FILE_EXTENSIONS = setOf("nsp", "xci", "nsz", "xcz")
 
 /** A game card's status, and the port options a game carries — pure vocabulary, shared by the layers */
-enum class GameStatus { NOT_PORTED, PORTING, DONE }
+enum class GameStatus {
+    NOT_PORTED,
+    PORTING,
+    DONE,
+    NEEDS_BUILD,
+}
+
+/**
+ * 库里的一张卡：一个游戏（title ID）+ 它的三样东西——数据包、构建工作区、上次构建用的源文件。
+ *
+ * 身份是 title ID，不是路径：源文件被挪走或删掉时，卡还在（包与工作区还在）。
+ */
+data class GameEntry(
+    val titleId: String,        // 游戏的 title ID（每张卡都有）
+    val pack: Ported?,          // 数据包
+    val work: File?,            // 构建工作区
+    val sourcePath: String?,    // 上次构建用的源文件路径（文件可能已经不在了）
+) {
+    /** 上次构建用的那个源文件：还在吗 */
+    val source: File? get() = sourcePath?.let { File(it) }?.takeIf { it.isFile }
+
+    /** 卡片的稳定标识 */
+    val key: String get() = titleId
+
+    /** 卡上的名字：包清单里的游戏名；没有包就用记住的源路径中的文件名 */
+    val label: String get() = pack?.name?.trim()?.takeIf { it.isNotEmpty() }
+        ?: sourcePath?.let { GameIdentity.displayName(File(it)) }
+        ?: titleId
+}
+
 
 /**
  * 额外地址空间（别名区）：-1 = Auto（不指定，由移植器按自己的规则决定：档案调通过的版本不加，
@@ -36,6 +65,21 @@ object GameConfigJson {
         o.optBoolean("touch"), o.optBoolean("fps60"), o.optBoolean("exp"), o.optInt("alias", ALIAS_AUTO))
 }
 
+/** Moves filename-keyed legacy options to title IDs once the library can identify their games. */
+object GameConfigMigration {
+    fun migrateLegacy(configs: MutableMap<String, GameConfig>, games: List<GameEntry>): Boolean {
+        var changed = false
+        for (entry in games) {
+            if (configs.containsKey(entry.titleId)) continue
+            val sourceName = entry.sourcePath?.let { File(it).name } ?: continue
+            val config = configs.remove(sourceName) ?: continue
+            configs[entry.titleId] = config
+            changed = true
+        }
+        return changed
+    }
+}
+
 /**
  * 一个完成的移植：数据包是唯一产物（手机线不再产出 APK），宿主程序（libdmplay.so）在包里，App 的
  * 玩家把它拷进私有目录后直接运行。「已完成」以包与宿主齐备为准。
@@ -47,9 +91,12 @@ data class Ported(
     val titleId: String,   // 清单里的 title id（存档、私有目录都按它分）
     val name: String = "", // 清单里的游戏名
     val status: String = "", // 清单里的档案状态（playable / wip / boots / experimental）：experimental 的移植提醒玩家它还没被正式调通
-    val hostFront: String = "", // 清单里的宿主前端（"player"）：别的值（没有这个字段 = 旧版宿主）要用当前版本重新移植
+    val playerApiRevision: Int = 0, // Missing or invalid revisions require a runtime update.
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
 ) {
-    /** 这个包是用当前版本的前端编的吗？不是的话要重新移植（宿主的前端变了，老的宿主没有新的入口） */
-    val needsRePort: Boolean get() = hostFront != FolderScanner.HOST_FRONT
+    /** The pack has its host and was built for the current player interface revision. */
+    val runnable: Boolean get() = host.isFile && playerApiRevision == PlayerApiRevision.CURRENT
+
+    /** Missing host or a different/legacy revision requires a runtime update. */
+    val needsRuntimeUpdate: Boolean get() = !runnable
 }

@@ -1,7 +1,6 @@
 # nx2androidX — Agent 指南
 
 > 本文件是本仓库对 AI agent 的**权威上下文**。`CLAUDE.md` 只指向这里，不重复维护内容。
-> Spec 工作流的配置与规则在 `openspec/config.yaml`（`openspec/` 是指向 openspec-hub 元仓库的软链）。
 >
 > **一句话：本 fork 只做 Android 端，产品是手机 app（APK）。** 看到仓库里的 PC / iOS 相关目录，
 > 不要因此以为项目要往那个方向做。
@@ -48,10 +47,13 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 本线的版本号是它承载的**上游基版本**：`porter/__init__.py` 持有基版本（`0.MINOR.PATCH`，当前 `0.3.0`）；
 发布 tag 是基版本加上本线的预发布阶段：`v<base>-alphaNN`（如 `v0.3.0-alpha02`），或正式版 `v<base>`。
 
+- 逐步操作见 [nx2android-release skill](.claude/skills/nx2android-release/SKILL.md)：发版的命令顺序、构建只看 tag、
+  产物怎么核、alpha 怎么变成当前版本、这些坑
+
 - 预发布用 GitHub **pre-release**（`--prerelease`）；app 的更新检查读 "Latest"，所以正式版玩家不会被推上 alpha。
   **GitHub 不允许预发布成为 "Latest"**（API：drafts and prereleases cannot be set as latest）：要让某个 alpha
   成为当前版本，就去掉它的预发布标记（`gh release edit <tag> --prerelease=false`）——tag 名字里的 `alpha` 不变，
-  之后的预发布不会自动抢走这个位置。现状：`v0.3.0-alpha05` 是 Latest
+  之后的预发布不会自动抢走这个位置。现状：`v0.3.0-alpha06` 是 Latest
 - **构建只由 tag 触发**：推分支什么都不构建。tag 一推，构建就开始（产物从那个 tag 的提交来），
   它会等 release 建好后把 APK 附上去（`gh release create` 紧跟着 tag 就行）。**要重新构建就把 tag 重推一次**
   （`git tag -f` + `git push --force`），构建跟着新 tag 走
@@ -110,7 +112,7 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 - 对外产物一律英文：README、docs、代码注释、日志与报错、提交信息、脚本输出
 - 尚未实现或明显不对的日志行以 `[RED] ` 开头
 - 需要匹配游戏自带的非 ASCII 文本时，写转义（`"\xE8\xB5\xB7"`），不写字符本身
-- **Spec 与 task 用中文**（见 `openspec/config.yaml`）
+- 需求与任务记录用中文
 
 ## 7. 深入指南
 
@@ -121,5 +123,4 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 | 分层与契约、目录职责 | `docs/ARCHITECTURE.md` |
 | 从仓库运行、构建、测试、提交信息 | `docs/DEVELOPMENT_GUIDE.md` |
 | 游戏进度清单 | `docs/PORT_CHECKLIST.md`、`docs/PORT_STATUS.md` |
-| Spec 工作流与规则 | `openspec/config.yaml` |
 | 上游引擎（Apple 路线）的档案格式与调查手册 | `nxnative/AGENTS.md`、`nxnative/docs/agents/` |

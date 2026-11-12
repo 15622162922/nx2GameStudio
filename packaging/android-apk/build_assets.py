@@ -204,9 +204,38 @@ def dotnet_runtime(cache):
     return item
 
 
+def finalize_metadata(out):
+    # The APK's assets have no permissions, so the modes of the tool's tree travel in a file of their own: the
+    # guest's programs have to be executable, or the porter cannot start them.
+    modes = {}
+    for tree in ('tool', 'toolchain'):
+        root = out / tree
+        if not root.exists(): continue
+        for p in root.rglob('*'):
+            if p.is_file():
+                modes[f'{tree}/{p.relative_to(root)}'] = p.stat().st_mode & 0o777
+    (out / 'modes.json').write_text(json.dumps(modes))
+    print(f'>> the modes of {len(modes)} file(s)')
+
+    # the build's stamp: the app compares it with the one the tree was unpacked with, and copies the tree again
+    # when it changed (the tree is big: the games' profiles alone are a third of it)
+    stamp = hashlib.sha256()
+    for tree in ('tool', 'toolchain'):
+        root = out / tree
+        if not root.exists(): continue
+        for p in sorted(root.rglob('*')):
+            if p.is_file():
+                stamp.update(f'{tree}/{p.relative_to(root)}:{p.stat().st_size}\n'.encode())
+                with p.open('rb') as source:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                        stamp.update(chunk)
+    (out / 'build-id').write_text(stamp.hexdigest() + '\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
+    ap.add_argument('--finalize', action='store_true', help='refresh content stamps after all runtime tools have been staged')
     ap.add_argument('--payload', default='')
     ap.add_argument('--toolchain', default='')
     ap.add_argument('--cache', default='')
@@ -214,6 +243,9 @@ def main():
     ap.add_argument('--no-dotnet', action='store_true', help='do not ship the .NET SDK: the app downloads it on the first run')
     a = ap.parse_args()
     out = Path(a.out); cache = Path(a.cache or (Path(__file__).resolve().parent / '.cache'))
+    if a.finalize:
+        finalize_metadata(out)
+        return 0
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
 
@@ -268,28 +300,7 @@ def main():
     # when it starts (the archive travels; the library does not).
     driver_archive(cache, out / 'drivers')
 
-    # The APK's assets have no permissions, so the modes of the tool's tree travel in a file of their own: the
-    # guest's programs have to be executable, or the porter cannot start them.
-    modes = {}
-    for tree in ('tool', 'toolchain'):
-        root = out / tree
-        if not root.exists(): continue
-        for p in root.rglob('*'):
-            if p.is_file():
-                modes[f'{tree}/{p.relative_to(root)}'] = p.stat().st_mode & 0o777
-    (out / 'modes.json').write_text(json.dumps(modes))
-    print(f'>> the modes of {len(modes)} file(s)')
-
-    # the build's stamp: the app compares it with the one the tree was unpacked with, and copies the tree again
-    # when it changed (the tree is big: the games' profiles alone are a third of it)
-    stamp = hashlib.sha256()
-    for tree in ('tool', 'toolchain'):
-        root = out / tree
-        if not root.exists(): continue
-        for p in sorted(root.rglob('*')):
-            if p.is_file():
-                stamp.update(f'{p.relative_to(root)}:{p.stat().st_size}\n'.encode())
-    (out / 'build-id').write_text(stamp.hexdigest() + '\n')
+    finalize_metadata(out)
 
     manifest = {'schema': 'nx2a.phone-assets.v1',
                 'rootfs': 'rootfs.pkg',

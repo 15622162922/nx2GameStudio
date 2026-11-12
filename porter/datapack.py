@@ -13,14 +13,12 @@
 # Big trees are hard links into the extraction when the volume allows, so the pack takes no extra space; the pack is rebuilt whole when anything in it changes.
 import json, os, shutil, time
 from pathlib import Path
+from porter.revision import PLAYER_API_REVISION
 
 MANIFEST = 'nx2a-data.json'
 KEEP_ON_DEVICE = ('settings.txt',)          # the player's choices win over the pack's defaults
 OWNED = ('mods', 'RomFS', 'aoc', 'sysdata')            # folders the pack owns on the device: files there that the pack lacks are stale (an older version's) and removed
 ROMFS = 'RomFS'
-HOST_FRONT = 'player-hud'                   # the front end the pack's host was built with (the player front: the app draws the gamepad, the host draws no panel;
-                                          # and the host counts the frames for the app's performance HUD instead of drawing a counter of its own).
-                                          # The app compares it with the front its own build needs: a pack built with another front has to be ported again
 
 
 def link_or_copy(src, dst):
@@ -84,7 +82,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     if icon: man['icon'] = icon
     if drivers: man['drivers'] = list(drivers)
     if profile_h: man['profile_h'] = profile_h
-    man['host_front'] = HOST_FRONT      # the front the host was built with: the app knows a pack from another front has to be ported again
+    man['player_api_revision'] = PLAYER_API_REVISION   # the runtime interface the pack was built against: the app rebuilds the runtime when its own revision differs
     (tmp / MANIFEST).write_text(json.dumps(man, indent=2), encoding='utf-8')
     # the exported saves (the player's backups) are not the build's own: the pack is rebuilt whole, so they are put aside and put back
     keep = dst.with_name(dst.name + '.saves-keep')

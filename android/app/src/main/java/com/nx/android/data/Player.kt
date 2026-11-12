@@ -42,17 +42,21 @@ object Player {
      * 退出游戏也就不会回到库页。
      */
     fun run(activity: Activity, port: Ported, name: String, onReady: (Boolean) -> Unit) {
+        if (com.nx.android.data.library.LibraryFileScanner.portFromPack(port.pack)?.runnable != true) {
+            onReady(false)
+            return
+        }
         if (playProcessAlive(activity)) {
             GameActivity.stop(activity)
             val deadline = System.currentTimeMillis() + 3000
             while (playProcessAlive(activity) && System.currentTimeMillis() < deadline) Thread.sleep(100)
+            if (playProcessAlive(activity)) { onReady(false); return }
         }
         Thread {
             val ok = try {
                 val dst = hostDir(activity, port.titleId)
                 dst.mkdirs()
-                copy(port.host, File(dst, port.host.name))
-                File(port.pack, "drivers").listFiles()?.forEach { if (it.isFile) copy(it, File(dst, it.name)) }
+                RuntimeLibraries.copyForLaunch(port, dst)
                 true
             } catch (e: Exception) {
                 false
@@ -72,14 +76,4 @@ object Player {
         }.start()
     }
 
-    private fun copy(src: File, dst: File) {
-        if (src.length() == dst.length()) return   // the pack's copy is already in place
-        dst.parentFile?.mkdirs()
-        val tmp = File(dst.parentFile, dst.name + ".part")
-        src.inputStream().use { s -> tmp.outputStream().use { s.copyTo(it) } }
-        if (!tmp.renameTo(dst)) {
-            dst.delete()
-            if (!tmp.renameTo(dst)) throw java.io.IOException("cannot put ${dst.name} in place")
-        }
-    }
 }

@@ -1,0 +1,99 @@
+"""Rebuild only a pack's player runtime. An atomic manifest switch activates the complete component set."""
+import json
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from porter import config, toolchain
+from porter.paths import DM
+from porter.revision import PLAYER_API_REVISION
+
+HOOKS = ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', 'libgsl_alloc_hook.so')
+
+
+def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
+    pack = Path(pack).resolve()
+    expected = os.environ.get('NX2A_PLAYER_API_REVISION')
+    if expected is not None and expected != str(PLAYER_API_REVISION):
+        raise ValueError('The runtime tools do not match this app. Refresh the environment and retry.')
+    manifest_path = pack / 'nx2a-data.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    title_id = manifest.get('title_id', '')
+    if not isinstance(title_id, str) or not re.fullmatch(r'[0-9A-Fa-f]{16}', title_id):
+        raise ValueError('Invalid game identity. Port the game again from its original files.')
+    profile = pack / 'profile' / title_id
+    for name in ('game.tsv', 'android.tsv'):
+        source = profile / name
+        if not source.is_file() or not source.resolve().is_relative_to(pack):
+            raise ValueError('This pack has no saved game profile. Port the game again from its original files.')
+    ndk, _ = toolchain.find_ndk(config.load())
+    if ndk is None:
+        raise ValueError('The Android compiler is unavailable. Prepare the environment and retry.')
+    root = Path(os.environ.get('NX2A_WORK') or tempfile.gettempdir()) / 'runtime'
+    root.mkdir(parents=True, exist_ok=True)
+    stage = None
+    activated = False
+    try:
+        with tempfile.TemporaryDirectory(prefix=title_id + '-', dir=root) as scratch:
+            scratch = Path(scratch)
+            # Snapshot the two non-executable inputs; do not reuse generated headers or old objects.
+            profile_root = scratch / 'profile'
+            target = profile_root / title_id
+            target.mkdir(parents=True)
+            for name in ('game.tsv', 'android.tsv'):
+                shutil.copyfile(profile / name, target / name)
+            output = scratch / 'host'
+            prebuilt = DM.parent.parent / 'tools' / 'adrenotools'
+            use_prebuilt = all((prebuilt / name).is_file() for name in HOOKS)
+            args = [sys.executable, str(DM / 'android/build.py'), '--game', title_id,
+                    '--ndk', str(ndk), '--out', str(output), '--play', '--release',
+                    '--jobs', str(jobs or os.cpu_count() or 8)]
+            if no_lsfg: args.append('--no-lsfg')
+            if not use_prebuilt: args.append('--adrenotools')
+            env = dict(os.environ, DM_GAME=title_id, DM_GAMES_DIR=str(profile_root), DM_GAMES_FIRST='1')
+            tc_lib = DM.parent.parent / 'toolchain' / 'lib'
+            if tc_lib.is_dir(): env['LD_LIBRARY_PATH'] = str(tc_lib) + os.pathsep + env.get('LD_LIBRARY_PATH', '')
+            emit('Building the player runtime')
+            with subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace') as process:
+                for line in process.stdout: emit(line.rstrip())
+                if process.wait(): raise RuntimeError('Runtime compilation failed. Retry, or port the game again from its original files.')
+            host = output / 'libdmplay.so'
+            with host.open('rb') as stream: header = stream.read(20)
+            if len(header) < 20 or header[:5] != b'\x7fELF\x02' or struct.unpack_from('<H', header, 18)[0] != 183:
+                raise ValueError('The compiler did not produce an Android ARM64 runtime.')
+            hooks = prebuilt if use_prebuilt else output
+            for name in HOOKS:
+                if not (hooks / name).is_file(): raise ValueError(f'Missing runtime component: {name}')
+            stage = Path(tempfile.mkdtemp(prefix='.runtime-', dir=pack))
+            for source in [host, *[hooks / name for name in HOOKS]]:
+                with source.open('rb') as src, (stage / source.name).open('wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                    dst.flush()
+                    os.fsync(dst.fileno())
+            manifest['host'] = f'{stage.name}/libdmplay.so'
+            manifest['player_api_revision'] = PLAYER_API_REVISION
+            manifest.pop('host_front', None)
+            # The manifest is the commit point. Before it changes the old component set remains active.
+            pending = stage / 'manifest.json'
+            with pending.open('w', encoding='utf-8') as stream:
+                json.dump(manifest, stream, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(pending, manifest_path)
+            activated = True
+        return {'data': str(pack), 'title_id': title_id, 'name': manifest.get('name', title_id)}
+    finally:
+        if stage is not None and not activated:
+            # Cancellation can arrive just after replace() committed but before the assignment above.
+            # Never remove a generation the manifest already names; an unreadable manifest is inconclusive.
+            try:
+                active = json.loads(manifest_path.read_text(encoding='utf-8')).get('host')
+            except (OSError, ValueError):
+                active = f'{stage.name}/libdmplay.so'
+            if active != f'{stage.name}/libdmplay.so':
+                shutil.rmtree(stage, ignore_errors=True)

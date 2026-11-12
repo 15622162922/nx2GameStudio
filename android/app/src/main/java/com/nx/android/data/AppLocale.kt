@@ -9,6 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import java.util.Locale
 
 /**
@@ -23,7 +26,8 @@ import java.util.Locale
  * `ui/Locale.kt`), and the code that has no screen — the state holders, the service, the activity — reads
  * them with [str]. Both read the same resources.
  */
-class AppLocale(private val base: Context, private val prefs: PrefsStore) {
+@Singleton
+class AppLocale @Inject constructor(@ApplicationContext private val base: Context, private val prefs: PrefsStore) {
 
     /** What the player picked: the phone's own setting, or one of the two languages */
     enum class Mode(val code: String) {

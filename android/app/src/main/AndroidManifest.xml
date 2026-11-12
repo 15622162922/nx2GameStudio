@@ -12,6 +12,10 @@
     <!-- The port runs in a foreground service (the notification keeps the process alive while the app is
          in the background or the screen is off). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- The battery exemption: the unpack and a port are long background jobs, and the power saving kills
+         them halfway unless the app is exempt. The prompt is Android's own dialog (the onboarding's
+         battery check opens it). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- The vibration: the gamepad's tick when a button goes down, and the game's own rumble (the host's
          haptics thread). Without it the system's Vibrator throws and nothing moves. -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -48,6 +52,8 @@
             android:name=".PortService"
             android:exported="false" />
 
+        <service android:name=".RuntimeUpdateService" android:exported="false" />
+
         <!-- The player: one game at a time, in a process of its own — a crash (or the game's own exit, which
              ends the process) takes the game down, not the app or a port that is running.
              The game page is a page of the app's own task: it sits on top of the library page, so the launcher
@@ -64,6 +70,10 @@
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|layoutDirection|colorMode|fontWeightAdjustment|fontScale"
             android:exported="false"
             android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+
+        <!-- The Wireless debugging pairing code typed into the child-process limit fix's
+             notification (data/PhantomFix.kt). -->
+        <receiver android:name=".data.PhantomFixReceiver" android:exported="false" />
 
         <!-- The save packages the panel shares: the system share sheet reads them through this provider (a
              file:// URI is refused by Android since 7). It hands out the download folder's nx2android/ and

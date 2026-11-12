@@ -75,7 +75,12 @@ Per-build knowledge stays where upstream keeps it: the rewriter's cuts in `patch
 
 ## The port
 
-`python -m porter port <game file> -k <prod.keys>` (the GUI's **Port** button) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the data pack is made again each time (seconds).
+`python -m porter port <game file> -k <prod.keys>` (the phone app's **Port** action) runs these stages. The slow ones (extraction, rewrite, shader split, the translator build, the Vulkan shaders) keep their output with a key of their inputs and are skipped on the next run when the key is unchanged; the host build is incremental (`build.py`), and the data pack is made again each time. The pack records `player_api_revision`, the manual APK/player interface revision from `porter/revision.py`. Gradle generates the Android constant from the same file. Increment it only for incompatible APK/runtime interface changes; ordinary engine fixes, game patches, shaders, APK versions and payload changes do not invalidate installed games. A missing or different revision offers **Update runtime** first. Completed packs run without source files or a build workspace.
+
+`python -m porter rebuild-runtime <pack>` compiles the current player runtime using the final `profile/<titleId>/game.tsv` and `android.tsv` saved during the original port. It does not read keys or source games, or regenerate mods, shaders or RomFS. Compiler switches follow the current APK policy. A fresh runtime and its managed hooks are staged in a new `.runtime-*` directory; an atomic manifest replacement activates the complete set. Failed or interrupted attempts leave the previous manifest and game data intact. Launch copies are refreshed even when file sizes are unchanged. Runtime updates have their own modal state and foreground service. They never enter the port progress screen, port history or source-file bookkeeping. The dialog closes on success; failures offer retry, a full re-port or close. An interrupted process restores a retry prompt from a single pending-pack marker.
+
+Legacy packs without saved profiles cannot use this path and receive a clear suggestion to port again. Compilation failure offers retry or a full re-port; load failures and identifiable native crashes also suggest a full re-port without claiming that old data caused the error. Full re-port still requires source game files and keys, so keeping a backup is useful. Saves, user settings and selected drivers are retained during runtime updates.
+
 
 | Stage | What | Output (in `<game folder>/<title ID>_build/`) |
 |---|---|---|
@@ -204,6 +209,29 @@ threads and the host's own alike. The host's **notices to the app** (the drawer 
 thread of their own: they are JNI calls into the Activity, and the game's thread must never wait for the app (it
 blocked there once, and the game froze with its keyboard never coming up).
 
+### Android source boundaries
+
+| Package | Responsibility |
+|---|---|
+| `app/` | Root navigation, tab shell and Activity action boundary. `MainActivity` owns Android permissions, intents and system UI. |
+| `feature/<name>/` | Routes, Compose screens, ViewModels and UI state. Features call domain contracts rather than own file/network implementations. |
+| `domain/` | Platform-independent models, rules and repository/capability contracts. It must not import Android, Compose, `data/` or `feature/`. |
+| `data/<name>/` | Repository implementations, platform adapters, persistence and file operations. |
+| `core/` | Cross-feature primitives: DI bindings, dispatchers, app paths and shared UI/theme components. |
+| `game/{input,hud,overlay}/` | The `:play` process UI grouped by concern. `GameActivity` and `Native` keep their JNI-facing class and method names. |
+| `appstate/` | Application-scoped state/coordinators shared across screens and the foreground service; screen presentation state belongs in a feature ViewModel. |
+
+Hilt is the dependency source: application-scoped repositories and state have one binding, Android entry points
+inject only the capabilities they use, and Composables receive explicit state/action parameters. The `:play`
+process must not start library scans, update checks or port recovery. Long-running work has an explicit owner
+(a ViewModel for screen-scoped work, or a service/coordinator for background porting) and a cancellation or recovery path.
+
+`./gradlew :app:check` runs `checkArchitectureBoundaries`: domain cannot import Android, UI, appstate or data;
+feature-to-data imports are checked against a file-specific legacy allowlist so new dependencies cannot spread
+while the remaining platform integrations are moved behind routes. Remove an allowlist entry as soon as that
+call crosses the boundary. The process-shared state in `appstate/` remains application-scoped because the
+foreground service, the Activity and multiple feature ViewModels observe the same in-flight work.
+
 ### The app's own language
 
 The app's words live in its own resources: `res/values/strings.xml` is English (the default bundle) and
@@ -214,11 +242,11 @@ language is not the game's language: the game's own is a per-game setting in the
 into the pack's `env.txt`.
 
 `AppLocale` (`data/AppLocale.kt`) holds the choice and hands out the resources the words are read from. The
-screens read them with `stringResource` (the resources are handed to the composition by `ui/Locale.kt`), and
+screens read them with `stringResource` (the resources are handed to the composition by `core/ui/Locale.kt`), and
 the code that has no screen — the state holders, the service, the activity — reads them with
 `AppLocale.str()`. Both read the same resources, so a word is the same word wherever it is shown. The data
 layer stays free of Android and says what went wrong in a code, not a sentence (`Drivers.Refused`,
-`SaveBackup.Refused`); `ui/Failures.kt` turns a code into the app's own words.
+`SaveBackup.Refused`); `core/ui/Failures.kt` turns a code into the app's own words.
 
 `tests/test_app_text.py` holds the two tables to each other and the sources to the tables: the same keys on
 both sides, no Chinese left in the Kotlin sources, every `R.string` in the table, and every
@@ -242,7 +270,7 @@ their comparison (free of Android, so the tests run on the JVM), `domain/UpdateF
 repository's release feed (GitHub's Atom feed: every release with its own notes, already rendered into HTML —
 also a plain page, so no API's rate limit), `data/UpdateChecker.kt` asks for the tag and the feed, and
 `appstate/UpdateState.kt` holds the state the screens read — the popup on a cold start and the entry in the
-settings (`ui/update/UpdateUi.kt`).
+settings (`feature/updates/`).
 
 One platform quirk is worth knowing: a locale **with** a region (`en_US`, `zh_CN`) overrides the phone's own
 locale, a locale with only a language (`en`) does not — on Android 16 the configuration keeps the phone's
@@ -262,6 +290,15 @@ allows 60 requests an hour per address and a phone shares its address), ships on
 (`drivers/Turnip_Gen8_V39.zip`, unpacked into the app's own folder by the app itself when it starts — no network,
 no click — and marked as the built-in one, so it is the app's own and not the player's to remove) and imports any
 other from the device's files.
+
+In the Android app, `domain/drivers/` owns the driver model and `DriverRepository` contract. `data/drivers/`
+owns the app-private directory, archive parsing, fixed download catalogue, import, removal and built-in driver
+setup. `feature/drivers/` owns the download route, screen, `DriverViewModel` and its UI state. Hilt binds one
+application-scoped repository; Activity and feature entry points inject that same instance. Settings
+subscribes to its driver flow for the installed list and sends import/removal actions to the repository. The
+library's run options receive that same list from the app root, so all three surfaces observe one source of
+installed driver state. New features should keep UI resource selection in `feature/`, storage and network work
+in `data/`, and shared models/contracts in `domain/`.
 
 The **loader** (`libadrenotools.so`) is the app's own native library, and it has to be: the host `dlopen`s it **by
 name**, and the Android linker looks a bare name up in `LD_LIBRARY_PATH`, in the caller's `DT_RUNPATH` and in the

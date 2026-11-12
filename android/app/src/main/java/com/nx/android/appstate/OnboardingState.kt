@@ -7,9 +7,10 @@ import androidx.compose.runtime.setValue
 import com.nx.android.R
 import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
-import com.nx.android.data.Env
 import com.nx.android.data.PortRunner
 import com.nx.android.data.PrefsStore
+import com.nx.android.domain.environment.EnvironmentSetup
+import com.nx.android.domain.environment.GuestProcessLauncher
 import com.nx.android.data.PrefsStore.Companion.OB_COMPLETED
 import com.nx.android.data.PrefsStore.Companion.OB_LATER
 import com.nx.android.data.PrefsStore.Companion.OB_STEP
@@ -18,6 +19,8 @@ import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The guided setup's state: the step the player is on, what each step gathered, and where "later" lands next
@@ -25,10 +28,22 @@ import java.io.File
  * storage permission, the environment's unpack, the doctor's keys check — and remembers everything across
  * restarts in the PrefsStore (its own ob.* keys; the tool's older keys stay untouched).
  */
-class OnboardingState(private val prefs: PrefsStore, private val env: Env, private val locale: AppLocale,
-                      private val storageOk: () -> Boolean,
-                      /** The environment changed: the top bar's chip reads the facts again */
-                      private val onEnvChanged: () -> Unit = {}) {
+@Singleton
+class OnboardingState @Inject constructor(
+    private val prefs: PrefsStore,
+    private val env: EnvironmentSetup,
+    private val guestLauncher: GuestProcessLauncher,
+    private val locale: AppLocale,
+    private val envCheck: EnvCheckState,
+) {
+    @Volatile var storageOk: Boolean = false
+
+    /**
+     * The app is exempt from the power saving (the system's own setting). It is a Compose state, so the
+     * check row redraws itself the moment the activity reads it again after the player comes back from
+     * the settings - a plain field would not be noticed by the flow that feeds the screens.
+     */
+    var batteryOk by mutableStateOf(false)
 
     companion object {
         /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
@@ -54,17 +69,12 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     var unpackStep by mutableStateOf(""); private set
     var unpackError by mutableStateOf(""); private set
 
-    /** Opens the flow: first run lands on Welcome; "later" resumes at its saved step, revalidated */
+    /** Opens the flow: first run lands on Welcome; a setup that was cut short resumes at its saved step */
     fun open() {
         val saved = prefs.str(OB_STEP)
         refreshEnv()
         keysPath = prefs.keys      // the settings page may have set a keys file since the last time
-        step = if (saved.isNotEmpty() && prefs.bool(OB_LATER)) {
-            // 旧版本存的步名可能已经不存在了（游戏文件夹那步被删了）：认不出来就当从头开始
-            OnboardingLogic.revalidate(runCatching { ObStep.valueOf(saved) }.getOrNull() ?: ObStep.WELCOME, facts())
-        } else {
-            ObStep.WELCOME
-        }
+        step = OnboardingLogic.resume(saved, prefs.bool(OB_LATER), facts())
         active = true
         enter()
     }
@@ -73,12 +83,6 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     fun openLibrary() {
         prefs.put(OB_COMPLETED, true)
         prefs.put(OB_LATER, false)
-        active = false
-    }
-
-    /** Everything gathered so far is kept, and the next launch comes back to this step */
-    fun skipForLater() {
-        saveStep()
         active = false
     }
 
@@ -124,13 +128,14 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         Thread {
             env.reset()
             refreshEnv()
-            onEnvChanged()
+            envCheck.refresh()
         }.start()
     }
 
     fun facts(): ObFacts = ObFacts(
-        storageOk = storageOk(), freeGB = freeGB(), neededGB = NEEDED_GB,
+        storageOk = storageOk, freeGB = freeGB(), neededGB = NEEDED_GB,
         envReady = envReady, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
+        batteryOk = batteryOk,
     )
 
     /** The environment's readiness, read again: the screens watch the copy, not the filesystem */
@@ -161,7 +166,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
                 AppLog.line(locale.str(R.string.onb_prepare_failed, e.message))
             }
             refreshEnv()
-            onEnvChanged()
+            envCheck.refresh()
         }.start()
     }
 
@@ -228,7 +233,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
         keysChecking = true
         keysDetail = ""
         val buf = StringBuilder()
-        PortRunner(env, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
+        PortRunner(env, guestLauncher, locale) { line -> buf.appendLine(line) }.doctor(p, json = true) {
             keysChecking = false
             // the port reads the file: a file that cannot be read is not good keys
             if (!readable(p)) {

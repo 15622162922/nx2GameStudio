@@ -24,7 +24,8 @@ The build folders, the surveys and the packs land next to the game files.
 ### On the phone (no computer needed)
 
 1. Install the app from [Releases](https://github.com/zFitness/nx2androidX/releases/latest).
-2. First start: the onboarding walks storage access → environment → keys → done. The environment step
+2. First start: the onboarding walks the first step (storage access, free space and the battery setting the
+   long background jobs need) → environment → keys → done. The environment step
    unpacks about 700 MB once.
 3. **Builds** tab → *Choose a game file* → pick the base game (the updates and the DLC beside it are taken
    along) → *Start a port*. The port runs in the background; the notification bar shows the progress.

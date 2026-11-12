@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from porter import config, datapack, dumps, fpslocker, install, paths, profiles, toolchain
+from porter.revision import PLAYER_API_REVISION
 from porter.adb import NO_ADB, Adb, AdbError
 from porter.paths import DM, NXNATIVE
 from porter.upstream import BuildError, PROG, android_profile, game, nacp, nsp, profile_guess, say, trinity, uepak
@@ -230,6 +231,16 @@ def on_android():
     return Path('/system/build.prop').is_file() or os.environ.get('ANDROID_ROOT') == '/system'
 
 
+def volume_of(path):
+    """The filesystem a path is on, as the device number of its nearest existing folder (None when it cannot be told: Windows).
+    Two paths on the same volume can be written in place (a rename), two on different ones cannot"""
+    p = Path(path)
+    while not p.exists() and p.parent != p: p = p.parent
+    try: dev = os.stat(p).st_dev
+    except OSError: return None
+    return dev or None
+
+
 def oodle_where(tools):
     """Where the game's own Oodle decoder runs: 'local' when the porter is on the phone app (the device is this machine), 'device' when adb and a device are there, else None"""
     if on_android(): return 'local'
@@ -321,6 +332,9 @@ class Port:
 
     def _run(self):
         o = self.o
+        expected = os.environ.get('NX2A_PLAYER_API_REVISION')
+        if expected is not None and expected != str(PLAYER_API_REVISION):
+            raise BuildError('The porting environment does not match this app. Refresh the environment before porting.')
         o.folder = Path(o.folder).expanduser().resolve()
         o.game = None
         if o.folder.is_file():    # the game file that was picked: its folder holds the updates and the DLC
@@ -426,7 +440,9 @@ class Port:
     def check_space(self):
         """Stop before extracting when the game folder's drive cannot hold the port: a build folder takes about 1 to 2 times the game files (NEO 7.0 GB of 6.8,
         Viractal 2.7 of 1.4), less what an earlier port left there, plus a margin; an NSZ / XCZ counts as decompressed, and once more for its NSP while it is extracted.
-        Only the picked game's files count (its base, its updates, its DLC): the folder may hold other games, which this port never reads"""
+        Only the picked game's files count (its base, its updates, its DLC): the folder may hold other games, which this port never reads.
+        The pack is a copy of the game's files (Android's SELinux never lets an app link), so the port needs room for the build's files and for the pack.
+        When the pack goes to another volume (the app may put it on the removable card), each volume is asked for its own share"""
         fam = self.fam
         files = [fam['base'], *[p for _, p in fam['updates']], *[p for _, _, p in fam['dlc']]]
         game, temp = sum(dumps.size(f) for f in files), sum(dumps.size(f) for f in files if dumps.compressed(f))
@@ -434,9 +450,20 @@ class Port:
         # the work folder may not be there yet: the space is the one of the folder that will hold it
         where = self.work
         while not where.exists() and where.parent != where: where = where.parent
-        # the pack is a copy of the game's files: the app may not hard link them (Android's SELinux never allows an app to link),
-        # so the port needs room for the build's files and for the pack
-        need, free = max(0, 2 * game + temp - built) + 2**30, shutil.disk_usage(where).free
+        margin = 2**30
+        pack = None
+        getter = getattr(self, 'pack_dir_root', None)   # the space check runs before the profile is known
+        if getter is not None:
+            try: pack = getter()
+            except Exception: pack = None
+        if pack is not None and volume_of(pack) not in (None, volume_of(where)):
+            # the pack goes to another volume (the removable card): the build's files stay here, the pack's copy goes there
+            need, free = max(0, game + temp - built) + margin, shutil.disk_usage(where).free
+            if free < need: raise BuildError(f'not enough disk space on {where.anchor} for the build folder: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
+            need, free = game + margin, shutil.disk_usage(pack).free
+            if free < need: raise BuildError(f'not enough disk space for the data pack in {pack}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
+            return
+        need, free = max(0, 2 * game + temp - built) + margin, shutil.disk_usage(where).free
         if free < need: raise BuildError(f'not enough disk space on {where.anchor}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
 
     def use_profile_dir(self, pdir, first):   # every tool finds the game's profile in pdir (game.py DM_GAMES_DIR; first: before dm/games)
@@ -997,12 +1024,21 @@ class Port:
         f = self.so.parent / ADRENOTOOLS_LOADER
         return [f] if f.is_file() else []
 
+    def pack_dir_root(self):
+        """The folder that will hold the data pack. The app may put it on the removable card (NX2A_PACK_DIR);
+        without it the pack goes beside the build folders, on the phone's own storage"""
+        given = os.environ.get('NX2A_PACK_DIR', '').strip()
+        if given: return Path(given).expanduser()
+        return self.work_root.parent / 'ports'
+
     def data_dir(self):
         """Where the data pack goes (and where the game reads its files from): the pack's own name in the output folder.
-        The app's mode: the pack goes to the app's own folder, beside the build folders (the same volume, so the pack hard links the build's files and takes no room of its own).
-        The shared storage cannot link them (another volume), so a pack there is a copy of the whole game: minutes, and it breaks"""
+        The app's mode: the pack goes to the app's own folder, beside the build folders (the same volume, so the pack is written next to the build's files).
+        The shared storage cannot hard link them (another volume), so a pack there is a copy of the whole game: minutes, and it breaks.
+        The app may put the pack on the removable card (NX2A_PACK_DIR): there it is a copy all the same (Android's SELinux never lets an app link),
+        and the build's own folder stays on the phone's storage, where the programs that run during the build can live"""
         stem = f'{app_stem(self.g, self.app_name)}-data'
-        if self.o.app: return self.work_root.parent / 'ports' / stem
+        if self.o.app: return self.pack_dir_root() / stem
         return self.o.out / stem
 
     def data(self):
@@ -1015,6 +1051,8 @@ class Port:
         files = {**self.fps_files, **font_files, **cjk_files}
         host = icon = None; drivers = []
         if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
+            for filename in ('game.tsv', 'android.tsv'):
+                files[f'profile/{self.g.id}/{filename}'] = self.g.dir / filename
             host = 'host/libdmplay.so'
             files[host] = self.so
             if theme := self.theme_files(): files.update(theme)

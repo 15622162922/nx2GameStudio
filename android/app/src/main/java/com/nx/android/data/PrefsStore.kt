@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,7 +16,8 @@ import org.json.JSONObject
  * observable state — a write goes to disk at once, a read is a Compose read. The key names and their meanings
  * are the old app's, unchanged: an update keeps its settings.
  */
-class PrefsStore(ctx: Context) {
+@Singleton
+class PrefsStore @Inject constructor(@ApplicationContext ctx: Context) {
 
     companion object {
         // the old app's key, unchanged
@@ -27,7 +31,11 @@ class PrefsStore(ctx: Context) {
         // the library's memory
         const val LIB_CONFIGS = "lib.configs"
         const val LIB_PORTS = "lib.ports"
-        const val LIB_EXTRA = "lib.extra"
+        // title ID → the data pack's path the last time it was seen (for the storage page's "out of reach")
+        const val LIB_PACKS = "lib.packs"
+        // title ID → the source file the game was last built from (for the rebuild button)
+        const val LIB_SOURCES = "lib.sources"
+        const val LIB_MEMORIES_MIGRATED = "lib.memories.migrated"
         // the guided setup
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"
@@ -36,7 +44,11 @@ class PrefsStore(ctx: Context) {
         const val OSS_NOTICE_SHOWN = "oss.notice.shown"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
+        const val RUNTIME_PENDING_PACK = "runtime.pendingPack"
+        const val PLAYER_LAST_START = "player.lastStart"
+        const val PORT_STARTED_AT = "port.startedAt"
         const val PORT_HISTORY = "port.history"
+        const val PORT_COMPLETED = "port.completed"
         // the performance HUD: the two lines and what the performance one shows
         const val HUD_STATS = "hud.stats"
         const val HUD_DEVICE = "hud.device"

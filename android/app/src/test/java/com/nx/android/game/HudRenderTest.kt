@@ -1,5 +1,10 @@
 package com.nx.android.game
 
+import com.nx.android.game.hud.HudData
+import com.nx.android.game.hud.HudField
+import com.nx.android.game.hud.HostSample
+import com.nx.android.game.hud.HudRole
+import com.nx.android.game.hud.HudSample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

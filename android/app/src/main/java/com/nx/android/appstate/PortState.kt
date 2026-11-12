@@ -7,32 +7,39 @@ import com.nx.android.R
 import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
 import com.nx.android.data.PrefsStore
-import com.nx.android.data.PrefsStore.Companion.PORT_HISTORY
 import com.nx.android.data.PrefsStore.Companion.PORT_RUNNING
+import com.nx.android.data.PrefsStore.Companion.PORT_STARTED_AT
 import com.nx.android.domain.PortEvents
-import org.json.JSONArray
-import org.json.JSONObject
+import com.nx.android.domain.porting.PortPhase
+import com.nx.android.domain.porting.PortPhaseTransitions
+import com.nx.android.domain.porting.PortHistoryEntry
+import com.nx.android.domain.porting.PortHistoryRepository
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * The port that runs now and the ones that ran before: the one source the activity bar, the notification, the
  * builds page and the library's cards all read, so the places cannot disagree. The writes come from the runner's
- * thread; Compose's snapshot state takes writes from any thread. One instance lives in the AppContainer — the
+ * thread; Compose's snapshot state takes writes from any thread. One application-scoped instance lives in Hilt — the
  * service and the UI share it.
  */
-class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
-
-    enum class Phase { IDLE, RUNNING, DONE, FAILED, CANCELLED, INTERRUPTED }
+@Singleton
+class PortState @Inject constructor(
+    private val prefs: PrefsStore,
+    private val locale: AppLocale,
+    private val historyRepository: PortHistoryRepository,
+) {
 
     /** A finished (or interrupted) port, for the builds page's history */
     data class Record(
         val game: String,      // the source file's name
-        val phase: Phase,      // DONE / FAILED / CANCELLED / INTERRUPTED
+        val phase: PortPhase,  // DONE / FAILED / CANCELLED / INTERRUPTED
         val out: String,       // the artifact the port made (the data pack; '' when none)
         val startedAt: Long,   // wall clock of the start
         val seconds: Long,     // how long it took
     )
 
-    var phase by mutableStateOf(Phase.IDLE); private set
+    var phase by mutableStateOf(PortPhase.IDLE); private set
     var gameFile by mutableStateOf(""); private set
     var stageOf by mutableStateOf(0); private set
     var stages by mutableStateOf(0); private set
@@ -45,20 +52,23 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
     var log by mutableStateOf(listOf<String>()); private set
     var history by mutableStateOf(listOf<Record>()); private set
 
-    val running: Boolean get() = phase == Phase.RUNNING
+    val running: Boolean get() = phase == PortPhase.RUNNING
 
     /** The port's artifact (the pack in the app's mode, the APK on the PC flow); '' while it runs */
     val outPath: String get() = apkPath.ifEmpty { dataPath }
 
     /** Loads the history and answers the question "was a port interrupted?": the marker is still set */
     fun attach() {
-        history = loadHistory()
+        history = historyRepository.load().mapNotNull { entry ->
+            runCatching { Record(entry.game, PortPhase.valueOf(entry.phase), entry.out, entry.startedAt, entry.seconds) }
+                .getOrNull()
+        }
         if (prefs.str(PORT_RUNNING).isNotEmpty()) markInterrupted()
     }
 
     /** The port begins: fresh state, and the marker that survives the process (the interrupted case reads it) */
     fun begin(game: String) {
-        phase = Phase.RUNNING
+        phase = PortPhase.RUNNING
         gameFile = game
         stageOf = 0; stages = 0; stageName = ""; stageStep = ""
         progress = 0f
@@ -67,6 +77,8 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
         log = listOf()
         startedAt = System.currentTimeMillis()
         prefs.put(PORT_RUNNING, game)
+        // 进程被杀时，靠这个记着构建是什么时候开始的（工作区是那次构建留下的）
+        prefs.put(PORT_STARTED_AT, startedAt.toString())
         say(locale.str(R.string.port_begin, game))
     }
 
@@ -99,39 +111,45 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
 
     /** The porter ended on its own: an APK means done, none means failed */
     fun finish() {
-        if (phase != Phase.RUNNING) return   // a cancel already marked it
-        end(if (outPath.isNotEmpty()) Phase.DONE else Phase.FAILED)
+        val terminal = PortPhaseTransitions.finish(phase, outPath.isNotEmpty())
+        if (terminal == phase) return   // a cancel already marked it
+        end(terminal)
     }
 
     /** The player stopped it: the porter and the tools it started are already dying */
     fun cancel() {
-        if (phase != Phase.RUNNING) return
-        end(Phase.CANCELLED)
+        val terminal = PortPhaseTransitions.cancel(phase)
+        if (terminal == phase) return
+        end(terminal)
     }
 
     /** The system killed the port (the marker is set, nothing runs): shown as interrupted, restartable */
     fun markInterrupted() {
         val game = prefs.str(PORT_RUNNING)
         if (game.isEmpty()) return
-        end(Phase.INTERRUPTED, gameOverride = game)
+        if (PortPhaseTransitions.interrupted(phase, markerPresent = true) == phase && phase != PortPhase.IDLE) return
+        // 那次构建开始的时间还在 prefs 里：恢复它，历史与工作区才对得上
+        prefs.str(PORT_STARTED_AT).toLongOrNull()?.let { startedAt = it }
+        end(PortPhase.INTERRUPTED, gameOverride = game)
     }
 
-    private fun end(p: Phase, gameOverride: String = "") {
+    private fun end(p: PortPhase, gameOverride: String = "") {
         val secs = if (startedAt > 0) (System.currentTimeMillis() - startedAt) / 1000 else 0
         val game = gameOverride.ifEmpty { gameFile }
         phase = p
         startedAt = 0
         prefs.put(PORT_RUNNING, null)
+        prefs.put(PORT_STARTED_AT, null)
         if (game.isNotEmpty()) {
             history = (listOf(Record(game, p, outPath, System.currentTimeMillis() - secs * 1000, secs)) + history).take(20)
             saveHistory()
         }
         say(
             when (p) {
-                Phase.DONE -> locale.str(R.string.port_done_path, outPath)
-                Phase.FAILED -> locale.str(R.string.port_failed_no_artifact)
-                Phase.CANCELLED -> locale.str(R.string.common_cancelled)
-                Phase.INTERRUPTED -> locale.str(R.string.port_interrupted, game)
+                PortPhase.DONE -> locale.str(R.string.port_done_path, outPath)
+                PortPhase.FAILED -> locale.str(R.string.port_failed_no_artifact)
+                PortPhase.CANCELLED -> locale.str(R.string.common_cancelled)
+                PortPhase.INTERRUPTED -> locale.str(R.string.port_interrupted, game)
                 else -> return
             }
         )
@@ -142,25 +160,14 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
         AppLog.line(s)
     }
 
-    // ---- the history, kept as JSON in the prefs ----------------------------------------------------------------
-
-    private fun loadHistory(): List<Record> = try {
-        val a = prefs.array(PORT_HISTORY)
-        (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            Record(o.getString("game"), Phase.valueOf(o.getString("phase")), o.optString("apk"),
-                o.optLong("startedAt"), o.optLong("seconds"))
-        }
-    } catch (e: Exception) {
-        emptyList()
+    /** The player cleared the log: the tail goes too, so the page shows what the file has (nothing) */
+    fun clearLog() {
+        log = listOf()
     }
 
+    // ---- the history, kept as JSON in the prefs ----------------------------------------------------------------
+
     private fun saveHistory() {
-        val a = JSONArray()
-        for (r in history) {
-            a.put(JSONObject().put("game", r.game).put("phase", r.phase.name).put("out", r.out)
-                .put("startedAt", r.startedAt).put("seconds", r.seconds))
-        }
-        prefs.putArray(PORT_HISTORY, a)
+        historyRepository.save(history.map { PortHistoryEntry(it.game, it.phase.name, it.out, it.startedAt, it.seconds) })
     }
 }

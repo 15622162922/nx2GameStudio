@@ -2,6 +2,8 @@ package com.nx.android.data
 
 import com.nx.android.BuildConfig
 import com.nx.android.R
+import com.nx.android.domain.environment.EnvironmentSetup
+import com.nx.android.domain.environment.GuestProcessLauncher
 import java.io.File
 
 /**
@@ -9,18 +11,25 @@ import java.io.File
  * behavior (one stream for stdout and stderr, the porter's events by line, cancel stops the porter and the
  * tools it started). Every run is one thread; the output goes to [onLine] from that thread.
  */
-class PortRunner(private val env: Env, private val locale: AppLocale, private val onLine: (String) -> Unit) {
+class PortRunner(
+    private val environmentSetup: EnvironmentSetup,
+    private val guestLauncher: GuestProcessLauncher,
+    private val locale: AppLocale,
+    private val onLine: (String) -> Unit,
+) {
 
+    @Volatile private var cancelled = false
     @Volatile private var proc: Process? = null
 
     fun port(
         gameFile: String, keys: String,
         touch: Boolean, fps60: Boolean, experimental: Boolean,
         aliasHeadroom: Int,
+        packDir: String? = null,
         onEnd: () -> Unit,
     ): Thread {
         val args = portArgs(gameFile, keys, touch, fps60, experimental, aliasHeadroom, !BuildConfig.NX_LSFG)
-        return start(args, onEnd)
+        return start(args, onEnd, if (packDir.isNullOrBlank()) emptyMap() else mapOf("NX2A_PACK_DIR" to packDir))
     }
 
     companion object {
@@ -59,7 +68,7 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         val t = Thread {
             try {
                 onLine(locale.str(R.string.runner_checking_tools))
-                env.patchInterpreters()
+                environmentSetup.patchInterpreters()
                 onLine(locale.str(R.string.runner_interpreter_patched))
             } catch (e: Exception) {
                 onLine(locale.str(R.string.runner_interpreter_patch_failed, e.message))
@@ -70,11 +79,16 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
         return t
     }
 
-    private fun start(args: List<String>, onEnd: () -> Unit): Thread {
+    private fun start(args: List<String>, onEnd: () -> Unit, extra: Map<String, String> = emptyMap()): Thread {
         val t = Thread {
             try {
-                val p = env.guest(args)
+                if (cancelled) return@Thread
+                val p = guestLauncher.guest(args, extra = extra)
                 proc = p
+                if (cancelled) {
+                    p.destroyForcibly()
+                    return@Thread
+                }
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)
                 if (code != 0) onLine(locale.str(R.string.runner_exit_code, code))
@@ -91,6 +105,7 @@ class PortRunner(private val env: Env, private val locale: AppLocale, private va
 
     /** Stops the porter and the tools it started (they are the app's own processes, stopped one by one) */
     fun cancel() {
+        cancelled = true
         try { proc?.destroyForcibly() } catch (e: Exception) {
         }
         proc = null
