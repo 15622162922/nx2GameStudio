@@ -105,6 +105,7 @@ fun SettingsScreen(ob: OnboardingState, drivers: List<Driver>, driverRepository:
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit,
                    section: SettingsSection, onSelectSection: (SettingsSection) -> Unit,
+                   onDiagnosticLog: () -> Unit,
                    onClose: () -> Unit) {
     val scroll = rememberPageScroll()
     LaunchedEffect(section) { scroll.scrollTo(0) }
@@ -142,7 +143,7 @@ fun SettingsScreen(ob: OnboardingState, drivers: List<Driver>, driverRepository:
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     when (section) {
-                        SettingsSection.ENVIRONMENT -> EnvironmentSection(ob, actions, onRequest)
+                        SettingsSection.ENVIRONMENT -> EnvironmentSection(ob, actions, onRequest, onDiagnosticLog)
                         SettingsSection.STORAGE -> StorageSection(storageViewModel)
                         SettingsSection.DRIVERS -> DriversSection(drivers, driverRepository, actions, onRequest, onDrivers)
                         SettingsSection.DISPLAY -> DisplaySection(actions, onRequest)
@@ -194,7 +195,8 @@ private fun RailItem(label: String, selected: Boolean, onClick: () -> Unit) {
  * 环境检查的入口是顶栏的胶囊（另有一处），这一行是设置页里改路径的地方。
  */
 @Composable
-private fun EnvironmentSection(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
+private fun EnvironmentSection(ob: OnboardingState, actions: AppActions, onRequest: (PickerRequest) -> Unit,
+                               onDiagnosticLog: () -> Unit) {
     val locale = LocalAppLocale.current
     var confirmReset by remember { mutableStateOf(false) }
 
@@ -225,6 +227,12 @@ private fun EnvironmentSection(ob: OnboardingState, actions: AppActions, onReque
         enabled = !ob.unpacking,
     ) { confirmReset = true }
     KeysRow(actions, onRequest)
+    ActionRow(title = stringResource(R.string.settings_diagnostic_log), label = stringResource(R.string.builds_log_view),
+        onClick = onDiagnosticLog)
+    ActionRow(title = stringResource(R.string.settings_diagnostic_log), label = stringResource(R.string.common_share),
+        onClick = actions.onShareLog)
+    ActionRow(title = stringResource(R.string.settings_diagnostic_log), label = stringResource(R.string.common_delete),
+        onClick = actions.onClearLog)
 
     if (confirmReset) {
         AlertDialog(

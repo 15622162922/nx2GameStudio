@@ -26,7 +26,8 @@ class PortCompletionCoordinator @Inject constructor(
 
     @Synchronized
     fun complete(record: PortState.Record) {
-        processor.complete(PortCompletion(record.game, record.phase, record.out, record.startedAt)) {
+        processor.complete(PortCompletion(record.game, record.phase, record.out, record.startedAt,
+            record.id.takeUnless { record.legacy }.orEmpty())) {
             when (record.phase) {
                 PortPhase.DONE -> library.noteDone(record.game, record.out)
                 PortPhase.FAILED,

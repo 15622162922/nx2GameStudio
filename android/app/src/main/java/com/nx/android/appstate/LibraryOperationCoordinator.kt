@@ -4,6 +4,7 @@ import com.nx.android.data.library.GameCleanupFiles
 import com.nx.android.data.library.PackMoverFiles
 import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameEntry
+import com.nx.android.domain.GameConfig
 import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.PackMover
 import com.nx.android.domain.library.GameLibraryRepository
@@ -21,9 +22,9 @@ class LibraryOperationCoordinator @Inject constructor(
 ) {
     private val moving = HashSet<String>()
 
-    fun beginBuild(game: String): Boolean = synchronized(moving) {
+    fun beginBuild(game: String, config: GameConfig): Boolean = synchronized(moving) {
         if (moving.isNotEmpty() || port.running || player.running || runtime.running) return@synchronized false
-        port.begin(game)
+        port.begin(game, config)
         true
     }
 

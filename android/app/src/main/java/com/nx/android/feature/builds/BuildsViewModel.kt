@@ -8,6 +8,11 @@ import com.nx.android.appstate.PortState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import com.nx.android.domain.porting.PortPhase
+import com.nx.android.domain.GameConfig
+import com.nx.android.data.porting.BuildSessionRepository
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +38,16 @@ data class BuildsUiState(
 class BuildsViewModel @Inject constructor(
     val library: LibraryState,
     val port: PortState,
+    private val sessions: BuildSessionRepository,
 ) : ViewModel() {
+    var selectedBuildId by mutableStateOf("")
+        private set
+    var preparedConfig by mutableStateOf<GameConfig?>(null)
+        private set
+    var preparedConfigWasMissing by mutableStateOf(false)
+        private set
+    var preparing by mutableStateOf(false)
+        private set
     val uiState: StateFlow<BuildsUiState> = snapshotFlow {
         BuildsUiState(
             target = library.buildsTarget?.absolutePath,
@@ -52,7 +66,23 @@ class BuildsViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BuildsUiState())
 
-    fun setTarget(file: File?) { library.buildsTarget = file }
+    fun setTarget(file: File?, config: GameConfig? = null, savedConfigMissing: Boolean = false) {
+        selectedBuildId = ""
+        preparedConfig = config
+        preparedConfigWasMissing = savedConfigMissing
+        preparing = file != null
+        library.buildsTarget = file
+    }
+
+    fun buildStarted() { preparing = false }
+
+    fun openBuild(id: String) { selectedBuildId = id }
+    fun closeBuild() { selectedBuildId = "" }
+    fun logTail(id: String): List<String> = if (id == port.buildId) port.log else sessions.tail(id)
+    fun fullLog(id: String): String = runCatching {
+        val file = sessions.logFile(id) ?: return ""
+        file.readText(Charsets.UTF_8)
+    }.getOrDefault("")
 
     fun clearLog() = port.clearLog()
 }

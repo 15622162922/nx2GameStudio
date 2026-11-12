@@ -105,6 +105,8 @@ import com.nx.android.core.ui.theme.NxTheme
 import com.nx.android.feature.updates.UpdatePopup
 import com.nx.android.feature.updates.openRepo
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -132,6 +134,12 @@ data class AppActions(
     val onShareLog: () -> Unit,
     val onClearLog: () -> Unit,
     val readLog: () -> String,
+    val onShareBuildLog: (String) -> Unit,
+    val readBuildLog: (String, Long, Int) -> String,
+    val buildLogLength: (String) -> Long,
+    val isBuildActive: (String) -> Boolean,
+    val emptyBuildLogMessage: (String) -> String,
+    val titleBuildLog: (String) -> String,
     val onUpdateRuntime: (File, String) -> Unit = { _, _ -> },
 )
 
@@ -156,13 +164,15 @@ fun AppRoot(
     actions: AppActions,
     startTab: Int,
     runtime: com.nx.android.appstate.RuntimeUpdateState,
+    launchBuildId: String,
 ) {
     NxTheme {
         // 界面语言：整棵树读同一份资源，玩家在设置里换语言时这里跟着换
         ProvideAppLocale(locale) {
         var pickerReq by remember { mutableStateOf<PickerRequest?>(null) }
         var driversOpen by remember { mutableStateOf(false) }
-        var logOpen by remember { mutableStateOf(false) }
+    var logOpen by remember { mutableStateOf(false) }
+    var buildLogId by remember { mutableStateOf("") }
         var envCheckOpen by remember { mutableStateOf(false) }
         var ossNotice by rememberSaveable { mutableStateOf(false) }
         val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -179,10 +189,11 @@ fun AppRoot(
             if (onboardingUiState.active) {
                 OnboardingScreen(onboardingViewModel, actions) { pickerReq = it }
             } else {
-                MainScreen(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, startTab, runtime,
+                MainScreen(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, startTab, runtime, launchBuildId,
                     onRequest = { pickerReq = it },
                     onDrivers = { driversOpen = true },
-                    onLog = { logOpen = true },
+                    onLog = { id -> buildLogId = id },
+                    onDiagnosticLog = { logOpen = true },
                     onEnvCheck = { envCheckOpen = true })
             }
             val volumes = remember(ctx, locale.mode) { StorageVolumes.list(ctx, locale) }
@@ -255,6 +266,25 @@ fun AppRoot(
                 BackHandler { logOpen = false }
                 LogOverlay(onClose = { logOpen = false }, text = remember { actions.readLog() })
             }
+            if (buildLogId.isNotEmpty()) {
+                BackHandler { buildLogId = "" }
+                data class InitialBuildLog(val text: String, val offset: Long, val length: Long)
+                val page by produceState(initialValue = InitialBuildLog("", 0, 0), buildLogId) {
+                    val length = withContext(Dispatchers.IO) { actions.buildLogLength(buildLogId) }
+                    val offset = (length - 64 * 1024).coerceAtLeast(0)
+                    val text = withContext(Dispatchers.IO) { actions.readBuildLog(buildLogId, offset, 64 * 1024) }
+                    value = InitialBuildLog(text, offset, length)
+                }
+                LogOverlay(
+                    onClose = { buildLogId = "" }, text = page.text,
+                    title = actions.titleBuildLog(buildLogId), buildId = buildLogId,
+                    initialOffset = page.offset, initialLength = page.length,
+                    active = actions.isBuildActive(buildLogId),
+                    emptyText = actions.emptyBuildLogMessage(buildLogId),
+                    readRange = { offset, length -> actions.readBuildLog(buildLogId, offset, length) },
+                    latestLength = { actions.buildLogLength(buildLogId) },
+                )
+            }
             // 开源声明：盖在最后面，玩家先看到它
             if (ossNotice) {
                 OpenSourceNoticeDialog(
@@ -299,9 +329,11 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                player: PlayerState, onboarding: OnboardingState, drivers: DriverRepository,
                environmentSetup: EnvironmentSetup, actions: AppActions, startTab: Int,
                runtime: com.nx.android.appstate.RuntimeUpdateState,
+               launchBuildId: String,
                onRequest: (PickerRequest) -> Unit,
                onDrivers: () -> Unit,
-               onLog: () -> Unit,
+               onLog: (String) -> Unit,
+               onDiagnosticLog: () -> Unit,
                onEnvCheck: () -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(startTab) }
     // 设置是一整页，盖住顶栏与下面的页面：从顶栏的设置图标进来，关掉才回到底下的页面
@@ -310,6 +342,12 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
     val lib = library
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val buildsViewModel: BuildsViewModel = hiltViewModel()
+    LaunchedEffect(launchBuildId) {
+        if (launchBuildId.isNotBlank()) {
+            tab = Tab.BUILDS.ordinal
+            buildsViewModel.openBuild(launchBuildId)
+        }
+    }
     val storageViewModel: StorageViewModel = hiltViewModel()
     val updateViewModel: UpdateViewModel = hiltViewModel()
     val environmentCheckViewModel: EnvironmentCheckViewModel = hiltViewModel()
@@ -330,6 +368,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                 } else {
                     lib.buildsTarget = file
                     lib.selected = null
+                    buildsViewModel.setTarget(file)
                     tab = Tab.BUILDS.ordinal
                 }
             }
@@ -356,7 +395,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
                 Tab.LIBRARY -> LibraryRoute(libraryViewModel, port, player, actions,
-                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
+                    onGoBuilds = { buildsViewModel.setTarget(lib.buildsTarget); tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsRoute(buildsViewModel, prefs.keys, environmentSetup.ready, actions, onRequest, onLog)
             }
         }
@@ -372,7 +411,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
         ) {
             panelFile.value?.let { f ->
                 GameDetailRoute(lib, port, player, f, installedDrivers, actions,
-                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest,
+                    onGoBuilds = { buildsViewModel.setTarget(lib.buildsTarget); tab = Tab.BUILDS.ordinal }, onRequest = onRequest,
                     onClose = { lib.selected = null })
             }
         }
@@ -382,6 +421,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                 storageViewModel, actions,
                 onRequest, onDrivers,
                 section = settingsSection, onSelectSection = { settingsSection = it },
+                onDiagnosticLog = onDiagnosticLog,
                 onClose = { settingsOpen = false })
         }
     }

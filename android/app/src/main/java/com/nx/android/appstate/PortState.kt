@@ -12,8 +12,9 @@ import com.nx.android.data.PrefsStore.Companion.PORT_STARTED_AT
 import com.nx.android.domain.PortEvents
 import com.nx.android.domain.porting.PortPhase
 import com.nx.android.domain.porting.PortPhaseTransitions
-import com.nx.android.domain.porting.PortHistoryEntry
-import com.nx.android.domain.porting.PortHistoryRepository
+import com.nx.android.domain.GameConfig
+import com.nx.android.domain.porting.BuildSession
+import com.nx.android.data.porting.BuildSessionRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,7 +28,7 @@ import javax.inject.Singleton
 class PortState @Inject constructor(
     private val prefs: PrefsStore,
     private val locale: AppLocale,
-    private val historyRepository: PortHistoryRepository,
+    private val sessions: BuildSessionRepository,
 ) {
 
     /** A finished (or interrupted) port, for the builds page's history */
@@ -37,6 +38,10 @@ class PortState @Inject constructor(
         val out: String,       // the artifact the port made (the data pack; '' when none)
         val startedAt: Long,   // wall clock of the start
         val seconds: Long,     // how long it took
+        val id: String = "",
+        val config: GameConfig? = null,
+        val legacy: Boolean = false,
+        val logAvailable: Boolean = true,
     )
 
     var phase by mutableStateOf(PortPhase.IDLE); private set
@@ -51,6 +56,7 @@ class PortState @Inject constructor(
     var startedAt by mutableStateOf(0L); private set
     var log by mutableStateOf(listOf<String>()); private set
     var history by mutableStateOf(listOf<Record>()); private set
+    var buildId by mutableStateOf(""); private set
 
     val running: Boolean get() = phase == PortPhase.RUNNING
 
@@ -59,23 +65,24 @@ class PortState @Inject constructor(
 
     /** Loads the history and answers the question "was a port interrupted?": the marker is still set */
     fun attach() {
-        history = historyRepository.load().mapNotNull { entry ->
-            runCatching { Record(entry.game, PortPhase.valueOf(entry.phase), entry.out, entry.startedAt, entry.seconds) }
-                .getOrNull()
-        }
-        if (prefs.str(PORT_RUNNING).isNotEmpty()) markInterrupted()
+        history = sessions.load().map(::toRecord)
+        if (phase != PortPhase.RUNNING &&
+            (prefs.str(PORT_RUNNING).isNotEmpty() || sessions.sessions.value.any { !it.terminal })) markInterrupted()
     }
 
     /** The port begins: fresh state, and the marker that survives the process (the interrupted case reads it) */
-    fun begin(game: String) {
+    fun begin(game: String, config: GameConfig = GameConfig()) {
+        val session = sessions.create(game, config)
+        history = sessions.load().map(::toRecord)
         phase = PortPhase.RUNNING
+        buildId = session.id
         gameFile = game
         stageOf = 0; stages = 0; stageName = ""; stageStep = ""
         progress = 0f
         apkPath = ""
         dataPath = ""
         log = listOf()
-        startedAt = System.currentTimeMillis()
+        startedAt = session.startedAt
         prefs.put(PORT_RUNNING, game)
         // 进程被杀时，靠这个记着构建是什么时候开始的（工作区是那次构建留下的）
         prefs.put(PORT_STARTED_AT, startedAt.toString())
@@ -91,6 +98,7 @@ class PortState @Inject constructor(
             "stage" -> {
                 stageOf = ev.stage; stages = ev.stages
                 stageName = ev.name; stageStep = ""
+                sessions.update(buildId) { it.copy(stage = stageName) }
                 say(locale.str(R.string.port_log_stage, ev.stage, ev.stages, ev.name))
             }
             "progress" -> {
@@ -105,6 +113,7 @@ class PortState @Inject constructor(
                 apkPath = ev.apk
                 dataPath = ev.data
                 progress = 1f
+                sessions.update(buildId) { it.copy(output = outPath, progress = 1f) }
             }
         }
     }
@@ -125,11 +134,23 @@ class PortState @Inject constructor(
 
     /** The system killed the port (the marker is set, nothing runs): shown as interrupted, restartable */
     fun markInterrupted() {
-        val game = prefs.str(PORT_RUNNING)
+        val active = sessions.sessions.value.firstOrNull { !it.terminal }
+        val game = prefs.str(PORT_RUNNING).ifEmpty { active?.game.orEmpty() }
         if (game.isEmpty()) return
         if (PortPhaseTransitions.interrupted(phase, markerPresent = true) == phase && phase != PortPhase.IDLE) return
+        active?.let { active ->
+            buildId = active.id
+            gameFile = active.game
+            dataPath = active.output
+            startedAt = active.startedAt
+        }
         // 那次构建开始的时间还在 prefs 里：恢复它，历史与工作区才对得上
         prefs.str(PORT_STARTED_AT).toLongOrNull()?.let { startedAt = it }
+        if (buildId.isEmpty()) {
+            val legacy = sessions.recoverLegacyInterrupted(game, startedAt)
+            buildId = legacy.id
+            gameFile = game
+        }
         end(PortPhase.INTERRUPTED, gameOverride = game)
     }
 
@@ -140,10 +161,6 @@ class PortState @Inject constructor(
         startedAt = 0
         prefs.put(PORT_RUNNING, null)
         prefs.put(PORT_STARTED_AT, null)
-        if (game.isNotEmpty()) {
-            history = (listOf(Record(game, p, outPath, System.currentTimeMillis() - secs * 1000, secs)) + history).take(20)
-            saveHistory()
-        }
         say(
             when (p) {
                 PortPhase.DONE -> locale.str(R.string.port_done_path, outPath)
@@ -153,11 +170,21 @@ class PortState @Inject constructor(
                 else -> return
             }
         )
+        if (buildId.isNotEmpty()) {
+            sessions.update(buildId) { it.copy(phase = p, output = outPath, seconds = secs) }
+            history = sessions.load().map(::toRecord)
+        }
+        if (game.isNotEmpty()) {
+            if (history.none { it.id == buildId }) {
+                history = (listOf(Record(game, p, outPath, System.currentTimeMillis() - secs * 1000, secs, buildId)) + history).take(20)
+            }
+        }
+        buildId = ""
     }
 
     fun say(s: String) {
         log = (log + s).takeLast(400)
-        AppLog.line(s)
+        if (buildId.isNotEmpty()) sessions.append(buildId, s) else AppLog.line(s)
     }
 
     /** The player cleared the log: the tail goes too, so the page shows what the file has (nothing) */
@@ -165,9 +192,6 @@ class PortState @Inject constructor(
         log = listOf()
     }
 
-    // ---- the history, kept as JSON in the prefs ----------------------------------------------------------------
-
-    private fun saveHistory() {
-        historyRepository.save(history.map { PortHistoryEntry(it.game, it.phase.name, it.out, it.startedAt, it.seconds) })
-    }
+    private fun toRecord(s: BuildSession) = Record(s.game, s.phase, s.output, s.startedAt, s.seconds,
+        s.id, s.config, s.legacy, s.logAvailable)
 }

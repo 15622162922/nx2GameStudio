@@ -79,53 +79,100 @@ private fun sourceMatchesTarget(target: File, candidate: File): Boolean {
  */
 @Composable
 fun BuildsRoute(viewModel: BuildsViewModel, keys: String, envReady: Boolean,
-                actions: AppActions, onRequest: (PickerRequest) -> Unit, onLog: () -> Unit) {
+                actions: AppActions, onRequest: (PickerRequest) -> Unit, onLog: (String) -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(uiState.running) { if (uiState.running) viewModel.buildStarted() }
     BuildsScreen(viewModel.library, viewModel, uiState, keys, envReady, actions, onRequest, onLog)
 }
 
 @Composable
 private fun BuildsScreen(lib: LibraryState, viewModel: BuildsViewModel, uiState: BuildsUiState,
                          keys: String, envReady: Boolean, actions: AppActions,
-                         onRequest: (PickerRequest) -> Unit, onLog: () -> Unit) {
+                         onRequest: (PickerRequest) -> Unit, onLog: (String) -> Unit) {
     val locale = LocalAppLocale.current
     val running = uiState.running
     val target = uiState.target?.let(::File) ?: uiState.gameFile.takeIf { running }?.let { File(it) }
+    val selected = uiState.history.firstOrNull { it.id == viewModel.selectedBuildId }
+    val current = uiState.history.firstOrNull { it.id == viewModel.port.buildId }
 
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberPageScroll()).padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (running) {
-            ProgressCard(uiState, actions)
-            // 运行中：目标卡让位，配置收起为可展开行
-            target?.let { ConfigDisclosure(lib, it) }
-            // 日志模块：这一页上日志唯一的家（看、分享、清空都在这里）
-            LogCard(uiState, actions, onLog)
-        } else if (target != null) {
-            TargetCard(lib, uiState, viewModel, keys, envReady, target, actions, onRequest)
-            OutcomeCard(lib, uiState, target, actions)
-            LogCard(uiState, actions, onLog)
-        } else {
-            // 没有目标：构建页自己选一个游戏文件（NX2Apple FilesCard 的入口逻辑）
-            Section(stringResource(R.string.builds_start_title)) {
-                Text(
-                    stringResource(R.string.builds_start_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                CapsuleButton(stringResource(R.string.builds_choose_game_file), onClick = {
-                    onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
-                        File("/storage"), locale.str(R.string.builds_choose_game_file),
-                        onPicked = { f ->
-                            viewModel.setTarget(f)
-                        }))
-                })
+        when {
+            selected != null -> {
+                TaskDetail(lib, selected, viewModel, actions, onLog, active = selected.id == viewModel.port.buildId && running)
+                QuietButton(stringResource(R.string.common_back), { viewModel.closeBuild() })
             }
-            // 日志模块在历史之前：历史能长到二十条，日志不该被它埋到底下
-            LogCard(uiState, actions, onLog)
-            if (uiState.history.isNotEmpty()) History(lib, uiState, viewModel, actions)
+            target != null && viewModel.preparing && !running ->
+                TargetCard(lib, uiState, viewModel, keys, envReady, target, actions, onRequest)
+            current != null -> TaskDetail(lib, current, viewModel, actions, onLog, active = running)
+            running -> ProgressCard(uiState, actions)
+            else -> {
+                Section(stringResource(R.string.builds_start_title)) {
+                    Text(stringResource(R.string.builds_start_hint), style = MaterialTheme.typography.bodyMedium)
+                    CapsuleButton(stringResource(R.string.builds_choose_game_file), onClick = {
+                        onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS, File("/storage"),
+                            locale.str(R.string.builds_choose_game_file), onPicked = { viewModel.setTarget(it) }))
+                    })
+                }
+                if (uiState.history.isNotEmpty()) History(uiState, viewModel)
+            }
         }
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun TaskDetail(lib: LibraryState, record: PortState.Record, viewModel: BuildsViewModel,
+                       actions: AppActions, onLog: (String) -> Unit, active: Boolean) {
+    val lines = viewModel.logTail(record.id)
+    Section(stringResource(R.string.builds_result)) {
+        Text(File(record.game).name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.builds_history_seconds, (record.seconds / 60).toString(), (record.seconds % 60).toString()))
+        PhaseChip(if (active) PortPhase.RUNNING else record.phase)
+        if (active && viewModel.port.stageName.isNotEmpty()) {
+            Text(viewModel.port.stageName, style = MaterialTheme.typography.bodySmall)
+            LinearProgressIndicator(progress = { viewModel.port.progress }, modifier = Modifier.fillMaxWidth().height(6.dp))
+            QuietButton(stringResource(R.string.builds_cancel_port), actions.onCancelPort, modifier = Modifier.fillMaxWidth())
+        }
+        record.config?.let { config ->
+            val options = listOfNotNull(
+                stringResource(R.string.builds_touch_game).takeIf { config.touch },
+                stringResource(R.string.builds_60fps).takeIf { config.fps60 },
+                stringResource(R.string.builds_experimental).takeIf { config.experimental },
+                if (config.aliasHeadroom >= 0) stringResource(R.string.builds_alias_short, config.aliasHeadroom) else null,
+            ).ifEmpty { listOf(stringResource(R.string.builds_default_options)) }
+            Hint(stringResource(R.string.builds_used_options, options.joinToString(" · ")))
+        }
+        if (record.legacy) Text(stringResource(R.string.builds_log_legacy), style = MaterialTheme.typography.bodySmall)
+        else if (!record.logAvailable) Text(stringResource(R.string.builds_log_unavailable), style = MaterialTheme.typography.bodySmall,
+            color = NxPalette.Danger)
+        LogTail(lines)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { onLog(record.id) }) { Text(stringResource(R.string.builds_log_view)) }
+            if (record.logAvailable && lines.isNotEmpty()) TextButton(onClick = { actions.onShareBuildLog(record.id) }) {
+                Text(stringResource(R.string.builds_log_share))
+            }
+        }
+        if (!active && File(record.game).isFile()) {
+            QuietButton(stringResource(R.string.builds_build_again), {
+                viewModel.setTarget(File(record.game), record.config, savedConfigMissing = record.config == null)
+            })
+        }
+        if (!active && !File(record.game).isFile()) QuietButton(stringResource(R.string.builds_build_again), {
+            viewModel.setTarget(File(record.game), record.config, savedConfigMissing = record.config == null)
+        })
+        if (record.phase == PortPhase.DONE && record.out.isNotEmpty()) {
+            val currentPack = lib.portFromPack(File(record.out))
+            if (currentPack != null) QuietButton(stringResource(R.string.builds_run_action), {
+                actions.onRun(currentPack.pack, GameIdentity.labelFor(File(record.game), currentPack))
+            })
+            else Text(stringResource(R.string.lib_artifact_missing_state), style = MaterialTheme.typography.bodySmall,
+                color = NxPalette.Danger)
+        }
+        if (record.phase != PortPhase.DONE && lib.portOf(File(record.game)) != null)
+            Hint(stringResource(R.string.builds_old_pack_still_usable))
     }
 }
 
@@ -136,9 +183,12 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
                        f: File, actions: AppActions, onRequest: (PickerRequest) -> Unit) {
     val locale = LocalAppLocale.current
     val status = lib.statusOf(f)
-    var cfg by remember(f.absolutePath) { mutableStateOf(lib.configOf(f)) }
+    var cfg by remember(f.absolutePath, viewModel.preparedConfig) {
+        mutableStateOf(viewModel.preparedConfig ?: lib.configOf(f))
+    }
+    var configOpen by remember(f.absolutePath) { mutableStateOf(false) }
     val storageOk = actions.storageOk()
-    val canStart = envReady && storageOk && !port.running && keys.isNotBlank() && status != GameStatus.PORTING
+    val canStart = f.isFile && f.canRead() && envReady && storageOk && !port.running && keys.isNotBlank() && status != GameStatus.PORTING
     val titleId = GameIdentity.titleIdIn(f.name)
 
     Section(stringResource(R.string.builds_target)) {
@@ -174,20 +224,33 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
             }
         }
         Hint(stringResource(R.string.builds_updates_taken))
+        if (viewModel.preparedConfigWasMissing) Hint(stringResource(R.string.builds_config_missing_saved))
 
-        // 该游戏自己的参数：出发前最后确认，改动即时保存
-        ConfigRow(stringResource(R.string.builds_touch_game), cfg.touch) { cfg = cfg.copy(touch = it); lib.setConfig(f, cfg) }
-        ConfigRow(stringResource(R.string.builds_60fps), cfg.fps60) { cfg = cfg.copy(fps60 = it); lib.setConfig(f, cfg) }
-        ConfigRow(stringResource(R.string.builds_experimental), cfg.experimental) { cfg = cfg.copy(experimental = it); lib.setConfig(f, cfg) }
-        AliasRow(cfg.aliasHeadroom) { cfg = cfg.copy(aliasHeadroom = it); lib.setConfig(f, cfg) }
-        Hint(stringResource(R.string.builds_alias_hint), size = 11.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clickable { configOpen = !configOpen },
+        ) {
+            Text(stringResource(R.string.builds_config_of, GameIdentity.labelFor(f, lib.portOf(f))),
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Icon(if (configOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (configOpen) {
+            ConfigRow(stringResource(R.string.builds_touch_game), cfg.touch) { cfg = cfg.copy(touch = it); lib.setConfig(f, cfg) }
+            ConfigRow(stringResource(R.string.builds_60fps), cfg.fps60) { cfg = cfg.copy(fps60 = it); lib.setConfig(f, cfg) }
+            ConfigRow(stringResource(R.string.builds_experimental), cfg.experimental) { cfg = cfg.copy(experimental = it); lib.setConfig(f, cfg) }
+            AliasRow(cfg.aliasHeadroom) { cfg = cfg.copy(aliasHeadroom = it); lib.setConfig(f, cfg) }
+            Hint(stringResource(R.string.builds_alias_hint), size = 11.sp)
+        }
 
-        if (!canStart && status != GameStatus.DONE) {
+        if (!canStart) {
             Text(
                 when {
                     !envReady -> stringResource(R.string.builds_need_env)
                     !storageOk -> stringResource(R.string.builds_need_storage)
                     keys.isBlank() -> stringResource(R.string.builds_need_keys)
+                    !f.isFile -> stringResource(R.string.builds_source_missing)
+                    !f.canRead() -> stringResource(R.string.builds_needs_storage)
                     port.running -> stringResource(R.string.builds_one_at_a_time, File(port.gameFile).name)
                     else -> ""
                 },
@@ -442,35 +505,23 @@ private fun AliasRow(headroom: Int, onChange: (Int) -> Unit) {
     )
 }
 
-/** The ports that ran before: the result, how long it took, and the done ones' run button */
+/** Recent attempts: one row opens the result and log belonging to that attempt. */
 @Composable
-private fun History(lib: LibraryState, port: BuildsUiState, viewModel: BuildsViewModel, actions: AppActions) {
+private fun History(port: BuildsUiState, viewModel: BuildsViewModel) {
     Section(stringResource(R.string.builds_history)) {
         for (r in port.history) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(File(r.game).name, style = MaterialTheme.typography.bodyMedium,
-                         maxLines = 1, fontWeight = FontWeight.Bold)
-                    Hint(stringResource(R.string.builds_history_seconds, r.seconds / 60, r.seconds % 60) + " · " + when (r.phase) {
-                        PortPhase.DONE -> stringResource(R.string.common_complete)
-                        PortPhase.FAILED -> stringResource(R.string.common_failed)
-                        PortPhase.CANCELLED -> stringResource(R.string.common_cancelled)
-                        PortPhase.INTERRUPTED -> stringResource(R.string.common_interrupted)
-                        else -> ""
-                    })
-                }
-                // 再次构建（NX2Apple rebuild）：源文件还在才能再来
-                if (File(r.game).isFile()) {
-                    QuietButton(stringResource(R.string.builds_build_again), onClick = { viewModel.setTarget(File(r.game)) })
-                }
-                // 完成记录的「▶ 运行」：与库页相同地启动（数据包还在才能跑）
-                if (r.phase == PortPhase.DONE && r.out.isNotEmpty() && lib.portFromPack(File(r.out)) != null) {
-                    QuietButton(stringResource(R.string.builds_run_action), {
-                        lib.portFromPack(File(r.out))?.let { actions.onRun(it.pack, GameIdentity.labelFor(File(r.game), it)) }
-                    })
-                }
+            Column(Modifier.fillMaxWidth().clickable { viewModel.openBuild(r.id) }.padding(vertical = 8.dp)) {
+                Text(File(r.game).name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, fontWeight = FontWeight.Bold)
+                Hint(stringResource(R.string.builds_history_seconds, r.seconds / 60, r.seconds % 60) + " · " + when (r.phase) {
+                    PortPhase.DONE -> stringResource(R.string.common_complete)
+                    PortPhase.FAILED -> stringResource(R.string.common_failed)
+                    PortPhase.CANCELLED -> stringResource(R.string.common_cancelled)
+                    PortPhase.INTERRUPTED -> stringResource(R.string.common_interrupted)
+                    else -> ""
+                })
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
+        Hint(stringResource(R.string.builds_history_retention))
     }
 }

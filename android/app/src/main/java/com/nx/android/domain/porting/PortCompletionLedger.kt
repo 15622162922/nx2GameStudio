@@ -5,6 +5,7 @@ data class PortCompletion(
     val phase: PortPhase,
     val output: String,
     val startedAt: Long,
+    val id: String = "",
 )
 
 /** Bounded, restartable record of completed task identities. */
@@ -30,10 +31,10 @@ class PortCompletionProcessor(private val ledger: PortCompletionLedger) {
     @Synchronized
     fun complete(task: PortCompletion, apply: () -> Unit): Boolean {
         if (task.phase !in setOf(PortPhase.DONE, PortPhase.FAILED, PortPhase.CANCELLED, PortPhase.INTERRUPTED)) return false
-        val id = "${task.startedAt}:${task.game}"
-        if (ledger.contains(id)) return false
+        val key = task.id.ifEmpty { "${task.startedAt}:${task.game}" }
+        if (ledger.contains(key)) return false
         apply()
-        ledger.record(id)
+        ledger.record(key)
         return true
     }
 }
