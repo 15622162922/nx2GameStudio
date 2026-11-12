@@ -37,3 +37,4 @@ title.keys
 /android/.gradle/
 /android/.kotlin/
 /android/local.properties
+/android/.idea/

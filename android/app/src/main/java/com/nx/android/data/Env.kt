@@ -5,6 +5,7 @@ import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.util.zip.GZIPInputStream
+import com.nx.android.core.storage.AppPaths
 
 /**
  * The environment the porter runs in.
@@ -14,7 +15,7 @@ import java.util.zip.GZIPInputStream
  * no /lib and the guest is not a chroot, so they are started through the rootfs's dynamic loader, and the programs
  * the porter starts itself (the compiler, the .NET runtime) get their interpreter path rewritten to the app's own rootfs.
  */
-class Env(private val ctx: Context) {
+class Env(private val ctx: Context, private val paths: AppPaths = AppPaths(ctx)) {
 
     companion object {
         const val TAG = "Nx2aEnv"
@@ -27,18 +28,18 @@ class Env(private val ctx: Context) {
         private const val STAMP_GEN = "wipe1:"
     }
 
-    val files = ctx.filesDir
-    val rootfs = File(files, "rootfs")
-    val tool = File(files, "tool")
-    val home = File(files, "home")
-    val nxHome = File(files, "nx2a")
-    val tmp = File(files, "tmp")
+    val files = paths.files
+    val rootfs = paths.rootfs
+    val tool = paths.tool
+    val home = paths.home
+    val nxHome = paths.nxHome
+    val tmp = paths.tmp
 
     /** 移植产出的数据包：移植器写在这里（NX2A_WORK 的旁边），游戏库也只在这里找包 */
-    val ports = File(files, "ports")
+    val ports = paths.ports
 
     /** 移植的工作区（NX2A_WORK）：解包、重写、着色器都在这里，一个游戏一个子目录 */
-    val work = File(files, "work")
+    val work = paths.work
 
     val loader = File(rootfs, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1")
     val python = File(rootfs, "usr/bin/python3.13")

@@ -9,6 +9,8 @@ import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import dagger.hilt.android.AndroidEntryPoint
 import androidx.activity.compose.setContent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -30,12 +32,14 @@ import com.nx.android.domain.RunAction
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.AppRoot
 import java.io.File
+import kotlinx.coroutines.launch
 
 /**
  * The shell: it owns what only an activity can own — the storage permission, the system pickers — and puts
  * the screen up. Everything long-lived comes from the AppContainer (NxApp); the screens take state holders
  * and action lambdas, never this activity.
  */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     companion object {
@@ -52,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 全屏沉浸：内容铺满整块屏幕，系统栏隐藏（下滑临时呼出）——capyps5 CapyActivity 同款
+        // 全屏沉浸：内容铺满整块屏幕，系统栏隐藏（下滑临时呼出）
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -72,9 +76,11 @@ class MainActivity : ComponentActivity() {
         // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
         Thread {
             container.env.refreshTools()
-            container.drivers.ensureShipped(this)
-            container.drivers.refresh(this)
         }.start()
+        lifecycleScope.launch {
+            container.drivers.ensureShipped()
+            container.drivers.refresh()
+        }
         // 有没有新版本：冷启动查一次，查不到就安静地过去（引导没走完的第一次启动不查）。
         // 它自己开线程（协程），所以不跟上面那条工具刷新挤在一起：那边出了岔子（未捕获的异常会
         // 杀掉整个进程），也不能把这一查一起带走。

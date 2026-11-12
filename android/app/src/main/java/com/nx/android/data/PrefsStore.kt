@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,7 +16,8 @@ import org.json.JSONObject
  * observable state — a write goes to disk at once, a read is a Compose read. The key names and their meanings
  * are the old app's, unchanged: an update keeps its settings.
  */
-class PrefsStore(ctx: Context) {
+@Singleton
+class PrefsStore @Inject constructor(@ApplicationContext ctx: Context) {
 
     companion object {
         // the old app's key, unchanged

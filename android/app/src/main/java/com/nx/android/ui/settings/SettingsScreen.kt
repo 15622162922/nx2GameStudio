@@ -44,12 +44,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
-import com.nx.android.appstate.DriverState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.StorageUsageState
 import com.nx.android.appstate.UpdateState
 import com.nx.android.data.AppLocale
-import com.nx.android.data.Drivers
+import com.nx.android.domain.drivers.Driver
+import com.nx.android.domain.drivers.DriverRepository
 import com.nx.android.data.LosslessDll
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
@@ -69,9 +69,7 @@ import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.NxPalette
 import com.nx.android.ui.update.UpdateCheckRow
 import com.nx.android.ui.update.openRepo
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -101,7 +99,7 @@ enum class SettingsSection(@StringRes val title: Int) {
 }
 
 @Composable
-fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateState,
+fun SettingsScreen(ob: OnboardingState, drivers: List<Driver>, driverRepository: DriverRepository, update: UpdateState,
                    usage: StorageUsageState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit,
@@ -145,7 +143,7 @@ fun SettingsScreen(ob: OnboardingState, drivers: DriverState, update: UpdateStat
                     when (section) {
                         SettingsSection.ENVIRONMENT -> EnvironmentSection(ob, actions, onRequest)
                         SettingsSection.STORAGE -> StorageSection(usage)
-                        SettingsSection.DRIVERS -> DriversSection(drivers, actions, onRequest, onDrivers)
+                        SettingsSection.DRIVERS -> DriversSection(drivers, driverRepository, actions, onRequest, onDrivers)
                         SettingsSection.DISPLAY -> DisplaySection(actions, onRequest)
                         SettingsSection.ABOUT -> AboutSection(ob, update, actions)
                     }
@@ -267,13 +265,10 @@ private fun KeysRow(actions: AppActions, onRequest: (PickerRequest) -> Unit) {
  * 抽屉里选（那里写的是数据包的 env.txt）。
  */
 @Composable
-private fun DriversSection(state: DriverState, actions: AppActions, onRequest: (PickerRequest) -> Unit,
+private fun DriversSection(drivers: List<Driver>, repository: DriverRepository, actions: AppActions, onRequest: (PickerRequest) -> Unit,
                            onDrivers: () -> Unit) {
     val locale = LocalAppLocale.current
-    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { state.refresh(context) }   // 这一区被打开时重读 App 自己的目录
-    val drivers = state.drivers
 
     // 装好的驱动。App 自带的那一个也在这里：它是 App 的一部分，没有「装上」这一步，也删不掉
     for (d in drivers) {
@@ -286,10 +281,10 @@ private fun DriversSection(state: DriverState, actions: AppActions, onRequest: (
                     Hint(stringResource(R.string.driver_builtin), size = 11.sp)
                 } else {
                     QuietButton(stringResource(R.string.common_delete), {
-                        if (Drivers.remove(context, d.id)) {
-                            state.refresh(context)
-                            actions.onToast(locale.str(R.string.driver_deleted, d.name))
-                        } else actions.onToast(locale.str(R.string.driver_delete_failed))
+                        scope.launch {
+                            if (repository.remove(d.id)) actions.onToast(locale.str(R.string.driver_deleted, d.name))
+                            else actions.onToast(locale.str(R.string.driver_delete_failed))
+                        }
                     })
                 }
             },
@@ -301,9 +296,9 @@ private fun DriversSection(state: DriverState, actions: AppActions, onRequest: (
     ActionRow(title = stringResource(R.string.driver_import_from_file), label = stringResource(R.string.common_import)) {
         onRequest(PickerRequest(PickerMode.FILE, setOf("zip", "so"), null, locale.str(R.string.driver_choose), onPicked = { f ->
             scope.launch {
-                val r = withContext(Dispatchers.IO) { Drivers.install(context, f) }
+                val r = repository.install(f)
                 r.fold(
-                    onSuccess = { state.refresh(context); actions.onToast(locale.str(R.string.driver_installed, it.label)) },
+                    onSuccess = { actions.onToast(locale.str(R.string.driver_installed, it.label)) },
                     onFailure = { actions.onToast(locale.str(R.string.lib_import_failed, failureText(locale, it))) },
                 )
             }

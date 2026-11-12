@@ -63,7 +63,7 @@ data class PickerRequest(
 private data class PickerEntry(val file: File, val isDirectory: Boolean, val actionable: Boolean)
 
 /**
- * 内置文件管理器（移植自 nixport-private 的 FilePickerScreen）：自绘的文件浏览界面，不依赖
+ * 内置文件管理器（移植自 nixport 的 FilePickerScreen）：自绘的文件浏览界面，不依赖
  * 系统文件选择器组件——PRC ROM 的文件栈对 SAF 支持参差，这里用 java.io 直读（全文件访问已在手）。
  *
  * 存储卷（内部存储 / SD 卡）从顶栏右侧的下拉切换——比 DocumentsUI 的侧栏少一层导航。

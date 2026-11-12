@@ -1,8 +1,10 @@
-package com.nx.android.data
+package com.nx.android.data.drivers
 
 import android.content.Context
-import androidx.annotation.StringRes
 import com.nx.android.R
+import com.nx.android.domain.drivers.Driver
+import com.nx.android.domain.drivers.DriverNote
+import com.nx.android.domain.drivers.DriverRelease
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -11,14 +13,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** 一个可以拿到的驱动：叫什么、在哪儿、给哪一家的 GPU */
-data class DriverRelease(
-    val file: String,      // 压缩包的文件名
-    val title: String,     // 玩家看到的名字
-    val metaName: String,  // 驱动自报的名字（meta.json 的 name）：认得出「已经装上了」
-    @StringRes val note: Int,   // 给哪一家的 GPU：App 自己的词，屏幕自己取
-    val url: String,       // 固定的下载地址
-)
-
 /**
  * App 能拿到的驱动：Adreno-Tools-Drivers 的 release v39 的三个构建，各自有固定的地址。
  *
@@ -31,11 +25,11 @@ object DriverCatalog {
 
     val RELEASES = listOf(
         DriverRelease("Turnip_Gen8_V39.zip", "Turnip Gen8 V39", "Turnip Gen8 V39",
-            R.string.driver_note_8xx, BASE + "Turnip_Gen8_V39.zip"),
+            DriverNote.GPU_8XX, BASE + "Turnip_Gen8_V39.zip"),
         DriverRelease("Turnip_v27.0.0-R2.zip", "Turnip 27.0.0-R2", "Turnip 27.0.0-R2",
-            R.string.driver_note_7xx, BASE + "Turnip_v27.0.0-R2.zip"),
+            DriverNote.GPU_7XX, BASE + "Turnip_v27.0.0-R2.zip"),
         DriverRelease("Turnip_v27.0.0-R2-Oneui.zip", "Turnip 27.0.0-R2 (OneUI)", "Turnip 27.0.0-R2-Oneui",
-            R.string.driver_note_7xx_oneui, BASE + "Turnip_v27.0.0-R2-Oneui.zip"),
+            DriverNote.GPU_7XX_ONE_UI, BASE + "Turnip_v27.0.0-R2-Oneui.zip"),
     )
 
     /** 内置的那个（assets 里，不用网络） */

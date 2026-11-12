@@ -1,6 +1,7 @@
-package com.nx.android.data
+package com.nx.android.data.drivers
 
 import android.content.Context
+import com.nx.android.domain.drivers.Driver
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -12,18 +13,6 @@ import java.util.zip.ZipInputStream
  * 一个驱动一个文件夹是必须的——AdrenoTools 的每个 Turnip 包里的库都叫 libvulkan_freedreno.so，
  * 两个放在同一个目录里会互相覆盖。
  */
-data class Driver(
-    val id: String,          // 文件夹的名字（由驱动的名字推出来的）
-    val name: String,        // 驱动自己的名字（meta.json 的 name）
-    val version: String,     // 它的版本（meta.json 的 driverVersion）
-    val vendor: String,      // 谁做的（meta.json 的 vendor）
-    val library: File,       // 驱动库本身
-    val shipped: Boolean = false,   // App 自带的那个：不是玩家的数据，删不掉
-) {
-    /** 玩家看到的名字：驱动名，版本跟在后面 */
-    val label: String get() = if (version.isBlank()) name else "$name · $version"
-}
-
 /** 驱动自带的 meta.json 说了什么 */
 data class DriverMeta(val name: String, val version: String, val vendor: String, val library: String)
 

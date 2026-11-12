@@ -26,8 +26,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nx.android.data.AppVersion
-import com.nx.android.data.Drivers
-import com.nx.android.domain.PackEnv
+import com.nx.android.data.drivers.Drivers
+import com.nx.android.data.playback.PackEnvStore
 import com.nx.android.game.HostSample
 import com.nx.android.game.HudData
 import com.nx.android.game.HudField
@@ -149,7 +149,7 @@ private fun deviceLine(ctx: Context, packPath: String?): String {
 /** The Vulkan driver this game runs with: the installed one it names, or the one the pack carries */
 private fun driverLabel(ctx: Context, packPath: String?): String? {
     if (packPath.isNullOrEmpty()) return null
-    val drv = runCatching { PackEnv.current(File(packPath)).second }.getOrNull()
+    val drv = runCatching { PackEnvStore.current(File(packPath)).second }.getOrNull()
     if (drv.isNullOrBlank()) return null   // the device's own driver
     val installed = runCatching { Drivers.list(ctx) }.getOrDefault(emptyList())
     installed.firstOrNull { it.library.absolutePath == drv }?.let { return it.label }

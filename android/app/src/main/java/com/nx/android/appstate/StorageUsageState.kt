@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nx.android.data.Env
 import com.nx.android.domain.StorageUsage
+import com.nx.android.domain.GameEntry
+import com.nx.android.domain.library.GameLibraryRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -24,7 +26,11 @@ import java.util.concurrent.Executors
  *   已测得的那一段留下当下界；
  * - 结果落盘（`files/usage.json`），当天再进直接用，不重��。
  */
-class StorageUsageState(private val env: Env, private val library: LibraryState) {
+class StorageUsageState(
+    private val env: Env,
+    private val games: () -> List<GameEntry>,
+    private val libraryRepository: GameLibraryRepository,
+) {
 
     /** 面板看到的状态 */
     var snapshot by mutableStateOf(StorageUsage.Snapshot()); private set
@@ -62,8 +68,8 @@ class StorageUsageState(private val env: Env, private val library: LibraryState)
      * 取数要读各个卷的端口目录（认包），所以它跑在后台线程上。
      */
     suspend fun prepare() {
-        val games = library.visible()               // 主线程读：库里的清单
-        val items = withContext(background) { library.usageItems(games) }
+        val gameSnapshot = games()                  // 主线程读：库里的清单
+        val items = withContext(background) { libraryRepository.usageItems(gameSnapshot) }
         val previous = snapshot.items.associateBy { it.id }
         snapshot = snapshot.copy(
             items = items.map { item ->

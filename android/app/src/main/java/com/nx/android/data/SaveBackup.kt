@@ -5,6 +5,7 @@ import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import com.nx.android.domain.saves.SAVE_PACKAGE_EXTENSION
 
 /**
  * The save package: the game's save leaves the app as a zip the player can send to someone, and comes back
@@ -18,7 +19,7 @@ import java.util.zip.ZipOutputStream
 object SaveBackup {
 
     /** the package's extension */
-    const val EXT = "zip"
+    const val EXT = SAVE_PACKAGE_EXTENSION
 
     /**
      * Why a package was refused. A code, not a sentence: this layer stays free of Android, so the words
@@ -158,9 +159,23 @@ object SaveBackup {
         if (files.isEmpty() && dev == null) return null
         packSaves.mkdirs()
         val dir = File(packSaves, "$stamp-before-import")
-        dir.deleteRecursively()
-        copyTree(live, dir)
-        if (dev != null) copyTree(dev, File(packSaves, "$stamp-before-import.device"))
+        val deviceDir = File(packSaves, "$stamp-before-import.device")
+        val stage = File(packSaves, ".$stamp-before-import.part")
+        val deviceStage = File(packSaves, ".$stamp-before-import.device.part")
+        stage.deleteRecursively(); deviceStage.deleteRecursively()
+        try {
+            copyTree(live, stage)
+            if (dev != null) copyTree(dev, deviceStage)
+            if (dir.exists() && !dir.deleteRecursively()) throw IOException("Could not replace save backup")
+            if (deviceDir.exists() && !deviceDir.deleteRecursively()) throw IOException("Could not replace device backup")
+            if (!stage.renameTo(dir)) throw IOException("Could not finish save backup")
+            if (deviceStage.isDirectory && !deviceStage.renameTo(deviceDir)) {
+                dir.deleteRecursively()
+                throw IOException("Could not finish device save backup")
+            }
+        } finally {
+            stage.deleteRecursively(); deviceStage.deleteRecursively()
+        }
         return dir
     }
 
@@ -180,10 +195,38 @@ object SaveBackup {
         val oldDevice = File(liveDevice.parentFile, liveDevice.name + ".old")
         oldLive.deleteRecursively()
         oldDevice.deleteRecursively()
-        if (live.exists()) live.renameTo(oldLive)
-        if (liveDevice.exists()) liveDevice.renameTo(oldDevice)
-        if (!newLive.renameTo(live)) copyTree(newLive, live)
-        if (newDevice.isDirectory && !newDevice.renameTo(liveDevice)) copyTree(newDevice, liveDevice)
+        var movedLive = false
+        var movedDevice = false
+        var installedLive = false
+        var installedDevice = false
+        try {
+            if (live.exists()) {
+                if (!live.renameTo(oldLive)) throw IOException("Could not stage current save")
+                movedLive = true
+            }
+            if (liveDevice.exists()) {
+                if (!liveDevice.renameTo(oldDevice)) throw IOException("Could not stage current device save")
+                movedDevice = true
+            }
+            if (!newLive.renameTo(live)) throw IOException("Could not install new save")
+            installedLive = true
+            if (newDevice.isDirectory) {
+                if (!newDevice.renameTo(liveDevice)) throw IOException("Could not install new device save")
+                installedDevice = true
+            }
+        } catch (failure: Throwable) {
+            if (installedLive) live.deleteRecursively()
+            if (installedDevice) liveDevice.deleteRecursively()
+            val rollbackFailures = mutableListOf<String>()
+            if (movedLive && oldLive.exists() && !oldLive.renameTo(live)) rollbackFailures += "save"
+            if (movedDevice && oldDevice.exists() && !oldDevice.renameTo(liveDevice)) rollbackFailures += "device save"
+            newLive.deleteRecursively()
+            newDevice.deleteRecursively()
+            if (rollbackFailures.isNotEmpty()) {
+                throw IOException("Save install failed and rollback could not restore ${rollbackFailures.joinToString()}", failure)
+            }
+            throw failure
+        }
         oldLive.deleteRecursively()
         oldDevice.deleteRecursively()
     }

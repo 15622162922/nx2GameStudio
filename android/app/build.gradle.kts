@@ -6,6 +6,8 @@ plugins {
     id("com.android.application")
     // The Compose compiler: from Kotlin 2.0 it is a plugin of its own
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android")
 }
 
 // The payload (rootfs, toolchain, the tool's tree) is built by packaging/android-apk/build_assets.py and staged
@@ -123,11 +125,19 @@ android {
         implementation("androidx.compose.material3:material3")
         implementation("androidx.compose.material:material-icons-extended")
         implementation("androidx.activity:activity-compose:1.13.0")
+        implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+        implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+        implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+        implementation("androidx.hilt:hilt-lifecycle-viewmodel-compose:1.3.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+        implementation("com.google.dagger:hilt-android:2.60.1")
+        ksp("com.google.dagger:hilt-compiler:2.60.1")
         // adb's wireless debugging pairing needs the TLS session's keying material, which the
         // platform's Conscrypt does not export: the app pairs with itself to switch off Android's
         // child-process limit (data/PhantomFix.kt)
         implementation("org.conscrypt:conscrypt-android:2.7.0")
         testImplementation("junit:junit:4.13.2")
+        testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
         // the porter's progress events and the data pack's manifest are JSON: the JVM tests parse them with
         // the real org.json (the android.jar the tests run against only has the stubs)
         testImplementation("org.json:json:20240303")

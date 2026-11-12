@@ -2,8 +2,9 @@ package com.nx.android.ui
 
 import com.nx.android.R
 import com.nx.android.data.AppLocale
-import com.nx.android.data.Drivers
+import com.nx.android.data.drivers.Drivers
 import com.nx.android.data.SaveBackup
+import com.nx.android.domain.saves.SaveOperationException
 
 /**
  * The app's own words for a failure the data layer reported.
@@ -12,6 +13,12 @@ import com.nx.android.data.SaveBackup
  * and this is where the code becomes a sentence the player reads, in the language the app shows.
  */
 fun failureText(locale: AppLocale, e: Throwable): String = when (e) {
+    is SaveOperationException -> when (e.reason) {
+        SaveOperationException.Reason.GAME_RUNNING -> locale.str(R.string.lib_game_running_hint)
+        SaveOperationException.Reason.TITLE_MISMATCH -> locale.str(R.string.lib_other_games_save, e.message.orEmpty())
+        SaveOperationException.Reason.NO_SAVES -> locale.str(R.string.lib_no_saves)
+        else -> locale.str(R.string.common_error_unknown_reason)
+    }
     is Drivers.Refused -> when (e.refusal) {
         Drivers.Refusal.NO_DRIVER -> locale.str(R.string.driver_refused_no_driver)
         Drivers.Refusal.NO_LIBRARY -> locale.str(R.string.driver_refused_no_library)

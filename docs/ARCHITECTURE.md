@@ -230,6 +230,15 @@ allows 60 requests an hour per address and a phone shares its address), ships on
 no click — and marked as the built-in one, so it is the app's own and not the player's to remove) and imports any
 other from the device's files.
 
+In the Android app, `domain/drivers/` owns the driver model and `DriverRepository` contract. `data/drivers/`
+owns the app-private directory, archive parsing, fixed download catalogue, import, removal and built-in driver
+setup. `feature/drivers/` owns the download route, screen, `DriverViewModel` and its UI state. Hilt binds one
+application-scoped repository; the transitional `AppContainer` receives that same injected instance. Settings
+subscribes to its driver flow for the installed list and sends import/removal actions to the repository. The
+library's run options receive that same list from the app root, so all three surfaces observe one source of
+installed driver state. New features should keep UI resource selection in `feature/`, storage and network work
+in `data/`, and shared models/contracts in `domain/`.
+
 The **loader** (`libadrenotools.so`) is the app's own native library, and it has to be: the host `dlopen`s it **by
 name**, and the Android linker looks a bare name up in `LD_LIBRARY_PATH`, in the caller's `DT_RUNPATH` and in the
 namespace's default library paths — the app's native library folder is the only one of those the app controls (the

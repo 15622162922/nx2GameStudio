@@ -1,4 +1,4 @@
-package com.nx.android.domain
+package com.nx.android.data.playback
 
 import java.io.File
 
@@ -8,7 +8,7 @@ import java.io.File
  * from the pack's lists (languages.txt, drivers.txt); writing replaces the two rows in place, everything else
  * (the profile's rows, the comments) stays. Free of Android, so the tests run on the JVM.
  */
-object PackEnv {
+internal object PackEnvStore {
 
     /** The pack's languages (languages.txt rows of `code<TAB>name`), code first */
     fun languages(pack: File): List<Pair<String, String>> =

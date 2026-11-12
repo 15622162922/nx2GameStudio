@@ -37,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,11 +78,12 @@ import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.env.EnvChecklistDialog
 import com.nx.android.ui.env.EnvChip
 import com.nx.android.domain.GameEntry
-import com.nx.android.ui.library.ConfigPanel
+import com.nx.android.feature.gamedetail.GameDetailRoute
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
 import com.nx.android.ui.onboarding.OnboardingScreen
-import com.nx.android.ui.settings.DriverScreen
+import com.nx.android.feature.drivers.DriverRoute
+import com.nx.android.domain.drivers.Driver
 import com.nx.android.ui.settings.SettingsScreen
 import com.nx.android.ui.settings.SettingsSection
 import com.nx.android.ui.theme.GlassSheet
@@ -194,7 +196,7 @@ fun AppRoot(container: AppContainer, actions: AppActions, startTab: Int) {
             }
             // 驱动页：盖住整屏，在页面之外
             if (driversOpen) {
-                DriverScreen(container.drivers, onClose = { driversOpen = false })
+                DriverRoute(onClose = { driversOpen = false })
             }
             // 环境检查清单：顶栏胶囊点开的，盖住整屏
             if (envCheckOpen) {
@@ -269,6 +271,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
     var settingsSection by remember { mutableStateOf(SettingsSection.ENVIRONMENT) }
     val port = container.port
     val lib = container.library
+    val installedDrivers by container.drivers.drivers.collectAsStateWithLifecycle()
 
     // a finished port goes into the library's records (the source and its data pack stay together)
     LaunchedEffect(port.phase) {
@@ -297,7 +300,7 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         UpdatePopup(container.update)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions,
+                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, installedDrivers, actions,
                     onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest, onLog)
             }
@@ -313,14 +316,14 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
             exit = slideOutHorizontally { it } + fadeOut(),
         ) {
             panelFile.value?.let { f ->
-                ConfigPanel(lib, port, container.player, f, actions,
+                GameDetailRoute(lib, port, container.player, f, installedDrivers, actions,
                     onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest,
                     onClose = { lib.selected = null })
             }
         }
         // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
         if (settingsOpen) {
-            SettingsScreen(container.onboarding, container.drivers, container.update,
+            SettingsScreen(container.onboarding, installedDrivers, container.drivers, container.update,
                 container.storageUsage, actions,
                 onRequest, onDrivers,
                 section = settingsSection, onSelectSection = { settingsSection = it },

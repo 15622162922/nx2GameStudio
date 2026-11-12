@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.nx.android.appstate.DriverState
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
@@ -16,32 +15,65 @@ import com.nx.android.data.Env
 import com.nx.android.data.Player
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PhantomFix
-import com.nx.android.data.StorageVolumes
+import com.nx.android.domain.drivers.DriverRepository
+import com.nx.android.domain.library.GameConfigRepository
+import com.nx.android.domain.library.GameLibraryRepository
+import com.nx.android.core.storage.AppPaths
 import com.nx.android.ui.env.EnvCheckState
+import com.nx.android.app.AppProcess
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 /**
  * The app's own wiring: every long-lived object is built here, once, and flows one way from here — the UI
  * takes what it shows, the service takes what it runs. Nothing else builds these.
  */
+@HiltAndroidApp
 class NxApp : Application() {
 
-    val container by lazy { AppContainer(this) }
+    val isMainProcess: Boolean by lazy(LazyThreadSafetyMode.NONE) { AppProcess.isMainProcess(this) }
+
+    @Inject
+    lateinit var appPaths: AppPaths
+
+    @Inject
+    lateinit var driverRepository: DriverRepository
+
+    @Inject
+    lateinit var prefsStore: PrefsStore
+
+    @Inject
+    lateinit var gameLibraryRepository: GameLibraryRepository
+
+    @Inject
+    lateinit var gameConfigRepository: GameConfigRepository
+
+    val container by lazy {
+        AppContainer(this, appPaths, driverRepository, prefsStore, gameLibraryRepository, gameConfigRepository)
+    }
 }
 
 /**
  * 手动依赖注入（仓库零框架传统下的官方等价物）：依赖只从这里往下流，上层拿构造好的对象，不找全局。
  * 存储权限是唯一由 Activity 喂进来的状态（只有 Activity 能感知它的变化），这里持有、UI 观察。
  */
-class AppContainer(app: NxApp) {
+class AppContainer(
+    app: NxApp,
+    paths: AppPaths,
+    val drivers: DriverRepository,
+    val prefs: PrefsStore,
+    libraryRepository: GameLibraryRepository,
+    configRepository: GameConfigRepository,
+) {
 
-    val prefs = PrefsStore(app)
-    val env = Env(app)
+    val paths = paths
+    val env = Env(app, paths)
 
     /** 界面语言：玩家选的那个（没选就是跟随系统）。屏幕用 stringResource 读词，没有屏幕的地方用它的 str() */
     val locale = AppLocale(app, prefs)
 
     /** 子进程限制的修复：它要自己读系统设置，也要用它自己的话（通知里没有屏幕） */
-    init { PhantomFix.attach(app, locale) }
+    init { if (app.isMainProcess) PhantomFix.attach(app, locale) }
 
     /** 所有文件访问权限：MainActivity 在 onResume 时更新 */
     var storageOk by mutableStateOf(false)
@@ -58,14 +90,10 @@ class AppContainer(app: NxApp) {
     val player = PlayerState(alive = { Player.playProcessAlive(app) })
 
     // 游戏库：私有目录 + 插着的可移动卡上的端口目录（卡不在时那个列表是空的）
-    val library = LibraryState(prefs, port, player, env.ports, env.work,
-        cardPortsDirs = { StorageVolumes.removablePortsDirs(app).map { it.second } })
-
-    /** 玩家装好的 Vulkan 驱动：设置页和驱动页读同一份 */
-    val drivers = DriverState()
+    val library = LibraryState(port, player, libraryRepository, configRepository)
 
     /** 存储占用：设置页「存储」分区背后的状态（每个卷上构建缓存与数据包各占多少） */
-    val storageUsage = StorageUsageState(env, library)
+    val storageUsage = StorageUsageState(env, { library.visible() }, libraryRepository)
 
     /** 有没有新版本：冷启动时查一次，弹框与设置页读同一份 */
     val update = UpdateState(app)

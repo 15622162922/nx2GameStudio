@@ -1,6 +1,7 @@
 package com.nx.android.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -150,5 +151,20 @@ class SaveBackupTest {
         SaveBackup.swapIn(fresh, freshDevice, live, device)
         assertEquals("new island", File(device, "island.dat").readText())
         assertEquals("progress", File(live, "slot0.dat").readText())
+    }
+
+    @Test
+    fun a_failed_install_restores_the_original_live_save() {
+        val internal = tmp("internal")
+        val live = liveSave(internal, "0100000000010000", "slot0.dat", "original")
+        val device = SaveBackup.deviceDir(internal, "0100000000010000")
+        val missing = File(tmp("missing"), "not-a-tree")
+
+        val result = runCatching { SaveBackup.swapIn(missing, null, live, device) }
+
+        assertTrue(result.isFailure)
+        assertEquals("original", File(live, "slot0.dat").readText())
+        assertFalse(File(internal, "save/0100000000010000.old").exists())
+        assertFalse(File(internal, "save/0100000000010000.import").exists())
     }
 }
