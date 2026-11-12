@@ -49,6 +49,7 @@
     <string name="main_log_empty">The log is still empty</string>
     <string name="main_log_cleared">The log has been cleared</string>
     <string name="main_no_permission_settings">This device has no permission settings page</string>
+    <string name="main_no_battery_settings">This device has no battery settings page</string>
     <string name="port_notification_channel">Port progress</string>
     <string name="port_notification_running">Porting…</string>
     <string name="port_stage_of">Stage %1$s/%2$s: %3$s</string>
@@ -81,6 +82,11 @@
     <string name="onb_free_space">%1$s GB free · unpacking the environment needs about 700 MB</string>
     <string name="onb_space_short">Not enough space: free some room and come back</string>
     <string name="onb_space_enough">There is enough space; you can go on</string>
+    <string name="onb_battery_access">Background activity</string>
+    <string name="onb_battery_ok">The power saving does not touch this app</string>
+    <string name="onb_battery_why">Unpacking and porting are long background jobs: the power saving can stop them halfway</string>
+    <string name="onb_open_battery_settings">Open settings</string>
+    <string name="onb_battery_hint">Android\'s own dialog opens there; the check turns green by itself when you come back</string>
     <string name="onb_runtime">Runtime</string>
     <string name="onb_env_ready">The environment is ready</string>
     <string name="onb_unpacking">Unpacking: %1$s</string>

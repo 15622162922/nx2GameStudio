@@ -119,6 +119,7 @@ enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 /** The screens' way back to the activity's own privileges: what they may ask for, nothing else */
 data class AppActions(
     val onAskStorage: () -> Unit,
+    val onAskBattery: () -> Unit,
     val storageOk: () -> Boolean,
     val onSetKeys: (String) -> Unit,
     val onStartPort: (file: File, cfg: GameConfig) -> Unit,

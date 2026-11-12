@@ -38,6 +38,13 @@ class OnboardingState @Inject constructor(
 ) {
     @Volatile var storageOk: Boolean = false
 
+    /**
+     * The app is exempt from the power saving (the system's own setting). It is a Compose state, so the
+     * check row redraws itself the moment the activity reads it again after the player comes back from
+     * the settings - a plain field would not be noticed by the flow that feeds the screens.
+     */
+    var batteryOk by mutableStateOf(false)
+
     companion object {
         /** The unpack writes about 700 MB (the rootfs, the build tools and the .NET runtime); a little headroom for the check */
         const val NEEDED_GB = 1L
@@ -128,6 +135,7 @@ class OnboardingState @Inject constructor(
     fun facts(): ObFacts = ObFacts(
         storageOk = storageOk, freeGB = freeGB(), neededGB = NEEDED_GB,
         envReady = envReady, keysPath = keysPath, keysOk = keysOk, keysSkipped = keysSkipped,
+        batteryOk = batteryOk,
     )
 
     /** The environment's readiness, read again: the screens watch the copy, not the filesystem */

@@ -48,6 +48,7 @@
     <string name="main_log_empty">日志还是空的</string>
     <string name="main_log_cleared">日志已清空</string>
     <string name="main_no_permission_settings">这台设备没有可用的权限设置页</string>
+    <string name="main_no_battery_settings">这台设备没有可用的电池设置页</string>
     <string name="port_notification_channel">移植进度</string>
     <string name="port_notification_running">正在移植…</string>
     <string name="port_stage_of">阶段 %1$s/%2$s：%3$s</string>
@@ -80,6 +81,11 @@
     <string name="onb_free_space">剩余 %1$s GB · 解压环境需要约 700 MB</string>
     <string name="onb_space_short">空间不足：清一色删掉些东西再回来</string>
     <string name="onb_space_enough">空间足够，可以继续</string>
+    <string name="onb_battery_access">后台运行</string>
+    <string name="onb_battery_ok">省电策略不会动这个 App</string>
+    <string name="onb_battery_why">解压环境与移植都是长时间的后台任务，省电策略可能中途把它们停掉</string>
+    <string name="onb_open_battery_settings">去设置</string>
+    <string name="onb_battery_hint">那里会弹系统自己的对话框；允许之后回来这一步自动变绿</string>
     <string name="onb_runtime">运行环境</string>
     <string name="onb_env_ready">环境就绪</string>
     <string name="onb_unpacking">正在解压：%1$s</string>

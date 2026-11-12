@@ -28,13 +28,13 @@ import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
 
 /**
- * 引导的四个步骤：欢迎（权限与空间）、环境、keys、好了。
+ * 引导的四个步骤：欢迎（权限、空间与后台运行）、环境、keys、好了。
  *
  * 都是无状态的：看到的东西从 [OnboardingUiState] 来，要做的事是外面给的回调。
  */
 
 @Composable
-internal fun WelcomeStep(facts: ObFacts, onAskStorage: () -> Unit) {
+internal fun WelcomeStep(facts: ObFacts, onAskStorage: () -> Unit, onAskBattery: () -> Unit) {
     Section(stringResource(R.string.onb_storage_access)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatusDot(if (facts.storageOk) NxPalette.Ready else NxPalette.Danger)
@@ -58,6 +58,21 @@ internal fun WelcomeStep(facts: ObFacts, onAskStorage: () -> Unit) {
         }
         Hint(if (facts.freeGB < facts.neededGB) stringResource(R.string.onb_space_short) else stringResource(R.string.onb_space_enough))
     }
+    // The battery: a hint, not a gate. The dot is amber, not red - the setup goes on either way, but
+    // without the exemption the power saving can stop the unpack or a port halfway.
+    Section(stringResource(R.string.onb_battery_access)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatusDot(if (facts.batteryOk) NxPalette.Ready else NxPalette.Building)
+            Text(
+                if (facts.batteryOk) stringResource(R.string.onb_battery_ok)
+                else stringResource(R.string.onb_battery_why),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (!facts.batteryOk) QuietButton(stringResource(R.string.onb_open_battery_settings), onAskBattery)
+        }
+        Hint(stringResource(R.string.onb_battery_hint))
+    }
 }
 
 /** 预览：还没拿到「所有文件访问」（红点与授予按钮） */
@@ -69,6 +84,22 @@ private fun WelcomeStepPreview() {
             WelcomeStep(
                 facts = previewState(ObStep.WELCOME, storageOk = false, freeGB = 42).facts,
                 onAskStorage = {},
+                onAskBattery = {},
+            )
+        }
+    }
+}
+
+/** 预览：还没拿到电池豁免（黄点与设置按钮） */
+@Preview(name = "Step, battery not exempt", widthDp = 1280, heightDp = 520, showBackground = true)
+@Composable
+private fun WelcomeStepBatteryPreview() {
+    PreviewSurface {
+        Column(Modifier.fillMaxWidth()) {
+            WelcomeStep(
+                facts = previewState(ObStep.WELCOME, batteryOk = false).facts,
+                onAskStorage = {},
+                onAskBattery = {},
             )
         }
     }

@@ -12,6 +12,12 @@ data class ObFacts(
     val keysPath: String,
     val keysOk: Boolean,
     val keysSkipped: Boolean,
+    /**
+     * The app is exempt from the power saving. It is a fact the screens show but no gate reads: the long
+     * background work is stopped halfway without it, but some ROMs never report it as granted, and a
+     * check that blocks the setup on those phones is worse than a hint.
+     */
+    val batteryOk: Boolean = false,
 )
 
 /**

@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
         }
         onboarding.storageOk = storageGranted()
+        onboarding.batteryOk = batteryUnrestricted()
         launchTab = intent?.getIntExtra(EXTRA_TAB, 0) ?: 0
         if (!prefs.bool(PrefsStore.OB_COMPLETED)) onboarding.open()
         AppLog.init(this)
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity() {
     /** The screens' way back to the activity's own privileges: the actions they may ask for, nothing else */
     private val actions = AppActions(
         onAskStorage = { askStorage() },
+        onAskBattery = { askBattery() },
         storageOk = { onboarding.storageOk },
         onSetKeys = { prefs.writeKeys(it); envCheck.refresh() },
         onStartPort = { file, cfg ->
@@ -196,6 +198,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         onboarding.storageOk = storageGranted()   // the permission may have been given in the background
+        onboarding.batteryOk = batteryUnrestricted()   // so may the battery exemption
         // 回到前台：顶栏胶囊的两个事实重读一遍（玩家可能在后台改了文件）
         envCheck.refresh()
         if (android.os.Build.VERSION.SDK_INT >= 30) {
@@ -261,6 +264,40 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
             } catch (e2: Exception) {
                 toast(locale.str(R.string.main_no_permission_settings))
+            }
+        }
+    }
+
+    // ---- the battery (the system's own privilege) ------------------------------------------------------------
+
+    /**
+     * Whether the app is exempt from the power saving. The unpack and a port are long background jobs:
+     * the power saving stops them halfway without it.
+     *
+     * Some ROMs never report the exemption (the setting lives in their own power manager), and a phone
+     * that cannot answer must not look broken: a failure counts as exempt. The check is a hint, not a
+     * gate, so nothing depends on the answer being right.
+     */
+    private fun batteryUnrestricted(): Boolean = try {
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        pm == null || pm.isIgnoringBatteryOptimizations(packageName)
+    } catch (e: Exception) {
+        true
+    }
+
+    /**
+     * Android's own prompt: the player allows the app to run in the background there. The list of the
+     * exempt apps is the fallback for the ROMs that have no prompt of their own.
+     */
+    fun askBattery() {
+        try {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                 Uri.parse("package:$packageName")))
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e2: Exception) {
+                toast(locale.str(R.string.main_no_battery_settings))
             }
         }
     }

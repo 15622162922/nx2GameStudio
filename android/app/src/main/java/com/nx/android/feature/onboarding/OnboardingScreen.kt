@@ -61,6 +61,7 @@ fun OnboardingScreen(viewModel: OnboardingViewModel, actions: AppActions, onRequ
             onBack = { viewModel.back() },
             onOpenLibrary = { viewModel.openLibrary() },
             onAskStorage = { actions.onAskStorage() },
+            onAskBattery = { actions.onAskBattery() },
             onUnpack = { viewModel.unpack() },
             // the picker's own title is a word of the app's language: it is read here, not in the step
             onChooseKeysFile = {
@@ -73,12 +74,13 @@ fun OnboardingScreen(viewModel: OnboardingViewModel, actions: AppActions, onRequ
     )
 }
 
-/** 页面上的动作：下一步、上一步、进入游戏库、要权限、解包、选 keys、跳过 keys */
+/** 页面上的动作：下一步、上一步、进入游戏库、要权限、要电池豁免、解包、选 keys、跳过 keys */
 internal data class OnboardingActions(
     val onNext: () -> Unit,
     val onBack: () -> Unit,
     val onOpenLibrary: () -> Unit,
     val onAskStorage: () -> Unit,
+    val onAskBattery: () -> Unit,
     val onUnpack: () -> Unit,
     val onChooseKeysFile: () -> Unit,
     val onKeysSkippedChange: (Boolean) -> Unit,
@@ -128,7 +130,7 @@ internal fun OnboardingContent(uiState: OnboardingUiState, actions: OnboardingAc
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (uiState.step) {
-                    ObStep.WELCOME -> WelcomeStep(uiState.facts, actions.onAskStorage)
+                    ObStep.WELCOME -> WelcomeStep(uiState.facts, actions.onAskStorage, actions.onAskBattery)
                     ObStep.ENV -> EnvStep(uiState, actions.onUnpack)
                     ObStep.KEYS -> KeysStep(uiState, actions.onChooseKeysFile, actions.onKeysSkippedChange)
                     ObStep.DONE -> DoneStep()
