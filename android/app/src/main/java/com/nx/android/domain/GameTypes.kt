@@ -93,10 +93,16 @@ data class Ported(
     val status: String = "", // 清单里的档案状态（playable / wip / boots / experimental）：experimental 的移植提醒玩家它还没被正式调通
     val playerApiRevision: Int = 0, // Missing or invalid revisions require a runtime update.
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
+    val romfsAt: String = "", // 清单里的 romfs_at：游戏的文件不在包里，在工作区（老的数据包没有这一项：它们自带 RomFS）
 ) {
-    /** The pack has its host and was built for the current player interface revision. */
-    val runnable: Boolean get() = host.isFile && playerApiRevision == PlayerApiRevision.CURRENT
+    /** The pack has its host, was built for the current player interface revision, and its game's files are there. */
+    val runnable: Boolean get() = host.isFile && playerApiRevision == PlayerApiRevision.CURRENT && !romfsMissing
 
     /** Missing host or a different/legacy revision requires a runtime update. */
-    val needsRuntimeUpdate: Boolean get() = !runnable
+    val needsRuntimeUpdate: Boolean get() = !host.isFile || playerApiRevision != PlayerApiRevision.CURRENT
+
+    /**
+     * 包的 RomFS 在工作区里（移植时没有复制一份进包）：那个文件夹没了，游戏就跑不起来 —— 要重新移植。
+     */
+    val romfsMissing: Boolean get() = romfsAt.isNotEmpty() && !File(romfsAt).isDirectory
 }

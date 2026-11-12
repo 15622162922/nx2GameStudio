@@ -1,6 +1,7 @@
 package com.nx.android.appstate
 
 import com.nx.android.data.library.GameCleanupFiles
+import com.nx.android.data.library.LibraryFileScanner
 import com.nx.android.data.library.PackMoverFiles
 import com.nx.android.domain.GameCleanup
 import com.nx.android.domain.GameEntry
@@ -58,6 +59,8 @@ class LibraryOperationCoordinator @Inject constructor(
         removalBlockedLocked(entry)?.let { return@synchronized GameCleanup.Result(it) }
         val plan = planCache(entry)
         removalBlockedLocked(entry)?.let { return@synchronized GameCleanup.Result(it) }
+        // 数据包读的是工作区里的 RomFS：单独删工作区，游戏就跑不起来了（要删就整个删）
+        if (plan.workspaceInUse) return@synchronized GameCleanup.Result(GameCleanup.Outcome.WORKSPACE_IN_USE)
         val deleted = GameCleanupFiles.delete(plan)
         GameCleanup.Result(
             outcome = if (deleted.failed.isEmpty()) GameCleanup.Outcome.DONE else GameCleanup.Outcome.FAILED,
@@ -94,7 +97,19 @@ class LibraryOperationCoordinator @Inject constructor(
     fun planCache(entry: GameEntry): GameCleanup.Plan {
         val workspace = entry.work ?: repository.existingWorkspace(entry.titleId)
         val partials = if (port.running) emptyList() else repository.partialPacks()
-        return GameCleanup.plan(entry.titleId, emptyList(), workspace, partials)
+        return GameCleanup.plan(entry.titleId, emptyList(), workspace, partials, workspaceInUse = workspaceInUse(entry, workspace))
+    }
+
+    /**
+     * 数据包读的是工作区里的 RomFS（移植时没有复制一份进包，省一份游戏的体积）：
+     * 那个文件夹是游戏的一部分，不能单独删。
+     */
+    private fun workspaceInUse(entry: GameEntry, workspace: File?): Boolean {
+        if (workspace == null) return false
+        return repository.packsOf(entry).any { pack ->
+            val at = LibraryFileScanner.portFromPack(pack)?.romfsAt.orEmpty()
+            at.isNotEmpty() && File(at).toPath().startsWith(workspace.toPath())
+        }
     }
 
     private fun removalBlockedLocked(entry: GameEntry): GameCleanup.Outcome? {

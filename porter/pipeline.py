@@ -442,15 +442,18 @@ class Port:
         Viractal 2.7 of 1.4), less what an earlier port left there, plus a margin; an NSZ / XCZ counts as decompressed, and once more for its NSP while it is extracted.
         Only the picked game's files count (its base, its updates, its DLC): the folder may hold other games, which this port never reads.
         The pack is a copy of the game's files (Android's SELinux never lets an app link), so the port needs room for the build's files and for the pack.
+        The app's mode copies no RomFS into the pack (the pack points at the build folder's own), so there the build's files are the only copy and the room is half.
         When the pack goes to another volume (the app may put it on the removable card), each volume is asked for its own share"""
         fam = self.fam
         files = [fam['base'], *[p for _, p in fam['updates']], *[p for _, _, p in fam['dlc']]]
         game, temp = sum(dumps.size(f) for f in files), sum(dumps.size(f) for f in files if dumps.compressed(f))
+        dlc = sum(dumps.size(p) for _, _, p in fam['dlc'])
         built = sum(f.stat().st_size for f in self.work.rglob('*') if f.is_file()) if self.work.is_dir() else 0
         # the work folder may not be there yet: the space is the one of the folder that will hold it
         where = self.work
         while not where.exists() and where.parent != where: where = where.parent
         margin = 2**30
+        copies = 1 if self.o.app else 2   # the app's pack holds no RomFS (it points at the build folder's own): one copy of the game's files, not two
         pack = None
         getter = getattr(self, 'pack_dir_root', None)   # the space check runs before the profile is known
         if getter is not None:
@@ -460,10 +463,10 @@ class Port:
             # the pack goes to another volume (the removable card): the build's files stay here, the pack's copy goes there
             need, free = max(0, game + temp - built) + margin, shutil.disk_usage(where).free
             if free < need: raise BuildError(f'not enough disk space on {where.anchor} for the build folder: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
-            need, free = game + margin, shutil.disk_usage(pack).free
+            need, free = (dlc if self.o.app else game) + margin, shutil.disk_usage(pack).free
             if free < need: raise BuildError(f'not enough disk space for the data pack in {pack}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
             return
-        need, free = max(0, 2 * game + temp - built) + margin, shutil.disk_usage(where).free
+        need, free = max(0, copies * game + temp - built) + margin, shutil.disk_usage(where).free
         if free < need: raise BuildError(f'not enough disk space on {where.anchor}: the port needs about {need / 2**30:.1f} GB more, {free / 2**30:.1f} GB is free')
 
     def use_profile_dir(self, pdir, first):   # every tool finds the game's profile in pdir (game.py DM_GAMES_DIR; first: before dm/games)
@@ -1050,16 +1053,22 @@ class Port:
         dst = self.data_dir()
         files = {**self.fps_files, **font_files, **cjk_files}
         host = icon = None; drivers = []
+        romfs, romfs_at = self.game / 'RomFS', None
         if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
             for filename in ('game.tsv', 'android.tsv'):
                 files[f'profile/{self.g.id}/{filename}'] = self.g.dir / filename
+            # the app's mode: the pack points at the build folder's own RomFS instead of copying it (the same game twice on the phone is too much).
+            # The pack's env.txt says where the host reads it from, and the manifest says the same, so the app knows the pack needs that folder.
+            # A game without a RomFS (an OpenGL ES one) has none to point at: the pack keeps no RomFS, as before.
+            if romfs.is_dir():
+                romfs_at, romfs = str(romfs), None
             host = 'host/libdmplay.so'
             files[host] = self.so
             if theme := self.theme_files(): files.update(theme)
             if src := self.icon_png(): icon = 'icon.png'; files[icon] = src
             for d in self.drivers() + self.loader_libs(): files[f'drivers/{d.name}'] = d
             drivers = sorted({f'drivers/{d.name}' for d in self.drivers() + self.loader_libs()})
-        man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=self.game / 'RomFS', shaders=self.dmsv,
+        man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=romfs, romfs_at=romfs_at, shaders=self.dmsv,
                              aoc=self.aoc, sysdata=self.sysdata, language=self.lang, package=self.package, env=self.fps_env + font_env + (['DM_VK_MT_REPLAY=1'] if self.o.mt_replay else [])
                              + ([f'DM_VK_DRIVER={driver_lib_name(self.o.vulkan_driver)}'] if self.o.vulkan_driver else []) + cjk_env, settings=TOUCH_SETTINGS if self.o.touch else None,
                              files=files, text=self.lists(), host=host, icon=icon, drivers=drivers, profile_h=getattr(self, 'profile_h', None),

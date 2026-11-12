@@ -279,6 +279,7 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                     GameCleanup.Outcome.BUSY_PORTING -> locale.str(R.string.lib_remove_busy_porting)
                     GameCleanup.Outcome.BUSY_RUNNING -> locale.str(R.string.lib_remove_busy_running)
                     GameCleanup.Outcome.BUSY_MOVING -> locale.str(R.string.lib_pack_busy_moving)
+                    GameCleanup.Outcome.WORKSPACE_IN_USE -> locale.str(R.string.lib_remove_cache_workspace_in_use)
                 }
             )
         }
@@ -571,6 +572,7 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         when {
+                            req.kind == Removal.CACHE && req.plan.workspaceInUse -> locale.str(R.string.lib_remove_cache_workspace_in_use)
                             req.kind == Removal.CACHE && items.isEmpty() -> locale.str(R.string.lib_remove_cache_nothing)
                             req.kind == Removal.CACHE && status == GameStatus.DONE -> locale.str(R.string.lib_remove_cache_what_done)
                             req.kind == Removal.CACHE -> locale.str(R.string.lib_remove_cache_what_failed)

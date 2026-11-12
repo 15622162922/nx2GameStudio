@@ -1,6 +1,6 @@
 # The data pack: everything the app reads from its files folder on the device (/sdcard/Android/data/<package>/files, front_player.c), as a folder beside the APK:
 #   mods/          the rewritten code modules (patch_nso.py's outputs)
-#   RomFS/         the game's files (the packed version's merged RomFS)
+#   RomFS/         the game's files (the packed version's merged RomFS); the app's mode leaves it out: the pack points at the build folder's own RomFS (the manifest's romfs_at)
 #   aoc/<index>/   the DLC the player has
 #   sysdata/<title ID>/  system data from the player's firmware dump that the game reads (android.tsv sysdata, porter --firmware; env.txt's DM_SYSDATA)
 #   shaders.dmsv   the Vulkan shaders (dm/android/tools/shader_vk.py)
@@ -45,13 +45,16 @@ def romfs_sizes(d):   # {path in the RomFS: size} of the pack in d, '/'-separate
 
 
 def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, sysdata=None, language='en-US', package=None, env=(), settings=None, files=None, text=None,
-          host=None, icon=None, drivers=None, profile_h=None, pack_base=None, progress=None):
+          host=None, icon=None, drivers=None, profile_h=None, pack_base=None, romfs_at=None, progress=None):
     """Write the pack to dst (replacing it). profile: the AndroidProfile; package: the app's, when not the profile's; env: more env.txt rows, after the profile's; settings: settings.txt values over the profile's;
     files: {name in the pack: source} (the 60 fps memory writes, fpslock.tsv; the button-icon font; subfolders for the app's mode: host/, drivers/, overlay/, icon.png);
     text: {name in the pack: its text} (the launcher's lists: languages.txt, drivers.txt); host/icon/drivers: the app's artifacts, named in the manifest;
-    pack_base: where the pack lives on the device (the app's mode carries it in its own folder; else the app's files folder); profile_h: sha256 of the game_profile.h the host was built with (porter host).
+    pack_base: where the pack lives on the device (the app's mode carries it in its own folder; else the app's files folder); profile_h: sha256 of the game_profile.h the host was built with (porter host);
+    romfs_at: a folder on the device that holds the game's RomFS (the app's mode: the build folder's own RomFS). The pack does not carry the RomFS then: its env.txt says where the host reads it from,
+    and the manifest says the same, so the app knows the pack needs that folder.
     Returns the manifest"""
     package = package or profile.package
+    if romfs_at: romfs = None   # the RomFS is read from that folder, not from the pack
     tmp = dst.with_name(dst.name + '.partial')
     shutil.rmtree(tmp, ignore_errors=True)   # the half-made pack of a killed port: it may be gone already, and one that vanishes while it is removed must not stop the port
     tmp.mkdir(parents=True)
@@ -69,6 +72,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     base = pack_base or str(dst)   # where the pack lives on the device: its own folder (the app's mode); the PC tool's install puts it in the app's files folder
     rows = [f'# Written by nx2android\'s porter for {profile.name} ({profile.id}); KEY=VALUE per line, read by the app at launch',
             f'DM_LANG={language}']
+    if romfs_at: rows.append(f'DM_ROMFS={romfs_at}')   # the game's RomFS is read from there, not from the pack (the app's mode: the build folder's own)
     if aoc: rows.append(f'DM_AOC_DIR={base}/aoc')   # the pack's own folder
     if sysdata: rows.append(f'DM_SYSDATA={base}/sysdata')
     rows += profile.env + list(env)
@@ -82,6 +86,7 @@ def build(dst, *, profile, version, display, patched, romfs, shaders, aoc=None, 
     if icon: man['icon'] = icon
     if drivers: man['drivers'] = list(drivers)
     if profile_h: man['profile_h'] = profile_h
+    if romfs_at: man['romfs_at'] = romfs_at   # the folder the RomFS is read from: the pack does not carry it, so the app checks that folder before the game runs
     man['player_api_revision'] = PLAYER_API_REVISION   # the runtime interface the pack was built against: the app rebuilds the runtime when its own revision differs
     (tmp / MANIFEST).write_text(json.dumps(man, indent=2), encoding='utf-8')
     # the exported saves (the player's backups) are not the build's own: the pack is rebuilt whole, so they are put aside and put back

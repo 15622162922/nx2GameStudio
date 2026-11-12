@@ -67,6 +67,48 @@ class FolderScannerTest {
         out.deleteRecursively()
     }
 
+    /**
+     * 包读的是工作区里的游戏文件（移植时没有复制一份进包）：那个文件夹没了，游戏就跑不起来。
+     */
+    @Test
+    fun `a pack that reads its files from the work folder needs that folder`() {
+        val out = tmpDir()
+        val work = tmpDir()
+        val romfs = File(work, "extract/v1/RomFS").apply { mkdirs() }
+        val pack = File(out, "Game-data")
+        File(pack, "host").mkdirs()
+        File(pack, "nx2a-data.json").writeText(
+            """{"title_id":"0100000000010000","player_api_revision":${PlayerApiRevision.CURRENT},"romfs_at":"${romfs.absolutePath}"}""")
+        File(pack, "host/libdmplay.so").writeText("ELF")
+
+        val p = LibraryFileScanner.outIndex(out)["0100000000010000"]!!
+        assertEquals(romfs.absolutePath, p.romfsAt)
+        assertFalse(p.romfsMissing)
+        assertTrue(p.runnable)          // the folder is there
+
+        romfs.delete()                  // the player cleared the build cache
+        val gone = LibraryFileScanner.outIndex(out)["0100000000010000"]!!
+        assertTrue(gone.romfsMissing)
+        assertFalse(gone.runnable)      // the game cannot run without it
+        assertFalse(gone.needsRuntimeUpdate)   // the host is fine: it is the game's files that are gone
+        out.deleteRecursively(); work.deleteRecursively()
+    }
+
+    /** 老的数据包自带 RomFS：没有这一项，删工作区不影响它 */
+    @Test
+    fun `an old pack carries its own files`() {
+        val out = tmpDir()
+        val pack = File(out, "Old-data")
+        File(pack, "host").mkdirs()
+        File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000"}""")
+        File(pack, "host/libdmplay.so").writeText("ELF")
+
+        val p = LibraryFileScanner.outIndex(out)["0100000000010000"]!!
+        assertEquals("", p.romfsAt)
+        assertFalse(p.romfsMissing)
+        out.deleteRecursively()
+    }
+
     @Test
     fun `a display name drops the brackets and the extension`() {
         assertEquals("Zelda", GameIdentity.displayName(File("Zelda [0100000000010000][v0].nsp")))

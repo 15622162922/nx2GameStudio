@@ -383,6 +383,7 @@
     <string name="lib_remove_cache_done">构建缓存已清除</string>
     <string name="lib_remove_workspace_unknown">已从游戏库删除（没找到构建工作区：文件名里没有 title ID）</string>
     <string name="lib_remove_cache_workspace_unknown">构建缓存已清除（没找到构建工作区：文件名里没有 title ID）</string>
+    <string name="lib_remove_cache_workspace_in_use">这个游戏读的是构建工作区里的游戏文件，单独清掉工作区它就跑不起来了。要删就整个删。</string>
     <string name="lib_remove_failed">删除失败</string>
     <string name="lib_remove_failed_files">删除失败：%1$s</string>
     <string name="lib_remove_failed_card">删除失败：卡上的那份数据包没有删成（%1$s）。插回卡再删一次。</string>

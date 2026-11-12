@@ -86,7 +86,8 @@ object LibraryFileScanner {
                       titleId = id, name = man.optString("name"),
                       status = man.optString("status"),
                       playerApiRevision = (man.opt("player_api_revision") as? Int)?.takeIf { it > 0 } ?: 0,
-                      display = man.optString("display"))
+                      display = man.optString("display"),
+                      romfsAt = man.optString("romfs_at"))
     }
 
     /**

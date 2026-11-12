@@ -11,8 +11,8 @@ import java.util.Locale
  */
 object GameCleanup {
 
-    /** 删除一个游戏的结果：删掉了、被拒（正在构建 / 正在运行 / 正在搬移）、失败 */
-    enum class Outcome { DONE, BUSY_PORTING, BUSY_RUNNING, BUSY_MOVING, FAILED }
+    /** 删除一个游戏的结果：删掉了、被拒（正在构建 / 正在运行 / 正在搬移 / 工作区在用）、失败 */
+    enum class Outcome { DONE, BUSY_PORTING, BUSY_RUNNING, BUSY_MOVING, WORKSPACE_IN_USE, FAILED }
 
     data class Result(
         val outcome: Outcome,
@@ -30,10 +30,14 @@ object GameCleanup {
      *
      * [workspaceKnown] 为 false 是因为游戏文件名里没有 title ID（多半是下载器改过名），
      * 移植器按 title ID 命名的工作区就找不到了——这时要说实话，不能假装删干净了。
+     *
+     * [workspaceInUse] 是因为数据包读的是工作区里的 RomFS（移植时没有复制一份进包）：
+     * 单独删工作区会让游戏跑不起来，这时只能整个删。
      */
     data class Plan(
         val targets: List<Target>,
         val workspaceKnown: Boolean,
+        val workspaceInUse: Boolean = false,
     )
 
     /** 删完的结果：什么没删掉 */
@@ -48,13 +52,14 @@ object GameCleanup {
      * @param titleId 这个游戏的 title ID（文件名里的，或数据包清单里的）；null = 不知道工作区在哪
      * @param packs 这个游戏已完成的数据包（每个卷上可能各有一份：私有的、可移动卡上的）
      * @param keepPartials 留着半成品包：另一个构建正在写它，删了就把那次构建杀了
+     * @param workspaceInUse 数据包读的是工作区里的 RomFS：单独删工作区会让游戏跑不起来
      */
-    fun plan(titleId: String?, packs: List<File>, workspace: File?, partials: List<File>): Plan {
+    fun plan(titleId: String?, packs: List<File>, workspace: File?, partials: List<File>, workspaceInUse: Boolean = false): Plan {
         val targets = ArrayList<Target>()
         packs.forEach { targets += Target(it, Kind.PACK) }
         workspace?.let { targets += Target(it, Kind.WORKSPACE) }
         partials.forEach { targets += Target(it, Kind.PARTIAL) }
-        return Plan(targets, workspaceKnown = titleId != null)
+        return Plan(targets, workspaceKnown = titleId != null, workspaceInUse = workspaceInUse)
     }
 
     /** 工作区：<work>/<title ID>_build（移植器按 title ID 建的目录）；没有 title ID 就不知道它在哪 */

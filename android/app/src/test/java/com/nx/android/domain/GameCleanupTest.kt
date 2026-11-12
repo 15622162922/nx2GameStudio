@@ -122,4 +122,17 @@ class GameCleanupTest {
         assertFalse(onCard.exists())
         assertFalse(cardPartial.exists())
     }
+
+    /** 包的 RomFS 在工作区里：单独清工作区会让游戏跑不起来，计划里要带着这个事实 */
+    @Test
+    fun `the plan says when the work folder holds the game's files`() {
+        val t = Tree()
+        val ws = t.workspace("0100000000010000")
+
+        val used = GameCleanup.plan("0100000000010000", emptyList(), ws, emptyList(), workspaceInUse = true)
+        assertTrue(used.workspaceInUse)
+
+        val own = GameCleanup.plan("0100000000010000", emptyList(), ws, emptyList())
+        assertFalse(own.workspaceInUse)   // 老的包自带 RomFS：工作区随便删
+    }
 }

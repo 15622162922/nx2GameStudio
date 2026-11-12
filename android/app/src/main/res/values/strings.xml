@@ -384,6 +384,7 @@
     <string name="lib_remove_cache_done">The build cache is cleared</string>
     <string name="lib_remove_workspace_unknown">Deleted from the library (the build work folder was not found: the file name carries no title ID)</string>
     <string name="lib_remove_cache_workspace_unknown">The build cache is cleared (the build work folder was not found: the file name carries no title ID)</string>
+    <string name="lib_remove_cache_workspace_in_use">This game reads its files from the build work folder, so clearing it would break the game. Delete the whole game instead.</string>
     <string name="lib_remove_failed">The deletion failed</string>
     <string name="lib_remove_failed_files">The deletion failed: %1$s</string>
     <string name="lib_remove_failed_card">The deletion failed: the data pack on the card was not deleted (%1$s). Insert the card and delete again.</string>

@@ -217,6 +217,23 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
+    def test_the_pack_can_point_at_the_romfs_outside(self):   # the app's mode: the pack holds no RomFS, it points at the build folder's own (the same game twice on the phone is too much)
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            (t / 'patched').mkdir(); (t / 'patched/main.patched.bin').write_bytes(b'x' * 10)
+            (t / 'romfs/Data').mkdir(parents=True); (t / 'romfs/Data/a.bin').write_bytes(b'y' * 20)
+            (t / 'shaders.dmsv').write_bytes(b'DMSV')
+            p = profiles.load(NEO)
+            man = datapack.build(t / 'out-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv',
+                                 romfs_at=str(t / 'romfs'))
+            o = t / 'out-data'
+            self.assertFalse((o / 'RomFS').exists())                       # the pack does not carry the game's files
+            self.assertIn(f'DM_ROMFS={t / "romfs"}', (o / 'env.txt').read_text())   # the host reads them from there
+            self.assertEqual(man['romfs_at'], str(t / 'romfs'))            # the app checks that folder before the game runs
+            self.assertEqual(datapack.read_manifest(o)['romfs_at'], str(t / 'romfs'))
+            self.assertNotIn('romfs_at', datapack.build(t / 'pc-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv'))   # the PC flow's pack carries its own RomFS
+        finally: shutil.rmtree(t, ignore_errors=True)
+
     def test_a_leftover_half_made_pack(self):   # a port killed mid-way leaves one behind: it must not stop the next port (the log of 2026-11-09: FileNotFoundError, then exit 139)
         from unittest import mock
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
@@ -581,14 +598,14 @@ class Misc(unittest.TestCase):
             self.assertIsNotNone(self.space_fits(p, 2**30 + 6 * 2**20 - 1))
         finally: shutil.rmtree(d, ignore_errors=True)
 
-    def test_space_in_the_app_s_mode(self):   # the app's mode asks for the same as the desktop: the pack is a copy (an app may not hard link, Android's SELinux), so it needs room of its own
+    def test_space_in_the_app_s_mode(self):   # the app's mode asks for the game's files once over: the pack points at the build folder's own RomFS instead of copying it
         d = Path(tempfile.mkdtemp(prefix='nx2a_test_space_'))
         try:
             (d / 'a.nsp').write_bytes(b'\0' * 2**20)
             work = d / 'build'
             p = self.space_port(d, {'base': d / 'a.nsp', 'updates': [], 'dlc': []}, work, app=True)
-            self.assertIsNone(self.space_fits(p, 2**30 + 2 * 2**20))          # the game's files twice over, plus 1 GB
-            self.assertIsNotNone(self.space_fits(p, 2**30 + 2 * 2**20 - 1))
+            self.assertIsNone(self.space_fits(p, 2**30 + 2**20))          # the game's files once over, plus 1 GB
+            self.assertIsNotNone(self.space_fits(p, 2**30 + 2**20 - 1))
         finally: shutil.rmtree(d, ignore_errors=True)
 
     def test_space_less_the_build_folder(self):   # what an earlier build left in the build folder is not needed again
