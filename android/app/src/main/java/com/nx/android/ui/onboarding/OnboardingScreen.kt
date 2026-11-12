@@ -60,7 +60,7 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
            verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
-        // the header: where the player is, and the way out for later
+        // the header: where the player is
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(stepTitle(ob.step), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -68,7 +68,6 @@ fun OnboardingScreen(ob: OnboardingState, actions: AppActions, onRequest: (Picke
                      style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { ob.skipForLater() }) { Text(stringResource(R.string.onb_later), color = NxPalette.Cream) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (s in ObStep.entries) {

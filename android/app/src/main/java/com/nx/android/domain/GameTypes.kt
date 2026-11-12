@@ -7,7 +7,36 @@ import java.io.File
 val GAME_FILE_EXTENSIONS = setOf("nsp", "xci", "nsz", "xcz")
 
 /** A game card's status, and the port options a game carries — pure vocabulary, shared by the layers */
-enum class GameStatus { NOT_PORTED, PORTING, DONE, FAILED }
+enum class GameStatus {
+    NOT_PORTED,
+    PORTING,
+    DONE,
+    NEEDS_BUILD,
+}
+
+/**
+ * 库里的一张卡：一个游戏（title ID）+ 它的三样东西——数据包、构建工作区、上次构建用的源文件。
+ *
+ * 身份是 title ID，不是路径：源文件被挪走或删掉时，卡还在（包与工作区还在）。
+ */
+data class GameEntry(
+    val titleId: String,        // 游戏的 title ID（每张卡都有）
+    val pack: Ported?,          // 数据包
+    val work: File?,            // 构建工作区
+    val sourcePath: String?,    // 上次构建用的源文件路径（文件可能已经不在了）
+) {
+    /** 上次构建用的那个源文件：还在吗 */
+    val source: File? get() = sourcePath?.let { File(it) }?.takeIf { it.isFile }
+
+    /** 卡片的稳定标识 */
+    val key: String get() = titleId
+
+    /** 卡上的名字：包清单里的游戏名；没有包就用记住的源路径中的文件名 */
+    val label: String get() = pack?.name?.trim()?.takeIf { it.isNotEmpty() }
+        ?: sourcePath?.let { FolderScanner.displayName(File(it)) }
+        ?: titleId
+}
+
 
 /**
  * 额外地址空间（别名区）：-1 = Auto（不指定，由移植器按自己的规则决定：档案调通过的版本不加，
@@ -50,6 +79,9 @@ data class Ported(
     val hostFront: String = "", // 清单里的宿主前端（"player"）：别的值（没有这个字段 = 旧版宿主）要用当前版本重新移植
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
 ) {
-    /** 这个包是用当前版本的前端编的吗？不是的话要重新移植（宿主的前端变了，老的宿主没有新的入口） */
-    val needsRePort: Boolean get() = hostFront != FolderScanner.HOST_FRONT
+    /** 清单和宿主都齐备，且使用当前播放器前端，可以直接运行。 */
+    val runnable: Boolean get() = host.isFile && hostFront == FolderScanner.HOST_FRONT
+
+    /** 这个包是否需要重新移植：宿主缺失或使用了旧前端都算。 */
+    val needsRePort: Boolean get() = !runnable
 }

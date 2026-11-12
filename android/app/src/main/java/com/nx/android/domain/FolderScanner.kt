@@ -11,28 +11,75 @@ object FolderScanner {
     /** 宿主的前端（数据包清单的 "host_front"）：当前版本要的前端。老的包里没有这个字段，那样的包要重新移植 */
     const val HOST_FRONT = "player-hud"
 
+    /** 构建工作区的目录名后缀：移植器按 title ID 建目录，`<title ID>_build` */
+    const val WORK_SUFFIX = "_build"
+
     /** A title ID in a file's name: `Zelda [0100000000010000][v0].nsp` → 0100000000010000 */
     fun titleIdIn(name: String): String? =
         Regex("\\[(0[0-9a-fA-F]{15})]").find(name)?.groupValues?.get(1)?.uppercase()
 
     /**
-     * The title ID of every finished port the ports folder holds: the port wrote `<stem>-data/` with
-     * `nx2a-data.json` (the game, its title ID) and the host the player runs (host/libdmplay.so). A pack
-     * without its host (a rebuild in flight, a deleted file) does not count as done.
+     * The title ID of every work folder the porter left behind: `<title ID>_build`, one per game.
+     *
+     * The porter names it by title ID (`pipeline.py`), so the name is the game's identity — a renamed
+     * source file still finds its own workspace this way.
+     */
+    fun workIndex(workRoot: File): Map<String, File> {
+        if (!workRoot.isDirectory) return emptyMap()
+        val out = HashMap<String, File>()
+        for (d in workRoot.listFiles() ?: return emptyMap()) {
+            if (!d.isDirectory) continue
+            val tid = titleIdInWork(d.name) ?: continue
+            out[tid] = d
+        }
+        return out
+    }
+
+    /** The title ID in a work folder's name: `010078D000F88000_build` → 010078D000F88000 */
+    fun titleIdInWork(name: String): String? {
+        if (!name.endsWith(WORK_SUFFIX)) return null
+        val tid = name.removeSuffix(WORK_SUFFIX)
+        if (tid.length != 16) return null
+        if (!tid.all { it in "0123456789ABCDEFabcdef" }) return null
+        return tid.uppercase()
+    }
+
+    /**
+     * The title ID of the work folder a build wrote during that build (the time window from..to).
+     *
+     * One build at a time, so there is exactly one such folder — a later build's folder is outside the
+     * window and is not confused with it. Nothing in the window (the build died before creating it), or
+     * more than one (should not happen), means we learn nothing.
+     */
+    fun workFolderIn(workRoot: File, from: Long, to: Long): String? {
+        val dirs = workRoot.listFiles()?.filter { d ->
+            d.isDirectory && titleIdInWork(d.name) != null
+        } ?: return null
+        val hit = dirs.filter { it.lastModified() >= from && it.lastModified() <= to }
+        return if (hit.size == 1) titleIdInWork(hit[0].name) else null
+    }
+
+    /**
+     * The title ID of every recognizable pack in the ports folder. A missing host does not make the
+     * pack disappear: the library must keep a card so the player can rebuild or delete it.
      */
     fun outIndex(outDir: File): Map<String, Ported> {
         if (!outDir.isDirectory) return emptyMap()
         val out = HashMap<String, Ported>()
         for (d in outDir.listFiles() ?: return emptyMap()) {
             if (!d.isDirectory || !d.name.endsWith("-data")) continue
-            portFromPack(d)?.let { out[it.titleId.uppercase()] = it }
+            portFromPack(d)?.let {
+                val id = it.titleId.uppercase()
+                val current = out[id]
+                if (current == null || (!current.runnable && it.runnable)) out[id] = it
+            }
         }
         return out
     }
 
     /**
-     * The port a data pack holds, or null when the pack is not runnable (no manifest, or the host file is
-     * gone): the title id, the icon and the game's name come from the manifest, the paths are conventions.
+     * The port metadata a data pack holds, or null when its manifest cannot identify a title. The host may
+     * be missing; [Ported.runnable] is the separate run-readiness check.
      */
     fun portFromPack(pack: File): Ported? {
         val man = try {
@@ -43,7 +90,6 @@ object FolderScanner {
         val id = man.optString("title_id")
         if (id.isEmpty()) return null
         val host = File(pack, man.optString("host", "host/libdmplay.so"))
-        if (!host.isFile) return null
         return Ported(pack = pack, host = host,
                       icon = File(pack, "icon.png").takeIf { it.isFile },
                       titleId = id, name = man.optString("name"),

@@ -49,6 +49,7 @@ import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.FolderScanner
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameStatus
+import com.nx.android.domain.LibraryLogic
 import com.nx.android.ui.AppActions
 import com.nx.android.ui.LocalAppLocale
 import com.nx.android.ui.components.CapsuleButton
@@ -63,6 +64,12 @@ import com.nx.android.ui.components.rememberPageScroll
 import com.nx.android.ui.elapsedSecs
 import com.nx.android.ui.theme.NxPalette
 import java.io.File
+
+/** A filename that includes a title ID must agree with the card being rebuilt. Renamed files are allowed. */
+private fun sourceMatchesTarget(target: File, candidate: File): Boolean {
+    val expected = FolderScanner.titleIdIn(target.name) ?: return true
+    return LibraryLogic.sourceMatchesTitle(candidate.name, expected)
+}
 
 /**
  * 构建页：发起与跟踪移植的工作台，按移植的顺序排卡——目标（游戏与它的参数）、进度与取消、产物、日志、历史。
@@ -100,7 +107,6 @@ fun BuildsScreen(lib: LibraryState, port: PortState, keys: String, envReady: Boo
                     onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
                         File("/storage"), locale.str(R.string.builds_choose_game_file),
                         onPicked = { f ->
-                            lib.registerExtra(f)
                             lib.buildsTarget = f
                         }))
                 })
@@ -136,8 +142,8 @@ private fun TargetCard(lib: LibraryState, port: PortState, keys: String, envRead
                 onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
                     File("/storage"), locale.str(R.string.builds_choose_game_file),
                     onPicked = { nf ->
-                        lib.registerExtra(nf)
-                        lib.buildsTarget = nf
+                        if (sourceMatchesTarget(f, nf)) lib.buildsTarget = nf
+                        else actions.onToast(locale.str(R.string.lib_source_mismatch))
                     }))
             })
             QuietButton(stringResource(R.string.builds_clear), onClick = { lib.buildsTarget = null })
@@ -389,7 +395,7 @@ private fun statusColor(s: GameStatus) = when (s) {
     GameStatus.NOT_PORTED -> NxPalette.Unbuilt
     GameStatus.PORTING -> NxPalette.Building
     GameStatus.DONE -> NxPalette.Ready
-    GameStatus.FAILED -> NxPalette.Danger
+    GameStatus.NEEDS_BUILD -> NxPalette.Unbuilt
 }
 
 @Composable
@@ -397,7 +403,7 @@ private fun statusLabel(s: GameStatus): String = when (s) {
     GameStatus.NOT_PORTED -> stringResource(R.string.common_not_ported)
     GameStatus.PORTING -> stringResource(R.string.common_porting)
     GameStatus.DONE -> stringResource(R.string.common_done)
-    GameStatus.FAILED -> stringResource(R.string.lib_last_build_failed)
+    GameStatus.NEEDS_BUILD -> stringResource(R.string.lib_needs_build_status)
 }
 
 @Composable

@@ -27,7 +27,11 @@ class PrefsStore(ctx: Context) {
         // the library's memory
         const val LIB_CONFIGS = "lib.configs"
         const val LIB_PORTS = "lib.ports"
-        const val LIB_EXTRA = "lib.extra"
+        // title ID → the data pack's path the last time it was seen (for the storage page's "out of reach")
+        const val LIB_PACKS = "lib.packs"
+        // title ID → the source file the game was last built from (for the rebuild button)
+        const val LIB_SOURCES = "lib.sources"
+        const val LIB_MEMORIES_MIGRATED = "lib.memories.migrated"
         // the guided setup
         const val OB_STEP = "ob.step"
         const val OB_LATER = "ob.later"
@@ -36,6 +40,7 @@ class PrefsStore(ctx: Context) {
         const val OSS_NOTICE_SHOWN = "oss.notice.shown"
         // the port: the interruption marker and the history
         const val PORT_RUNNING = "port.running"
+        const val PORT_STARTED_AT = "port.startedAt"
         const val PORT_HISTORY = "port.history"
         // the performance HUD: the two lines and what the performance one shows
         const val HUD_STATS = "hud.stats"

@@ -23,26 +23,27 @@ class FolderScannerTest {
     }
 
     @Test
-    fun `the output folder is indexed by title id through the data packs' manifests, host included`() {
+    fun `the output folder indexes every pack with a recognizable manifest`() {
         val out = tmpDir()
         val pack = File(out, "HadesIIData-data")
         File(pack, "host").mkdirs()
         File(pack, "nx2a-data.json").writeText("""{"title_id":"0100000000010000","name":"Hades II","package":"org.nx2a.hades"}""")
         File(pack, "host/libdmplay.so").writeText("ELF")
         File(pack, "icon.png").writeBytes(byteArrayOf(1))
-        // another data pack whose host is gone (a rebuild in flight): it does not count as done
+        // another data pack whose host is gone: it remains visible so it can be rebuilt or deleted
         val orphan = File(out, "Gone-data")
         orphan.mkdirs()
         File(orphan, "nx2a-data.json").writeText("""{"title_id":"0100000000019999"}""")
 
         val idx = FolderScanner.outIndex(out)
-        assertEquals(1, idx.size)
+        assertEquals(2, idx.size)
         val p = idx["0100000000010000"]!!
         assertEquals("Hades II", p.name)
         assertEquals("0100000000010000", p.titleId)
         assertTrue(p.host.isFile)
         assertTrue(p.icon!!.isFile)
-        assertFalse(idx.containsKey("0100000000019999"))
+        assertTrue(idx.containsKey("0100000000019999"))
+        assertFalse(idx["0100000000019999"]!!.runnable)
         out.deleteRecursively()
     }
 
@@ -169,5 +170,48 @@ class FolderScannerTest {
         assertEquals("0100000000010000", FolderScanner.manifestTitleId(pack))
         assertNull(FolderScanner.manifestTitleId(File(out, "nothing")))
         out.deleteRecursively()
+    }
+
+    /** 工作区：移植器按 title ID 建的目录，名字就是身份 */
+    @Test
+    fun `the work folders are indexed by the title id in their name`() {
+        val work = tmpDir()
+        File(work, "010078D000F88000_build").mkdirs()
+        File(work, "0100B99019412000_build").mkdirs()
+
+        val idx = FolderScanner.workIndex(work)
+        assertEquals(2, idx.size)
+        assertEquals(File(work, "010078D000F88000_build"), idx["010078D000F88000"])
+        assertEquals(File(work, "0100B99019412000_build"), idx["0100B99019412000"])
+        work.deleteRecursively()
+    }
+
+    /** 不是移植器建的目录不算工作区 */
+    @Test
+    fun `only the porter's own folders are work folders`() {
+        assertEquals("010078D000F88000", FolderScanner.titleIdInWork("010078D000F88000_build"))
+        assertNull(FolderScanner.titleIdInWork("tmp"))
+        assertNull(FolderScanner.titleIdInWork("010078D000F8800_build"))
+        assertNull(FolderScanner.titleIdInWork("Hades_build"))
+        // 没有工作区目录时，索引是空的
+        assertTrue(FolderScanner.workIndex(File(tmpDir(), "nothing")).isEmpty())
+    }
+
+    /**
+     * 一次构建的时间窗里只有它自己的工作区：后来那次构建的工作区不算（mtime 在窗外）。
+     */
+    @Test
+    fun `the workspace of a build is the one written in that build's time window`() {
+        val work = tmpDir()
+        val mine = File(work, "010078D000F88000_build").apply { mkdirs() }
+        val later = File(work, "0100B99019412000_build").apply { mkdirs() }
+        val t0 = 1_700_000_000_000L
+        mine.setLastModified(t0 + 10_000)          // 构建期间写的
+        later.setLastModified(t0 + 500_000)        // 后来那次构建写的
+
+        assertEquals("010078D000F88000", FolderScanner.workFolderIn(work, t0, t0 + 60_000))
+        // 窗外的工作区不算：那次构建什么都没留下
+        assertNull(FolderScanner.workFolderIn(work, t0 + 200_000, t0 + 400_000))
+        work.deleteRecursively()
     }
 }

@@ -81,8 +81,11 @@ import com.nx.android.data.SaveBackup
 import com.nx.android.data.SaveShare
 import com.nx.android.data.StorageVolumes
 import com.nx.android.domain.FolderScanner
+import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameCleanup
+import com.nx.android.domain.GameEntry
 import com.nx.android.domain.GameStatus
+import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.PackEnv
 import com.nx.android.domain.PackMover
 import com.nx.android.domain.Ported
@@ -100,6 +103,7 @@ import com.nx.android.ui.components.sizeText
 import com.nx.android.ui.failureText
 import com.nx.android.ui.theme.NxPalette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -113,15 +117,23 @@ import java.util.Locale
  */
 @Composable
 fun LibraryScreen(lib: LibraryState, port: PortState, player: PlayerState, actions: AppActions,
-                  onGoBuilds: () -> Unit) {
+                  onGoBuilds: () -> Unit, onRequest: (PickerRequest) -> Unit) {
 
     // a port ends: the cards' statuses are re-read
     LaunchedEffect(port.phase) { lib.rescan() }
 
+    // 构建中：工作区是构建开始之后才有的，过一会儿再看一次，那张「构建中」的卡才会出现
+    LaunchedEffect(port.running) {
+        while (port.running) {
+            lib.rescan()
+            delay(3000)
+        }
+    }
+
     val visible = lib.visible()
     LaunchedEffect(visible.size) { lib.selectHero(lib.heroIndex, visible.size) }
 
-    RowView(lib, port, player, visible, actions, onGoBuilds)
+    RowView(lib, port, player, visible, actions, onGoBuilds, onRequest)
 
     // 配置面板不在这里画：它要盖住顶栏，所以由页面的根（MainScreen）在最上层画（见 ui/App.kt）
 }
@@ -130,7 +142,7 @@ private fun statusColor(s: GameStatus) = when (s) {
     GameStatus.NOT_PORTED -> NxPalette.Unbuilt
     GameStatus.PORTING -> NxPalette.Building
     GameStatus.DONE -> NxPalette.Ready
-    GameStatus.FAILED -> NxPalette.Danger
+    GameStatus.NEEDS_BUILD -> NxPalette.Unbuilt
 }
 
 @Composable
@@ -138,7 +150,7 @@ private fun statusLabel(s: GameStatus): String = when (s) {
     GameStatus.NOT_PORTED -> stringResource(R.string.common_not_ported)
     GameStatus.PORTING -> stringResource(R.string.common_porting)
     GameStatus.DONE -> stringResource(R.string.common_done)
-    GameStatus.FAILED -> stringResource(R.string.lib_last_build_failed)
+    GameStatus.NEEDS_BUILD -> stringResource(R.string.lib_needs_build_status)
 }
 
 /**
@@ -176,7 +188,8 @@ private fun coverColors(name: String): List<Color> {
 
 @Composable
 private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
-                    visible: List<File>, actions: AppActions, onGoBuilds: () -> Unit) {
+                    visible: List<GameEntry>, actions: AppActions, onGoBuilds: () -> Unit,
+                    onRequest: (PickerRequest) -> Unit) {
     val sel = visible.getOrNull(lib.heroIndex)
 
     Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
@@ -213,16 +226,16 @@ private fun RowView(lib: LibraryState, port: PortState, player: PlayerState,
             if (i == lib.heroIndex) lib.selected = visible.getOrNull(i) else lib.selectHero(i, visible.size)
         }
         Spacer(Modifier.weight(1f))
-        sel?.let { HeroDetails(lib, port, player, it, actions, onGoBuilds) }
+        sel?.let { HeroDetails(lib, port, player, it, actions, onGoBuilds, onRequest) }
         Spacer(Modifier.height(18.dp))
     }
 }
 
 /** 选中游戏的全屏呈现：已完成的游戏用产物 APK 里的图标实图，其余用名字的渐变与首字母水印 */
 @Composable
-internal fun HeroBackground(lib: LibraryState, port: PortState, sel: File?) {
+internal fun HeroBackground(sel: GameEntry?) {
     if (sel == null) return
-    val icon by rememberGameIcon(lib.portOf(sel)?.icon?.absolutePath, 1280)
+    val icon by rememberGameIcon(sel.pack?.icon?.absolutePath, 1280)
 
     Box(Modifier.fillMaxSize()) {
         val bitmap = icon
@@ -236,11 +249,11 @@ internal fun HeroBackground(lib: LibraryState, port: PortState, sel: File?) {
         } else {
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.linearGradient(coverColors(sel.name).map { it.copy(alpha = 0.45f) })
+                    Brush.linearGradient(coverColors(sel.label).map { it.copy(alpha = 0.45f) })
                 )
             )
             Text(
-                FolderScanner.labelFor(sel, lib.portOf(sel)).take(1).ifEmpty { "?" },
+                sel.label.take(1).ifEmpty { "?" },
                 fontSize = 180.sp, fontWeight = FontWeight.Bold,
                 color = Color.White.copy(alpha = 0.10f),
                 modifier = Modifier.align(Alignment.Center),
@@ -314,7 +327,7 @@ private fun FormatChip(text: String) {
 
 /** 横向瓦片行：选中的放大（88 → 128），状态点跟着瓦片走 */
 @Composable
-private fun HeroRow(lib: LibraryState, port: PortState, visible: List<File>, onSelect: (Int) -> Unit) {
+private fun HeroRow(lib: LibraryState, port: PortState, visible: List<GameEntry>, onSelect: (Int) -> Unit) {
     val state = rememberLazyListState()
     // 选中项移到第三格之后行才滚动，选中的前后都留在视野里
     LaunchedEffect(lib.heroIndex) {
@@ -327,24 +340,24 @@ private fun HeroRow(lib: LibraryState, port: PortState, visible: List<File>, onS
         contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 80.dp),
         modifier = Modifier.fillMaxWidth().height(132.dp),
     ) {
-        itemsIndexed(visible, key = { _, f -> f.absolutePath }) { index, f ->
+        itemsIndexed(visible, key = { _, e -> e.key }) { index, e ->
             val size by androidx.compose.animation.core.animateDpAsState(
                 if (index == lib.heroIndex) 128.dp else 88.dp, label = "tileSize"
             )
-            HeroTile(lib, port, f, index == lib.heroIndex, Modifier.size(size)) { onSelect(index) }
+            HeroTile(lib, port, e, index == lib.heroIndex, Modifier.size(size)) { onSelect(index) }
         }
     }
 }
 
 @Composable
-private fun HeroTile(lib: LibraryState, port: PortState, f: File, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val status = lib.statusOf(f)
+private fun HeroTile(lib: LibraryState, port: PortState, e: GameEntry, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val status = lib.statusOf(e)
     val shape = RoundedCornerShape(14.dp)
-    val icon by rememberGameIcon(lib.portOf(f)?.icon?.absolutePath, 256)
+    val icon by rememberGameIcon(e.pack?.icon?.absolutePath, 256)
     Box(
         modifier = modifier
             .clip(shape)
-            .background(Brush.linearGradient(coverColors(f.name)))
+            .background(Brush.linearGradient(coverColors(e.label)))
             .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else NxPalette.Unbuilt.copy(alpha = 0.4f), shape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -352,12 +365,12 @@ private fun HeroTile(lib: LibraryState, port: PortState, f: File, selected: Bool
         val bitmap = icon
         if (bitmap != null) {
             androidx.compose.foundation.Image(
-                bitmap, FolderScanner.labelFor(f, lib.portOf(f)), Modifier.padding(2.dp).fillMaxSize(),
+                bitmap, e.label, Modifier.padding(2.dp).fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
         } else {
             Text(
-                FolderScanner.labelFor(f, lib.portOf(f)).take(1).ifEmpty { "?" },
+                e.label.take(1).ifEmpty { "?" },
                 fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.85f),
             )
         }
@@ -377,17 +390,40 @@ private fun HeroTile(lib: LibraryState, port: PortState, f: File, selected: Bool
 /** 左下详情：大标题、Title ID · 状态、主按钮（未移植 ▶ 构建 / 已完成 ▶ 运行）与圆形次级钮 */
 @Composable
 private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
-                        f: File, actions: AppActions, onGoBuilds: () -> Unit) {
-    val status = lib.statusOf(f)
-    val ported = lib.portOf(f)
-    // Title ID：文件名里的优先；文件名没有（多半是下载器改过名），就用数据包清单里的
-    val titleId = FolderScanner.titleIdIn(f.name) ?: ported?.titleId?.takeIf { it.isNotEmpty() }?.uppercase()
+                        e: GameEntry, actions: AppActions, onGoBuilds: () -> Unit,
+                        onRequest: (PickerRequest) -> Unit) {
+    val locale = LocalAppLocale.current
+    val status = lib.statusOf(e)
+    val ported = e.pack
+    // Title ID：游戏的身份（还没构建过的还没有）
+    val titleId = e.titleId
     // 单游戏：别的游戏在玩时，这个游戏的「▶ 运行」置灰并说明
     val locked = status == GameStatus.DONE && player.running && player.titleId != (ported?.titleId ?: "")
 
+    /**
+     * 开始构建：源文件在就直接带过去；不在了（玩家把它挪走腾空间去了）就请他重新选一个。
+     */
+    fun build() {
+        val src = e.source
+        if (src != null) {
+            lib.buildsTarget = src
+            onGoBuilds()
+        } else {
+            onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS, File("/storage"),
+                locale.str(R.string.builds_choose_game_file),
+                onPicked = { f ->
+                    if (LibraryLogic.sourceMatchesTitle(f.name, e.titleId)) {
+                        lib.buildsTarget = f; onGoBuilds()
+                    } else {
+                        actions.onToast(locale.str(R.string.lib_source_mismatch))
+                    }
+                }))
+        }
+    }
+
     Column(Modifier.widthIn(max = 640.dp)) {
         Text(
-            FolderScanner.labelFor(f, ported),
+            e.label,
             style = MaterialTheme.typography.displaySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(4.dp))
@@ -406,37 +442,41 @@ private fun HeroDetails(lib: LibraryState, port: PortState, player: PlayerState,
             val running = status == GameStatus.DONE
             val stale = ported?.needsRePort == true
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (locked) NxPalette.Unbuilt else NxPalette.Cream)
-                    .clickable(enabled = !locked) {
-                        if (running && !stale) actions.onRun(ported!!.pack, FolderScanner.labelFor(f, ported))
-                        else {
-                            lib.buildsTarget = f
-                            onGoBuilds()
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (locked) NxPalette.Unbuilt else NxPalette.Cream)
+                        .clickable(enabled = !locked) {
+                            when {
+                                // 正在构建：去构建页看进度（第一次构建还没有源文件的记忆，就带着正在跑的那个）
+                                building -> {
+                                    lib.buildsTarget = e.source ?: port.gameFile.takeIf { port.running }?.let { File(it) }
+                                    onGoBuilds()
+                                }
+                                running && !stale -> actions.onRun(ported!!.pack, e.label)
+                                else -> build()
+                            }
                         }
-                    }
-                    .padding(horizontal = 30.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp),
-                     tint = if (locked) NxPalette.Background else Color.Black)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    when {
-                        building -> stringResource(R.string.lib_view_builds)
-                        stale -> stringResource(R.string.lib_report_again)
-                        running -> stringResource(R.string.set_run_onboarding)
-                        else -> stringResource(R.string.common_build)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (locked) NxPalette.Background else Color.Black,
-                )
+                        .padding(horizontal = 30.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp),
+                         tint = if (locked) NxPalette.Background else Color.Black)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when {
+                            building -> stringResource(R.string.lib_view_builds)
+                            stale -> stringResource(R.string.lib_report_again)
+                            running -> stringResource(R.string.set_run_onboarding)
+                            else -> stringResource(R.string.common_build)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (locked) NxPalette.Background else Color.Black,
+                    )
             }
             // 配置圆钮
             Box(
                 Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.2f))
-                    .clickable { lib.selected = f }.padding(11.dp),
+                    .clickable { lib.selected = e }.padding(11.dp),
             ) {
                 Icon(Icons.Filled.Tune, if (running) stringResource(R.string.lib_run_config) else stringResource(R.string.lib_port_config), Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onBackground)
             }
@@ -466,13 +506,12 @@ private data class RemovalRequest(val kind: Removal, val plan: GameCleanup.Plan,
  */
 @Composable
 internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState,
-                        f: File, actions: AppActions, onGoBuilds: () -> Unit,
+                        e: GameEntry, actions: AppActions, onGoBuilds: () -> Unit,
                         onRequest: (PickerRequest) -> Unit, onClose: () -> Unit) {
     val locale = LocalAppLocale.current
-    val status = lib.statusOf(f)
-    // Title ID：文件名里的优先，没有就用数据包清单里的
-    val titleId = FolderScanner.titleIdIn(f.name)
-        ?: lib.portOf(f)?.titleId?.takeIf { it.isNotEmpty() }?.uppercase()
+    val status = lib.statusOf(e)
+    // Title ID：游戏的身份（还没构建过的还没有）
+    val titleId = e.titleId
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
@@ -490,8 +529,30 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     // 正在搬移/删除时：返回键不做事（别把进行中的动作打断，面板也别关）
     BackHandler(enabled = moving || removing) { }
     BackHandler(enabled = !(moving || removing)) { onClose() }
+
+    /**
+     * 开始构建：源文件在就直接带过去；不在了（玩家把它挪走腾空间去了）就请他重新选一个。
+     */
+    fun build() {
+        val src = e.source
+        if (src != null) {
+            lib.buildsTarget = src
+            onClose()
+            onGoBuilds()
+        } else {
+            onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS, File("/storage"),
+                locale.str(R.string.builds_choose_game_file),
+                onPicked = { f ->
+                    if (LibraryLogic.sourceMatchesTitle(f.name, e.titleId)) {
+                        lib.buildsTarget = f; onClose(); onGoBuilds()
+                    } else {
+                        actions.onToast(locale.str(R.string.lib_source_mismatch))
+                    }
+                }))
+        }
+    }
     // 完成的移植：数据包里带着宿主写的运行日志（log.txt）
-    val ported = lib.portOf(f)
+    val ported = e.pack
     // 这个游戏的包现在在哪：私有目录，还是卡上
     val packOnCard = ported?.pack?.parentFile?.let { p ->
         cardDirs.firstOrNull { it.second.absolutePath == p.absolutePath }
@@ -507,17 +568,17 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
      * 清缓存不动数据包，删游戏连数据包与存档一起删——两个动作的确认框各自写清影响。
      */
     fun askRemoval(kind: Removal) {
-        val blocked = lib.removalBlocked(f)
+        val blocked = lib.removalBlocked(e)
         if (blocked != null) {
             actions.onToast(locale.str(removeBlockedText(blocked)))
             return
         }
         scope.launch {
             val p = withContext(Dispatchers.IO) {
-                if (kind == Removal.CACHE) lib.planCache(f) else lib.planRemoval(f)
+                if (kind == Removal.CACHE) lib.planCache(e) else lib.planRemoval(e)
             }
             // 卡不在时够不着的包：先说清楚（不然玩家以为全删干净了）
-            val unreachable = withContext(Dispatchers.IO) { lib.unreachablePacks(f) }
+            val unreachable = withContext(Dispatchers.IO) { lib.unreachablePacks(e) }
             removal = RemovalRequest(kind, p, unreachable)
         }
     }
@@ -529,7 +590,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
         removing = true
         scope.launch {
             val r = withContext(Dispatchers.IO) {
-                if (req.kind == Removal.CACHE) lib.clearCache(f) else lib.remove(f)
+                if (req.kind == Removal.CACHE) lib.clearCache(e) else lib.remove(e)
             }
             removing = false
             actions.onToast(
@@ -569,7 +630,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
      * 搬完之前要确认：卡上写入很慢，拔卡就把这次搬移弄坏了。
      */
     fun askMove() {
-        val blocked = lib.moveBlocked(f)
+        val blocked = lib.moveBlocked(e)
         if (blocked != null) {
             actions.onToast(locale.str(removeBlockedText(blocked)))
             return
@@ -588,7 +649,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
         moving = true
         moveProgress = null
         scope.launch {
-            val r = withContext(Dispatchers.IO) { lib.movePack(f, target) { moveProgress = it } }
+            val r = withContext(Dispatchers.IO) { lib.movePack(e, target) { moveProgress = it } }
             moving = false
             moveProgress = null
             actions.onToast(
@@ -601,7 +662,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
     /** 游戏运行日志：宿主把它写在了数据包里，拷进下载目录再发出去（整份文件，不截断） */
     fun shareGameLog(target: Ported) {
         if (!actions.storageOk()) { actions.onToast(locale.str(R.string.lib_log_needs_storage)); return }
-        val game = FolderScanner.labelFor(f, ported)
+        val game = e.label
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching { GameLog.copyTo(target.pack, SaveShare.packagesDir(context), game) }
@@ -651,7 +712,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        FolderScanner.labelFor(f, ported),
+                        e.label,
                         style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
@@ -699,7 +760,11 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                     }
                 }
             }
-            Hint(f.absolutePath, size = 11.sp)
+            // 源文件在的时候告诉玩家它在哪；不在了（挪走腾空间去了）就说明它不在了
+            e.sourcePath?.let {
+                Hint(it, size = 11.sp)
+                if (e.source == null) Hint(locale.str(R.string.lib_source_missing), size = 11.sp)
+            }
 
             // 内容自上而下顺排：不用弹性 spacer 把它压到底（那会在路径与「产物：」之间开一大片空白）；
             // 列本身可滚，存档多时也够得着。
@@ -709,7 +774,8 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                     Hint(locale.str(R.string.lib_porting_see_builds))
                     Spacer(Modifier.height(6.dp))
                     CapsuleButton(locale.str(R.string.lib_view_builds), {
-                        lib.buildsTarget = f
+                        // 第一次构建还没有源文件的记忆：那就带着正在跑的那个构建的源文件去
+                        lib.buildsTarget = e.source ?: port.gameFile.takeIf { port.running }?.let { File(it) }
                         onClose()
                         onGoBuilds()
                     }, modifier = Modifier.fillMaxWidth())
@@ -722,7 +788,7 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                         Spacer(Modifier.height(8.dp))
                         RunOptions(ported)
                         Spacer(Modifier.height(10.dp))
-                        SaveRows(ported, FolderScanner.labelFor(f, ported), player, actions, onRequest, actions.onToast)
+                        SaveRows(ported, e.label, player, actions, onRequest, actions.onToast)
                         Spacer(Modifier.height(6.dp))
                         // 别的游戏在跑时锁住这个：跑着的那个自己不受限（点它的「运行」是回到它）
                         val locked = player.running && player.titleId != ported.titleId
@@ -731,34 +797,26 @@ internal fun ConfigPanel(lib: LibraryState, port: PortState, player: PlayerState
                             // 旧版宿主编的包：运行按钮变成「重新移植」（重新移植这个游戏，用当前版本的宿主）
                             if (ported.needsRePort) {
                                 CapsuleButton(locale.str(R.string.lib_report_again), {
-                                    lib.buildsTarget = f
-                                    onClose()
-                                    onGoBuilds()
+                                    build()
                                 }, modifier = Modifier.weight(1f), enabled = !locked)
                             } else {
                                 CapsuleButton(locale.str(R.string.builds_run_action), {
-                                    actions.onRun(ported.pack, FolderScanner.labelFor(f, ported))
+                                    actions.onRun(ported.pack, e.label)
                                 }, modifier = Modifier.weight(1f), enabled = !locked)
                             }
                             CapsuleButton(locale.str(R.string.lib_build_action), {
-                                lib.buildsTarget = f
-                                onClose()
-                                onGoBuilds()
+                                build()
                             }, modifier = Modifier.weight(1f))
                         }
                     }
                 }
                 else -> {
-                    // 上次构建失败：说清楚它失败过（原因在构建页的日志里）
-                    if (status == GameStatus.FAILED) {
-                        Hint(locale.str(R.string.lib_last_failed_hint))
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    // ▶ 构建：参数已即时保存，带参跳转，开始按钮在构建页上
+                    // All discovered but non-runnable cards share the same rebuild path.
+                    Hint(if (e.work != null && e.pack == null) locale.str(R.string.lib_residual_hint)
+                         else locale.str(R.string.lib_needs_build_hint))
+                    Spacer(Modifier.height(8.dp))
                     CapsuleButton(locale.str(R.string.lib_build_action), {
-                        lib.buildsTarget = f
-                        onClose()
-                        onGoBuilds()
+                        build()
                     }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

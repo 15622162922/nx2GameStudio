@@ -54,7 +54,7 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     var unpackStep by mutableStateOf(""); private set
     var unpackError by mutableStateOf(""); private set
 
-    /** Opens the flow: first run lands on Welcome; "later" resumes at its saved step, revalidated */
+    /** Opens the flow: first run lands on Welcome; a setup that was cut short resumes at its saved step */
     fun open() {
         val saved = prefs.str(OB_STEP)
         refreshEnv()
@@ -73,12 +73,6 @@ class OnboardingState(private val prefs: PrefsStore, private val env: Env, priva
     fun openLibrary() {
         prefs.put(OB_COMPLETED, true)
         prefs.put(OB_LATER, false)
-        active = false
-    }
-
-    /** Everything gathered so far is kept, and the next launch comes back to this step */
-    fun skipForLater() {
-        saveStep()
         active = false
     }
 

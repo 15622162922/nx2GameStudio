@@ -9,6 +9,7 @@ import com.nx.android.data.AppLog
 import com.nx.android.data.PrefsStore
 import com.nx.android.data.PrefsStore.Companion.PORT_HISTORY
 import com.nx.android.data.PrefsStore.Companion.PORT_RUNNING
+import com.nx.android.data.PrefsStore.Companion.PORT_STARTED_AT
 import com.nx.android.domain.PortEvents
 import org.json.JSONArray
 import org.json.JSONObject
@@ -67,6 +68,8 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
         log = listOf()
         startedAt = System.currentTimeMillis()
         prefs.put(PORT_RUNNING, game)
+        // 进程被杀时，靠这个记着构建是什么时候开始的（工作区是那次构建留下的）
+        prefs.put(PORT_STARTED_AT, startedAt.toString())
         say(locale.str(R.string.port_begin, game))
     }
 
@@ -113,6 +116,8 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
     fun markInterrupted() {
         val game = prefs.str(PORT_RUNNING)
         if (game.isEmpty()) return
+        // 那次构建开始的时间还在 prefs 里：恢复它，历史与工作区才对得上
+        prefs.str(PORT_STARTED_AT).toLongOrNull()?.let { startedAt = it }
         end(Phase.INTERRUPTED, gameOverride = game)
     }
 
@@ -122,6 +127,7 @@ class PortState(private val prefs: PrefsStore, private val locale: AppLocale) {
         phase = p
         startedAt = 0
         prefs.put(PORT_RUNNING, null)
+        prefs.put(PORT_STARTED_AT, null)
         if (game.isNotEmpty()) {
             history = (listOf(Record(game, p, outPath, System.currentTimeMillis() - secs * 1000, secs)) + history).take(20)
             saveHistory()

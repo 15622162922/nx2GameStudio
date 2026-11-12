@@ -76,6 +76,7 @@ import com.nx.android.ui.components.PickerRequest
 import com.nx.android.ui.components.QuietButton
 import com.nx.android.ui.env.EnvChecklistDialog
 import com.nx.android.ui.env.EnvChip
+import com.nx.android.domain.GameEntry
 import com.nx.android.ui.library.ConfigPanel
 import com.nx.android.ui.library.HeroBackground
 import com.nx.android.ui.library.LibraryScreen
@@ -269,14 +270,20 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
     val port = container.port
     val lib = container.library
 
-    // a finished port goes into the library's records (the source and its APK stay together)
+    // a finished port goes into the library's records (the source and its data pack stay together)
     LaunchedEffect(port.phase) {
-        if (port.phase == PortState.Phase.DONE) lib.noteDone(port.gameFile, port.dataPath)
+        when (port.phase) {
+            PortState.Phase.DONE -> lib.noteDone(port.gameFile, port.dataPath)
+            // 没构建成功（失败、取消、进程被杀）也有 title ID（工作区的目录名里带着它）：它认得自己是谁
+            PortState.Phase.FAILED, PortState.Phase.CANCELLED, PortState.Phase.INTERRUPTED ->
+                lib.noteFailed(port.gameFile)
+            else -> {}
+        }
     }
 
     // 选中游戏的背景铺满整块屏幕：顶栏透明画在图上，三个 tab 共用这层背景
     Box(Modifier.fillMaxSize()) {
-        HeroBackground(lib, port, lib.visible().getOrNull(lib.heroIndex))
+        HeroBackground(lib.visible().getOrNull(lib.heroIndex))
         Column(Modifier.fillMaxSize()) {
         TopBar(
             selected = tab,
@@ -290,14 +297,15 @@ fun MainScreen(container: AppContainer, actions: AppActions, startTab: Int,
         UpdatePopup(container.update)
         Box(Modifier.weight(1f)) {
             when (Tab.entries[tab]) {
-                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions, onGoBuilds = { tab = Tab.BUILDS.ordinal })
+                Tab.LIBRARY -> LibraryScreen(lib, port, container.player, actions,
+                    onGoBuilds = { tab = Tab.BUILDS.ordinal }, onRequest = onRequest)
                 Tab.BUILDS -> BuildsScreen(lib, port, container.prefs.keys, container.env.ready, actions, onRequest, onLog)
             }
         }
         if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
         }
         // 配置面板画在最上层：它的遮罩要盖住顶栏与整块页面
-        val panelFile = remember { mutableStateOf<File?>(null) }
+        val panelFile = remember { mutableStateOf<GameEntry?>(null) }
         LaunchedEffect(lib.selected) { if (lib.selected != null) panelFile.value = lib.selected }
         AnimatedVisibility(
             visible = lib.selected != null,
