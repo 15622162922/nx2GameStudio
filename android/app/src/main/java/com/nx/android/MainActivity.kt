@@ -19,6 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.nx.android.R
 import com.nx.android.appstate.LibraryState
+import com.nx.android.appstate.EnvCheckState
 import com.nx.android.appstate.OnboardingState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
@@ -58,7 +59,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var onboarding: OnboardingState
     @Inject lateinit var environmentSetup: com.nx.android.domain.environment.EnvironmentSetup
     @Inject lateinit var drivers: com.nx.android.domain.drivers.DriverRepository
-    @Inject lateinit var envCheck: com.nx.android.feature.environment.EnvCheckState
+    @Inject lateinit var envCheck: EnvCheckState
     @Inject lateinit var update: com.nx.android.appstate.UpdateState
 
     /** 界面语言：toast 与分享面板的标题从这里取词 */

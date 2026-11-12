@@ -1,4 +1,4 @@
-package com.nx.android.feature.environment
+package com.nx.android.appstate
 
 import android.content.Context
 import android.os.Handler

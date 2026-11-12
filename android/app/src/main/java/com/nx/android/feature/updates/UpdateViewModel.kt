@@ -3,7 +3,8 @@ package com.nx.android.feature.updates
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nx.android.appstate.UpdateState
+import com.nx.android.domain.UpdateController
+import com.nx.android.domain.UpdatePhase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -11,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 data class UpdateUiState(
-    val phase: UpdateState.Phase = UpdateState.Phase.IDLE,
+    val phase: UpdatePhase = UpdatePhase.IDLE,
     val latest: String = "",
     val mine: String = "",
     val notes: String = "",
@@ -20,7 +21,7 @@ data class UpdateUiState(
 
 @HiltViewModel
 class UpdateViewModel @Inject constructor(
-    val update: UpdateState,
+    val update: UpdateController,
 ) : ViewModel() {
     val uiState: StateFlow<UpdateUiState> = snapshotFlow {
         UpdateUiState(update.phase, update.latest, update.mine, update.notes, update.later)

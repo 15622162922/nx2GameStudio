@@ -8,6 +8,10 @@ import org.junit.Test
 /** The guided setup's gates: which step may advance, and where "later" lands when the machine changed */
 class OnboardingLogicTest {
 
+    private class FakeProgressStore(var stepName: String = "", var deferred: Boolean = false) {
+        fun restore(facts: ObFacts) = OnboardingLogic.resume(stepName, deferred, facts)
+    }
+
     private fun facts(
         storage: Boolean = true,
         free: Long = 10,
@@ -76,6 +80,20 @@ class OnboardingLogicTest {
     fun `a saved step whose premises hold stays`() {
         assertEquals(ObStep.KEYS, OnboardingLogic.revalidate(ObStep.KEYS, facts()))
         assertEquals(ObStep.DONE, OnboardingLogic.revalidate(ObStep.DONE, facts()))
+    }
+
+    @Test
+    fun `deferred onboarding resumes from fake persisted step after rechecking prerequisites`() {
+        val store = FakeProgressStore(stepName = "DONE", deferred = true)
+        assertEquals(ObStep.ENV, store.restore(facts(env = false)))
+        store.stepName = "KEYS"
+        assertEquals(ObStep.WELCOME, store.restore(facts(storage = false)))
+    }
+
+    @Test
+    fun `completed or invalid persisted progress starts at welcome`() {
+        assertEquals(ObStep.WELCOME, FakeProgressStore(stepName = "DONE").restore(facts()))
+        assertEquals(ObStep.WELCOME, FakeProgressStore(stepName = "removed-step", deferred = true).restore(facts()))
     }
 
     @Test

@@ -38,3 +38,5 @@ title.keys
 /android/.kotlin/
 /android/local.properties
 /android/.idea/
+/android/.agentbridge/
+android/gradle/gradle-daemon-jvm.properties

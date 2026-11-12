@@ -18,7 +18,6 @@ import com.nx.android.domain.DoctorOutput
 import com.nx.android.domain.ObFacts
 import com.nx.android.domain.ObStep
 import com.nx.android.domain.OnboardingLogic
-import com.nx.android.feature.environment.EnvCheckState
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -68,12 +67,7 @@ class OnboardingState @Inject constructor(
         val saved = prefs.str(OB_STEP)
         refreshEnv()
         keysPath = prefs.keys      // the settings page may have set a keys file since the last time
-        step = if (saved.isNotEmpty() && prefs.bool(OB_LATER)) {
-            // 旧版本存的步名可能已经不存在了（游戏文件夹那步被删了）：认不出来就当从头开始
-            OnboardingLogic.revalidate(runCatching { ObStep.valueOf(saved) }.getOrNull() ?: ObStep.WELCOME, facts())
-        } else {
-            ObStep.WELCOME
-        }
+        step = OnboardingLogic.resume(saved, prefs.bool(OB_LATER), facts())
         active = true
         enter()
     }

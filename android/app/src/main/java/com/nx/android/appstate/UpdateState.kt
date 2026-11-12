@@ -8,6 +8,8 @@ import com.nx.android.data.AppVersion
 import com.nx.android.data.UpdateChecker
 import com.nx.android.domain.UpdateFeed
 import com.nx.android.domain.UpdateVersion
+import com.nx.android.domain.UpdateController
+import com.nx.android.domain.UpdatePhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,24 +26,22 @@ import javax.inject.Singleton
  * 玩家点「稍后」＝这一次启动不再问；下次冷启动还会问（这是玩家自己的选择，不是永久的拒绝）。
  */
 @Singleton
-class UpdateState @Inject constructor(@ApplicationContext private val context: Context) {
-
-    enum class Phase { IDLE, CHECKING, UP_TO_DATE, AVAILABLE, FAILED }
+class UpdateState @Inject constructor(@ApplicationContext private val context: Context) : UpdateController {
 
     /** 上一次检查的结果 */
-    var phase by mutableStateOf(Phase.IDLE); private set
+    override var phase by mutableStateOf(UpdatePhase.IDLE); private set
 
     /** 新版本的版本号（canonical 的写法：0.3.0-alpha02）；没有新版本时是空的 */
-    var latest by mutableStateOf(""); private set
+    override var latest by mutableStateOf(""); private set
 
     /** App 自己的版本号（0.3.0-alpha02）——弹框里告诉玩家他现在在哪 */
-    var mine by mutableStateOf(""); private set
+    override var mine by mutableStateOf(""); private set
 
     /** 新版本的更新说明：那个 release 的正文（HTML，GitHub 自己渲染好的） */
-    var notes by mutableStateOf(""); private set
+    override var notes by mutableStateOf(""); private set
 
     /** 玩家说了「稍后」：这一次启动不再弹 */
-    var later by mutableStateOf(false); private set
+    override var later by mutableStateOf(false); private set
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -56,27 +56,27 @@ class UpdateState @Inject constructor(@ApplicationContext private val context: C
     }
 
     /** 玩家在设置页自己点的：结果都摆出来 */
-    fun checkNow() {
+    override fun checkNow() {
         scope.launch { run(manual = true) }
     }
 
     /** 玩家说「稍后」：这一次启动不再问 */
-    fun postpone() {
+    override fun postpone() {
         later = true
     }
 
     private suspend fun run(manual: Boolean) {
-        phase = Phase.CHECKING
+        phase = UpdatePhase.CHECKING
         val tag = UpdateChecker.latestTag().getOrElse {
             // 自动的那一次安静地过去；玩家自己问的那一次告诉他查不成
-            phase = if (manual) Phase.FAILED else Phase.IDLE
+            phase = if (manual) UpdatePhase.FAILED else UpdatePhase.IDLE
             return
         }
         val release = UpdateVersion.parse(tag)
         val ownText = AppVersion.of(context)
         val own = UpdateVersion.parseOwn(ownText)
         if (release == null || own == null || release <= own) {
-            phase = Phase.UP_TO_DATE
+            phase = UpdatePhase.UP_TO_DATE
             latest = ""
             notes = ""
             return
@@ -85,7 +85,7 @@ class UpdateState @Inject constructor(@ApplicationContext private val context: C
         mine = ownText
         notes = ""
         later = false
-        phase = Phase.AVAILABLE
+        phase = UpdatePhase.AVAILABLE
         // 更新说明随后到：弹框不等它（网络慢的时候玩家先看到版本号，说明自己补上去）
         scope.launch {
             val said = notesOf(tag)

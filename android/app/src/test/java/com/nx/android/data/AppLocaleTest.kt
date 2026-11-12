@@ -10,6 +10,11 @@ import org.junit.Test
  */
 class AppLocaleTest {
 
+    private class FakeLanguageStore(var savedCode: String = "") {
+        fun pick(mode: AppLocale.Mode) { savedCode = mode.code }
+        fun current(): AppLocale.Mode = AppLocale.Mode.of(savedCode)
+    }
+
     @Test
     fun `the mode comes from the code the choice is kept under`() {
         assertEquals(AppLocale.Mode.SYSTEM, AppLocale.Mode.of(""))
@@ -28,5 +33,15 @@ class AppLocaleTest {
         assertEquals("", AppLocale.Mode.SYSTEM.code)
         assertEquals("zh", AppLocale.Mode.ZH.code)
         assertEquals("en", AppLocale.Mode.EN.code)
+    }
+
+    @Test
+    fun `a fake preference restores the selected language`() {
+        val prefs = FakeLanguageStore()
+        prefs.pick(AppLocale.Mode.EN)
+        assertEquals("en", prefs.savedCode)
+        assertEquals(AppLocale.Mode.EN, prefs.current())
+        prefs.pick(AppLocale.Mode.SYSTEM)
+        assertEquals(AppLocale.Mode.SYSTEM, prefs.current())
     }
 }

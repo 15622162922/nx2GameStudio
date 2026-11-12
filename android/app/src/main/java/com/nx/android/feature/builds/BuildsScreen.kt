@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PortState
-import com.nx.android.data.AppLocale
 import com.nx.android.data.AppLog
 import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.GameIdentity

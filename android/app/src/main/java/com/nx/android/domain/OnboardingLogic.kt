@@ -20,6 +20,13 @@ data class ObFacts(
  */
 object OnboardingLogic {
 
+    /** Restore a persisted step only for a setup the player deferred, then re-check its prerequisites. */
+    fun resume(savedStep: String, deferred: Boolean, facts: ObFacts): ObStep {
+        if (savedStep.isEmpty() || !deferred) return ObStep.WELCOME
+        val parsed = runCatching { ObStep.valueOf(savedStep) }.getOrDefault(ObStep.WELCOME)
+        return revalidate(parsed, facts)
+    }
+
     fun canAdvance(step: ObStep, f: ObFacts): Boolean = when (step) {
         ObStep.WELCOME -> f.storageOk && f.freeGB >= f.neededGB
         ObStep.ENV -> f.envReady

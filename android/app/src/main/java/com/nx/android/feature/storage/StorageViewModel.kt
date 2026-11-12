@@ -3,8 +3,8 @@ package com.nx.android.feature.storage
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nx.android.appstate.StorageUsageState
 import com.nx.android.domain.StorageUsage
+import com.nx.android.domain.StorageUsageController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -18,7 +18,7 @@ data class StorageUiState(val snapshot: StorageUsage.Snapshot = StorageUsage.Sna
 
 @HiltViewModel
 class StorageViewModel @Inject constructor(
-    private val usage: StorageUsageState,
+    private val usage: StorageUsageController,
 ) : ViewModel() {
     val uiState: StateFlow<StorageUiState> = snapshotFlow { StorageUiState(usage.snapshot) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StorageUiState())
@@ -49,7 +49,8 @@ class StorageViewModel @Inject constructor(
         job = viewModelScope.launch {
             usage.load()
             usage.prepare()
-            delay(StorageUsageState.GATE_MS)
+            delay(StorageUsage.SCAN_GATE_MS)
+            if (!visible || !foreground) return@launch
             usage.scan()
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nx.android.core.storage.AppPaths
 import com.nx.android.domain.StorageUsage
+import com.nx.android.domain.StorageUsageController
 import com.nx.android.domain.library.GameLibraryRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -32,10 +33,10 @@ class StorageUsageState @Inject constructor(
     private val paths: AppPaths,
     private val library: LibraryState,
     private val libraryRepository: GameLibraryRepository,
-) {
+) : StorageUsageController {
 
     /** 面板看到的状态 */
-    var snapshot by mutableStateOf(StorageUsage.Snapshot()); private set
+    override var snapshot by mutableStateOf(StorageUsage.Snapshot()); private set
 
     /**
      * 遍历用的专用低优先级线程：不与界面渲染和游戏抢核。
@@ -57,7 +58,7 @@ class StorageUsageState @Inject constructor(
      *
      * 快照是「今天量过一次就别再量」的凭据：面板进来先读它，够新就直接用。
      */
-    fun load() {
+    override fun load() {
         if (snapshot.items.isNotEmpty() || snapshot.scannedAt > 0L) return
         val loaded = StorageUsage.read(snapshotFile()) ?: return
         snapshot = loaded
@@ -69,7 +70,7 @@ class StorageUsageState @Inject constructor(
      * 不遍历任何目录——只把要量的地方摆出来（上一轮量到的数字原样留着）。
      * 取数要读各个卷的端口目录（认包），所以它跑在后台线程上。
      */
-    suspend fun prepare() {
+    override suspend fun prepare() {
         val gameSnapshot = library.visible()        // 主线程读：库里的清单
         val items = withContext(background) { libraryRepository.usageItems(gameSnapshot) }
         val previous = snapshot.items.associateBy { it.id }
@@ -105,7 +106,7 @@ class StorageUsageState @Inject constructor(
      * 面板关闭 / 切换分区 ⇒ 协程被取消 ⇒ 遍历在下一个取消点停下；已经测出的那一段作为
      * 下界留在那一项上，标为部分统计。**统计没跑完就不落盘**：半份数字不算「今天量过」。
      */
-    suspend fun scan(force: Boolean = false) {
+    override suspend fun scan(force: Boolean) {
         val result = StorageUsage.scanAndSave(
             snapshot = snapshot,
             target = snapshotFile(),
@@ -126,6 +127,6 @@ class StorageUsageState @Inject constructor(
          *
          * 玩家「点进去马上又退出」是常态，闸门让这次进入**零遍历**。
          */
-        const val GATE_MS = 400L
+        const val GATE_MS = StorageUsage.SCAN_GATE_MS
     }
 }

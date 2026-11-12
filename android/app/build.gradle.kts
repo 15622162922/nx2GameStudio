@@ -148,3 +148,62 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+// Keep the most important package directions executable while the legacy feature/platform calls are moved
+// behind routes and domain contracts in follow-up changes. The allowlist is intentionally file-specific:
+// moving a call or adding a new one requires an explicit architecture decision.
+val legacyFeatureDataImports = setOf(
+    "feature/builds/BuildsScreen.kt|com.nx.android.data.AppLog",
+    "feature/environment/EnvChecklistDialog.kt|com.nx.android.data.PhantomFix",
+    "feature/environment/PhantomFixDialog.kt|com.nx.android.data.PhantomFix",
+    "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.GameIcon",
+    "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.GameLog",
+    "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.Player",
+    "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.SaveShare",
+    "feature/gamedetail/GameDetailScreen.kt|com.nx.android.data.StorageVolumes",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.GameIcon",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.GameLog",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.Player",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.SaveBackup",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.SaveShare",
+    "feature/library/LibraryScreen.kt|com.nx.android.data.StorageVolumes",
+    "feature/settings/SettingsScreen.kt|com.nx.android.data.AppLocale",
+    "feature/settings/SettingsScreen.kt|com.nx.android.data.LosslessDll",
+)
+
+val checkArchitectureBoundaries by tasks.registering {
+    group = "verification"
+    description = "Checks core domain dependency direction and prevents new feature-to-data imports."
+    doLast {
+        val sourceRoot = file("src/main/java/com/nx/android")
+        val domainRoot = file("$sourceRoot/domain")
+        val forbiddenDomainImports = Regex("^import (android\\.|androidx\\.|com\\.nx\\.android\\.(data|feature|appstate|game|app)\\.)")
+        val domainViolations = domainRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.flatMap { source ->
+            source.readLines().mapIndexedNotNull { index, line ->
+                if (forbiddenDomainImports.containsMatchIn(line)) "${source.relativeTo(sourceRoot)}:${index + 1}: $line" else null
+            }
+        }.toList()
+
+        val featureRoot = file("$sourceRoot/feature")
+        val featureDataImports = featureRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.flatMap { source ->
+            source.readLines().mapNotNull { line ->
+                val match = Regex("^import (com\\.nx\\.android\\.data\\..+)$").find(line) ?: return@mapNotNull null
+                "${source.relativeTo(sourceRoot)}|${match.groupValues[1]}"
+            }
+        }.toSet()
+        val unapprovedFeatureImports = featureDataImports - legacyFeatureDataImports
+        val staleAllowlistEntries = legacyFeatureDataImports - featureDataImports
+
+        check(domainViolations.isEmpty()) {
+            "Domain imports must stay platform/UI/data independent:\n${domainViolations.joinToString("\n")}"
+        }
+        check(unapprovedFeatureImports.isEmpty()) {
+            "New feature-to-data imports need an explicit migration or allowlist decision:\n${unapprovedFeatureImports.sorted().joinToString("\n")}"
+        }
+        check(staleAllowlistEntries.isEmpty()) {
+            "Remove migrated imports from legacyFeatureDataImports:\n${staleAllowlistEntries.sorted().joinToString("\n")}"
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(checkArchitectureBoundaries) }

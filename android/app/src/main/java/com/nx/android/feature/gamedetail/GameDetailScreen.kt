@@ -75,7 +75,6 @@ import com.nx.android.R
 import com.nx.android.appstate.LibraryState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.PortState
-import com.nx.android.data.AppLocale
 import com.nx.android.domain.drivers.Driver
 import com.nx.android.data.GameIcon
 import com.nx.android.data.GameLog

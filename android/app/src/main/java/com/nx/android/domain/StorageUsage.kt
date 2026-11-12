@@ -31,6 +31,9 @@ import kotlin.coroutines.coroutineContext
  */
 object StorageUsage {
 
+    /** A short visit to the storage section should not start a directory walk. */
+    const val SCAN_GATE_MS = 400L
+
     /** 一段目录的角色 */
     enum class Role {
         /** 构建工作区（构建缓存） */
@@ -456,4 +459,12 @@ object StorageUsage {
         val text = runCatching { target.readText() }.getOrNull() ?: return null
         return parse(text)
     }
+}
+
+/** Storage statistics operations consumed by the storage feature and replaceable in JVM tests. */
+interface StorageUsageController {
+    val snapshot: StorageUsage.Snapshot
+    fun load()
+    suspend fun prepare()
+    suspend fun scan(force: Boolean = false)
 }

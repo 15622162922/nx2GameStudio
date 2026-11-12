@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nx.android.domain.EnvCheck
 import com.nx.android.domain.PhantomCheck
-import com.nx.android.feature.environment.EnvCheckState
+import com.nx.android.appstate.EnvCheckState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted

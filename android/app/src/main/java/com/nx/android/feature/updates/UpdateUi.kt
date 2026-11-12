@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.nx.android.R
-import com.nx.android.appstate.UpdateState
+import com.nx.android.domain.UpdatePhase
 import com.nx.android.feature.updates.UpdateViewModel
 import com.nx.android.domain.UpdateVersion
 import com.nx.android.core.ui.components.Hint
@@ -72,7 +72,7 @@ fun openRepo(context: Context) {
 @Composable
 fun UpdatePopup(viewModel: UpdateViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    if (state.phase != UpdateState.Phase.AVAILABLE || state.later) return
+    if (state.phase != UpdatePhase.AVAILABLE || state.later) return
     val ctx = LocalContext.current
     AlertDialog(
         onDismissRequest = { viewModel.postpone() },
@@ -154,7 +154,7 @@ private fun Context.dp(value: Float): Float = value * resources.displayMetrics.d
 fun UpdateCheckRow(viewModel: UpdateViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
-    val checking = state.phase == UpdateState.Phase.CHECKING
+    val checking = state.phase == UpdatePhase.CHECKING
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
@@ -168,17 +168,17 @@ fun UpdateCheckRow(viewModel: UpdateViewModel, modifier: Modifier = Modifier) {
             )
         }
         when (state.phase) {
-            UpdateState.Phase.UP_TO_DATE ->
+            UpdatePhase.UP_TO_DATE ->
                 Text(stringResource(R.string.update_up_to_date), style = MaterialTheme.typography.bodySmall,
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
-            UpdateState.Phase.AVAILABLE ->
+            UpdatePhase.AVAILABLE ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(stringResource(R.string.update_available, state.latest),
                          style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
                          modifier = Modifier.weight(1f))
                     QuietButton(stringResource(R.string.update_download), { openReleases(ctx) })
                 }
-            UpdateState.Phase.FAILED ->
+            UpdatePhase.FAILED ->
                 Text(stringResource(R.string.update_failed), style = MaterialTheme.typography.bodySmall,
                      color = NxPalette.Danger)
             else -> {}

@@ -21,7 +21,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -29,24 +28,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nx.android.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.nx.android.feature.onboarding.OnboardingUiState
-import com.nx.android.feature.onboarding.OnboardingViewModel
-import com.nx.android.data.AppLocale
-import com.nx.android.domain.ObStep
-import com.nx.android.domain.OnboardingLogic
+import com.nx.android.R
 import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.components.CapsuleButton
 import com.nx.android.core.ui.components.Hint
-import com.nx.android.feature.filepicker.PickerMode
-import com.nx.android.feature.filepicker.PickerRequest
 import com.nx.android.core.ui.components.QuietButton
 import com.nx.android.core.ui.components.Section
 import com.nx.android.core.ui.components.StatusDot
 import com.nx.android.core.ui.theme.NxPalette
+import com.nx.android.domain.ObStep
+import com.nx.android.domain.OnboardingLogic
+import com.nx.android.feature.filepicker.PickerMode
+import com.nx.android.feature.filepicker.PickerRequest
 
 /**
  * The guided setup, five steps: the permission and the space, the environment's unpack, the keys, the games'
