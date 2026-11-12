@@ -1,7 +1,6 @@
 # nx2androidX — Agent 指南
 
 > 本文件是本仓库对 AI agent 的**权威上下文**。`CLAUDE.md` 只指向这里，不重复维护内容。
-> Spec 工作流的配置与规则在 `openspec/config.yaml`（`openspec/` 是指向 openspec-hub 元仓库的软链）。
 >
 > **一句话：本 fork 只做 Android 端，产品是手机 app（APK）。** 看到仓库里的 PC / iOS 相关目录，
 > 不要因此以为项目要往那个方向做。
@@ -113,7 +112,7 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 - 对外产物一律英文：README、docs、代码注释、日志与报错、提交信息、脚本输出
 - 尚未实现或明显不对的日志行以 `[RED] ` 开头
 - 需要匹配游戏自带的非 ASCII 文本时，写转义（`"\xE8\xB5\xB7"`），不写字符本身
-- **Spec 与 task 用中文**（见 `openspec/config.yaml`）
+- 需求与任务记录用中文
 
 ## 7. 深入指南
 
@@ -124,5 +123,4 @@ README 的 "For players" 一节讲桌面工具，那仍是真实存在的玩家�
 | 分层与契约、目录职责 | `docs/ARCHITECTURE.md` |
 | 从仓库运行、构建、测试、提交信息 | `docs/DEVELOPMENT_GUIDE.md` |
 | 游戏进度清单 | `docs/PORT_CHECKLIST.md`、`docs/PORT_STATUS.md` |
-| Spec 工作流与规则 | `openspec/config.yaml` |
 | 上游引擎（Apple 路线）的档案格式与调查手册 | `nxnative/AGENTS.md`、`nxnative/docs/agents/` |

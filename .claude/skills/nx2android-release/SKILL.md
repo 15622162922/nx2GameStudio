@@ -109,5 +109,4 @@ The name in the tag keeps its alpha; the next pre-release does not take that pla
 
 ## After the release
 
-- The OpenSpec change's task log gets the release's entry (the release's name, its tag and what it carried).
 - The device check of the release itself (the APK installed over the last one, the version in the settings) is still open until a phone is connected.
