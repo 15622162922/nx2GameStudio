@@ -25,7 +25,7 @@ object SaveBackup {
      * Why a package was refused. A code, not a sentence: this layer stays free of Android, so the words
      * for it live in the app's own resources (see `ui/Failures.kt`).
      */
-    enum class Refusal { TOO_MANY_ENTRIES, BAD_PATH, PATH_ESCAPES, TOO_BIG }
+    enum class Refusal { TOO_MANY_ENTRIES, BAD_PATH, PATH_ESCAPES, TOO_BIG, NOT_A_PACKAGE }
 
     /** A package that was refused: the reason, and the entry that caused it when there is one. */
     class Refused(val refusal: Refusal, val entry: String? = null) :
@@ -106,11 +106,15 @@ object SaveBackup {
      * Unpack a package into `dest`: the save tree it holds and the device save beside it. A package from
      * elsewhere is not trusted - an entry whose path points out of `dest` is refused, and the unpacked size
      * is capped.
+     *
+     * A package that holds no file at all is refused as well: it is not a save package (a broken zip, a text
+     * file with the right name), and importing it would replace the player's save with nothing.
      */
     fun unpack(pkg: File, dest: File): Package {
         dest.mkdirs()
         var bytes = 0L
         var entries = 0
+        var files = 0
         ZipInputStream(pkg.inputStream().buffered()).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
@@ -130,11 +134,13 @@ object SaveBackup {
                     out.mkdirs()
                     continue
                 }
+                files++
                 out.parentFile?.mkdirs()
                 bytes += out.outputStream().use { zip.copyTo(it) }
                 if (bytes > MAX_UNPACKED) throw Refused(Refusal.TOO_BIG)
             }
         }
+        if (files == 0) throw Refused(Refusal.NOT_A_PACKAGE)
         val dirs = dest.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name }.orEmpty()
         val devices = dirs.filter { it.name.endsWith(".device") }
         val trees = dirs.filter { !it.name.endsWith(".device") }

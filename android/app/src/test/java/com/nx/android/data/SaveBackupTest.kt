@@ -117,6 +117,37 @@ class SaveBackupTest {
     }
 
     @Test
+    fun aPackageThatIsNotAnArchiveIsRefused() {
+        val pkg = File(tmp("out"), "broken.zip")
+        pkg.writeText("this is not a zip archive")
+        try {
+            SaveBackup.unpack(pkg, tmp("unpacked"))
+            fail("a file that is not an archive has to be refused")
+        } catch (e: Exception) {
+            assertTrue(e.message ?: "", e is SaveBackup.Refused)
+            val refused = e as SaveBackup.Refused
+            assertEquals(SaveBackup.Refusal.NOT_A_PACKAGE, refused.refusal)
+        }
+    }
+
+    @Test
+    fun anArchiveWithoutASaveIsRefused() {
+        val pkg = File(tmp("out"), "empty.zip")
+        ZipOutputStream(pkg.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("pkg/"))
+            zip.closeEntry()
+        }
+        try {
+            SaveBackup.unpack(pkg, tmp("unpacked"))
+            fail("an archive without a save has to be refused")
+        } catch (e: Exception) {
+            assertTrue(e.message ?: "", e is SaveBackup.Refused)
+            val refused = e as SaveBackup.Refused
+            assertEquals(SaveBackup.Refusal.NOT_A_PACKAGE, refused.refusal)
+        }
+    }
+
+    @Test
     fun theSaveAnImportReplacesIsKept() {
         val internal = tmp("internal")
         val live = liveSave(internal, "0100000000010000", "slot0.dat", "old progress")

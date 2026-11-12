@@ -65,6 +65,26 @@ class SaveRepositoryImplTest {
     }
 
     @Test
+    fun `a broken package is refused and the live save stays`() = runBlocking {
+        val fixture = Fixture()
+        try {
+            val live = SaveBackup.liveDir(fixture.platform.filesDir, TITLE_ID)
+            live.mkdirs()
+            File(live, "slot.dat").writeText("keep")
+            val broken = fixture.platform.packagesDirectory().resolve("game-$TITLE_ID-20261112-120000.zip")
+            broken.writeText("this is not a zip archive")
+
+            val result = fixture.repository.import(TITLE_ID, broken, fixture.packSaves)
+
+            assertTrue(result.exceptionOrNull() is SaveBackup.Refused)
+            assertEquals("keep", File(live, "slot.dat").readText())
+            assertTrue("nothing was backed up", fixture.packSaves.listFiles().orEmpty().isEmpty())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
     fun `running game and invalid title id prevent save access`() = runBlocking {
         val fixture = Fixture()
         try {

@@ -208,6 +208,7 @@
     <string name="save_pkg_bad_path">The package holds a path that is not right: %1$s</string>
     <string name="save_pkg_escapes">The package holds a path that points outside: %1$s</string>
     <string name="save_pkg_too_big">The package unpacks to too much</string>
+    <string name="save_pkg_not_a_package">This file is not a save package (a broken archive)</string>
     <string name="fg_section">Frame generation (Lossless.dll)</string>
     <string name="fg_ready">Ready: %1$s</string>
     <string name="fg_not_found">No Lossless.dll yet. One in a usual place (Documents/Emulation/bios, Switch, Download) is found on its own, or pick one here.</string>

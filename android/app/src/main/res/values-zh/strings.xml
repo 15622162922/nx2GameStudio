@@ -207,6 +207,7 @@
     <string name="save_pkg_bad_path">包里的路径不对：%1$s</string>
     <string name="save_pkg_escapes">包里的路径越界：%1$s</string>
     <string name="save_pkg_too_big">包解开后太大</string>
+    <string name="save_pkg_not_a_package">这不是存档包（压缩包已损坏）</string>
     <string name="fg_section">帧生成（Lossless.dll）</string>
     <string name="fg_ready">已就绪：%1$s</string>
     <string name="fg_not_found">还没有 Lossless.dll。放在常见位置（Documents/Emulation/bios、Switch、Download）会自动发现，或在这里选一个。</string>

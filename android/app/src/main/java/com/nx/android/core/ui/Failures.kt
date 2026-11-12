@@ -29,6 +29,7 @@ fun failureText(locale: AppLocale, e: Throwable): String = when (e) {
         SaveBackup.Refusal.BAD_PATH -> locale.str(R.string.save_pkg_bad_path, e.entry ?: "")
         SaveBackup.Refusal.PATH_ESCAPES -> locale.str(R.string.save_pkg_escapes, e.entry ?: "")
         SaveBackup.Refusal.TOO_BIG -> locale.str(R.string.save_pkg_too_big)
+        SaveBackup.Refusal.NOT_A_PACKAGE -> locale.str(R.string.save_pkg_not_a_package)
     }
     else -> e.message ?: locale.str(R.string.common_error_unknown_reason)
 }
