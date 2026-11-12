@@ -242,6 +242,11 @@ fun AppRoot(
                             locale.str(R.string.onb_choose_prod_keys),
                             onPicked = { f -> actions.onSetKeys(f.path) })
                     },
+                    onRunOnboarding = {
+                        // the checklist first: it is drawn over the setup and would hide it
+                        envCheckOpen = false
+                        onboarding.open()
+                    },
                     onDismiss = { envCheckOpen = false },
                 )
             }
