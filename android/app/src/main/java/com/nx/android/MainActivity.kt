@@ -134,7 +134,8 @@ class MainActivity : ComponentActivity() {
                 // 落位跟着这个游戏的数据包走：它在可移动卡上，新包就建在那儿（内部存储的那份不动）
                 val packDir = library.packDirOf(file)?.absolutePath
                 PortService.start(this, file.absolutePath, prefs.keys,
-                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom, packDir)
+                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom,
+                                  cfg.sharedFont, cfg.firmware, cfg.mtReplay, packDir)
             } else {
                 toast(locale.str(R.string.builds_needs_storage)); askStorage()
             }

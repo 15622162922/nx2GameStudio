@@ -25,10 +25,12 @@ class PortRunner(
         gameFile: String, keys: String,
         touch: Boolean, fps60: Boolean, experimental: Boolean,
         aliasHeadroom: Int,
+        sharedFont: String = "", firmware: String = "", mtReplay: Boolean = false,
         packDir: String? = null,
         onEnd: () -> Unit,
     ): Thread {
-        val args = portArgs(gameFile, keys, touch, fps60, experimental, aliasHeadroom, !BuildConfig.NX_LSFG)
+        val args = portArgs(gameFile, keys, touch, fps60, experimental, aliasHeadroom, !BuildConfig.NX_LSFG,
+            sharedFont, firmware, mtReplay)
         return start(args, onEnd, if (packDir.isNullOrBlank()) emptyMap() else mapOf("NX2A_PACK_DIR" to packDir))
     }
 
@@ -42,14 +44,21 @@ class PortRunner(
          *
          * The extra address space (the alias region): Auto passes nothing, the porter decides by itself
          * (the version the profile was tested with gets none, another one 8 GB).
+         *
+         * The player's own overrides: the system font (a .ttf; empty = the app's own, which has the CJK
+         * glyphs), the firmware dump's system content folder (empty = none) and the multithread replay.
          */
         fun portArgs(gameFile: String, keys: String, touch: Boolean, fps60: Boolean,
-                     experimental: Boolean, aliasHeadroom: Int, noLsfg: Boolean): List<String> {
+                     experimental: Boolean, aliasHeadroom: Int, noLsfg: Boolean,
+                     sharedFont: String = "", firmware: String = "", mtReplay: Boolean = false): List<String> {
             val args = mutableListOf("-m", "porter", "port", gameFile, "-k", keys, "--progress", "json", "--app")
             if (touch) args += "--touch"
             if (fps60) args += "--fps60"
             if (experimental) args += "--experimental"
             if (aliasHeadroom >= 0) args += listOf("--alias-headroom", aliasHeadroom.toString())
+            if (sharedFont.isNotBlank()) args += listOf("--shared-font", sharedFont.trim())
+            if (firmware.isNotBlank()) args += listOf("--firmware", firmware.trim())
+            if (mtReplay) args += "--mt-replay"
             // A build without the frame generation (the Gradle property nxLsfg=false): the host the app builds on the
             // device is then smaller and the frame generation reports that it is not in this build (android/NOTICE.md).
             if (noLsfg) args += "--no-lsfg"
