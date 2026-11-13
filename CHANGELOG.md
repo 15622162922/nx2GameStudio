@@ -15,6 +15,50 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha07 - 2026-11-13
+
+### Before you update
+
+- Your data packs do not have to be ported again. If a game's runtime is not the current one, the library says so, and "Update runtime" rebuilds it from the profile that made the pack. Your saves are kept.
+- This release carries the upstream line's work: the engine's own fixes and nine more games that play on Android.
+
+### New games
+
+- Animal Crossing: New Horizons (local play over the LAN)
+- DARK SOULS: REMASTERED
+- FINAL FANTASY RESONANCE
+- Kirby and the Forgotten Land
+- Lonely Mountains: Downhill
+- Octopath Traveler 0, and its Chinese release with a gamepad of its own
+- Picross S+
+- South Park: The Stick of Truth
+- The Legend of Zelda: Echoes of Wisdom
+
+### New
+
+- A data pack's runtime can be updated on its own. The app rebuilds it from the profile that made the pack, so a game whose runtime is out of date does not have to be ported again.
+- Local play over the LAN: the console's own local play, without the console.
+- Games that use OpenGL ES run on the device's own GL driver.
+- Unreal's shader archives are decoded on the device, with the game's own Oodle decoder.
+- The app's code is split into layers now, and follows the repository's own layout.
+- The builds page says what the selected game holds.
+
+### Fixed
+
+- The memory pools are redone: they are allocated outside the pool lock and the small ones live in slabs, so the frame time does not jump when a pool appears or goes.
+- The Vulkan pipeline caches are checked against a copy on the CPU before they are used, and they are saved atomically: a cache that went wrong is rebuilt instead of drawing the wrong thing.
+- A 32-bit game stops with a clear message instead of failing later.
+- The Unreal shader decode continues with the streams it has.
+- The pak's AES works without commoncrypto, and with pycryptodome's other name.
+- The top bar's chip is coloured by the child-process limit.
+- A save package that holds no file is refused.
+- The setup checks the battery setting.
+
+### Community ports
+
+- No community pull request has been merged since the last version.
+- Everyone in this release's history is named in the README's contributors table.
+
 ## v0.3.0-alpha06 - 2026-11-11
 
 ### Before you update
