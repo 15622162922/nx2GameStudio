@@ -863,8 +863,6 @@ class Saves(unittest.TestCase):   # porter/saves.py: the save folders on the dev
 class UnrealShaders(unittest.TestCase):
     """porter/pipeline.py device_ue: the Unreal shader code archives decoded with the game's own Oodle decoder, in rounds"""
 
-    STAMP = 'Content/pakchunk0-Switch.pak\t3\n'   # what the version's archives were made from: its paks (paths and sizes)
-
     class FakePort:
         """the parts of Port.device_ue it uses"""
         UE_ROUNDS = 4
@@ -904,16 +902,17 @@ class UnrealShaders(unittest.TestCase):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / 'ShaderArchive-Global.ushaderbytecode').write_bytes(b'shaders')
 
-    def port(self, rounds, answers, stamp=None, root=None):
+    def port(self, rounds, answers, stamp_size=None, root=None):
         """a port with the fake decoder and the fake archives"""
         root = root or Path(tempfile.mkdtemp(prefix='nx2a_test_ue_'))
         p = self.FakePort(root, answers)
         p.root = root
         (p.dirs['v1'] / 'RomFS' / 'Content').mkdir(parents=True, exist_ok=True)
         (p.dirs['v1'] / 'RomFS' / 'Content' / 'pakchunk0-Switch.pak').write_bytes(b'pak')
-        if stamp is not None:
+        p.stamp = pipeline.nsp.ue_stamp(p.dirs['v1'])   # what the version's archives were made from: its paks (the path is the platform's own)
+        if stamp_size is not None:
             (p.dirs['v1'] / 'ue_shaders').mkdir(parents=True, exist_ok=True)
-            (p.dirs['v1'] / 'ue_shaders' / 'stamp').write_text(stamp, encoding='utf-8')
+            (p.dirs['v1'] / 'ue_shaders' / 'stamp').write_text(p.stamp.rsplit('\t', 1)[0] + f'\t{stamp_size}\n', encoding='utf-8')
         patches = [mock.patch.object(pipeline.uepak, 'job', self.uepak_job(rounds)),
                    mock.patch.object(pipeline.uepak, 'finish', self.uepak_finish)]
         for q in patches: q.start()
@@ -925,7 +924,7 @@ class UnrealShaders(unittest.TestCase):
         pipeline.Port.device_ue(p)
         self.assertEqual(p.asked, [[b'one']])   # the decoder was asked once: the second round wanted nothing
         self.assertEqual((p.dirs['v1'] / 'ue_shaders' / 'ShaderArchive-Global.ushaderbytecode').read_bytes(), b'shaders')
-        self.assertEqual((p.dirs['v1'] / 'ue_shaders' / 'stamp').read_text(), self.STAMP)
+        self.assertEqual((p.dirs['v1'] / 'ue_shaders' / 'stamp').read_text(), p.stamp)
 
     def test_a_stream_the_decoder_fails_on_is_asked_again(self):   # the round that decodes none of them says so
         from porter.upstream import BuildError
@@ -943,11 +942,11 @@ class UnrealShaders(unittest.TestCase):
         self.assertEqual(len(p.asked), 4)
 
     def test_a_stamped_decode_is_not_done_again(self):   # the stamp of a version whose archives are decoded: it is left alone
-        p = self.port([[(b'one', 6)]], {b'one': b'123456'}, stamp=self.STAMP)
+        p = self.port([[(b'one', 6)]], {b'one': b'123456'}, stamp_size=3)   # the stamp of this version's paks
         pipeline.Port.device_ue(p)
         self.assertEqual(p.asked, [])
         self.assertFalse((p.dirs['v1'] / 'ue_shaders' / 'ShaderArchive-Global.ushaderbytecode').exists())
-        p = self.port([[(b'one', 6)]], {b'one': b'123456'}, stamp='Content/pakchunk0-Switch.pak\t9\n')   # another pak: the stamp is not the one
+        p = self.port([[(b'one', 6)]], {b'one': b'123456'}, stamp_size=9)   # another pak: the stamp is not the one
         pipeline.Port.device_ue(p)
         self.assertEqual(p.asked, [[b'one']])
 

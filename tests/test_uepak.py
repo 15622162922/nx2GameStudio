@@ -7,7 +7,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from porter.upstream import uepak   # noqa: E402
 
-# NIST SP 800-38A, ECB-AES256: the key, one plaintext block and its ciphertext
+# NIST SP 800-38A, ECB-AES256: the key, one plaintext block and what decrypting that block gives (the ciphertext NIST
+# lists for it is f3eed1bd…, which is the encryption of PLAIN; here the block is decrypted)
 KEY = bytes.fromhex('603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4')
 PLAIN = bytes.fromhex('6bc1bee22e409f96e93d7e117393172a')
 CIPHER = '25cde6ca74d3539c375b66c3892cf70a'
@@ -16,7 +17,17 @@ CIPHER = '25cde6ca74d3539c375b66c3892cf70a'
 class Aes(unittest.TestCase):
     def tearDown(self): uepak._cc = uepak._aes = None   # the provider is picked once per run: every test starts fresh
 
+    def has_provider(self):   # CommonCrypto on a Mac, pycryptodome elsewhere
+        try: uepak.ctypes.CDLL('/usr/lib/libSystem.B.dylib'); return True
+        except OSError: pass
+        try: import Crypto.Cipher.AES   # noqa: F401
+        except ImportError:
+            try: import Cryptodome.Cipher.AES   # noqa: F401
+            except ImportError: return False
+        return True
+
     def test_the_vector(self):   # the machine's own provider: CommonCrypto on a Mac, pycryptodome elsewhere
+        if not self.has_provider(): self.skipTest('neither CommonCrypto nor pycryptodome is here')
         self.assertEqual(uepak.aes_decrypt(KEY, PLAIN).hex(), CIPHER)
 
     def test_without_commoncrypto(self):   # the phone app has no libSystem: pycryptodome does the same work

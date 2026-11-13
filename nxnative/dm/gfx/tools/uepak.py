@@ -51,7 +51,9 @@ def aes_decrypt(key, data):
             _cc.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
         except OSError:   # not a Mac: pycryptodome does the same work (pip install pycryptodome)
             try: from Crypto.Cipher import AES as _aes
-            except ImportError: raise ValueError('AES-256 ECB decryption needs CommonCrypto (a Mac) or pycryptodome (pip install pycryptodome)')
+            except ImportError:
+                try: from Cryptodome.Cipher import AES as _aes   # what some system package managers call pycryptodome
+                except ImportError: raise ValueError('AES-256 ECB decryption needs CommonCrypto (a Mac) or pycryptodome (pip install pycryptodome)') from None
     if _aes is not None: return _aes.new(key, _aes.MODE_ECB).decrypt(data)
     out = ctypes.create_string_buffer(len(data)); moved = ctypes.c_size_t()
     if _cc(1, 0, 2, key, len(key), None, data, len(data), out, len(data), ctypes.byref(moved)): raise ValueError('CCCrypt failed')   # decrypt, AES, ECB
