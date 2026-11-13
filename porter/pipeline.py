@@ -735,7 +735,9 @@ class Port:
         not binary-safe on Windows, and a forward reset when both directions were busy). Here it runs in rounds instead: uepak.job runs with a decoder that answers from the
         streams decoded so far and notes the others (answering zeros, so a stream that depends on one noted is noted only in a later round, with its real bytes, and a read that
         fails on the zeros ends the round); the noted ones go to the device as one job (oodle_job), and the next round runs. A round that notes nothing has decoded everything;
-        its per-shader Oodle job (paks) goes to the device as well, and the decoded archives land in <version dir>/ue_shaders, where the split reads them, with the NSP script's stamp"""
+        its per-shader Oodle job (paks) goes to the device as well, and the decoded archives land in <version dir>/ue_shaders, where the split reads them, with the NSP script's stamp.
+        The streams a round decoded are written to <version dir>/ue_streams/<the paks' digest>, one file each, so a run that stops (the phone's memory, the app killed) continues with
+        the streams it has and asks the decoder for the rest only"""
         import hashlib
         import struct
         todo = {v: self.dirs[v] for v in self.versions if not ((self.dirs[v] / 'ue_shaders/stamp').exists() and (self.dirs[v] / 'ue_shaders/stamp').read_text() == nsp.ue_stamp(self.dirs[v]))}
@@ -743,12 +745,19 @@ class Port:
         PROG.add(1); PROG.stage('UE shader decode', step='the shader code archives')
         tmp = self.work / 'tmp/ue'; total = 0
         for v, d in todo.items():
-            cache, jd = {}, tmp / f'job_{v}'
+            jd = tmp / f'job_{v}'
+            sdir = d / 'ue_streams' / hashlib.sha1(nsp.ue_stamp(d).encode()).hexdigest()[:16]   # the streams decoded so far, on disk
+            sdir.mkdir(parents=True, exist_ok=True)
+            for old in (d / 'ue_streams').iterdir():
+                if old != sdir: nsp.rmtree(old)   # another pak set's streams are of no use
             for rnd in range(self.UE_ROUNDS):
                 want = {}
                 def dec(comp, n):
                     k = (hashlib.sha1(comp).digest(), n)
-                    if k in cache: return cache[k]
+                    f = sdir / f'{k[0].hex()}-{k[1]}'
+                    if f.is_file():
+                        b = f.read_bytes()
+                        if len(b) == n: return b   # decoded in an earlier run
                     want.setdefault(k, bytes(comp)); return bytes(n)
                 nsp.rmtree(jd); PROG.set(step=f'{v}: the shader code archives (round {rnd + 1})')
                 try: listing, n = uepak.job(str(d / 'RomFS'), str(d / 'ExeFS/main'), str(jd), decode=dec)
@@ -766,7 +775,7 @@ class Port:
                 o, got = 8, 0
                 for k in want:
                     ln = struct.unpack_from('<I', b, o)[0]; o += 4
-                    if ln == k[1]: cache[k] = b[o:o + ln]; got += 1   # a stream decoded from zeros fails (0) and is asked for again with its real bytes
+                    if ln == k[1]: (sdir / f'{k[0].hex()}-{k[1]}').write_bytes(b[o:o + ln]); got += 1   # a stream decoded from zeros fails (0) and is asked for again with its real bytes
                     o += ln if ln != 0xffffffff else 0
                 say(f'{v}: round {rnd + 1}: {got:,} of {len(want):,} Oodle streams decoded {self.oodle_where}')
                 if not got: raise BuildError(f"{v}: the game's Oodle decoder decoded none of {len(want):,} streams (see {self.logs / 'android_oodle_job.log'})")
@@ -778,6 +787,7 @@ class Port:
             out = d / 'ue_shaders.partial'; nsp.rmtree(out)
             uepak.finish(str(jd), str(out)); (out / 'stamp').write_text(nsp.ue_stamp(d))
             nsp.swap_in(out, d / 'ue_shaders'); nsp.rmtree(jd)
+            nsp.rmtree(d / 'ue_streams')   # the decode is done: the streams on disk are of no use
             say(f'{v}: ' + '; '.join(f'{x["name"]} {x["shaders"]:,} shaders' + (f' ({x["compression"]})' if x.get('compression') else '') for x in listing))
             total += n + sum(x['shaders'] for x in listing if x['compression'] == 'IoStore, decoded')
         nsp.rmtree(tmp)

@@ -878,10 +878,11 @@ class UnrealShaders(unittest.TestCase):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / 'ShaderArchive-Global.ushaderbytecode').write_bytes(b'shaders')
 
-    def port(self, rounds, answers, stamp=None):
+    def port(self, rounds, answers, stamp=None, root=None):
         """a port with the fake decoder and the fake archives"""
-        root = Path(tempfile.mkdtemp(prefix='nx2a_test_ue_'))
+        root = root or Path(tempfile.mkdtemp(prefix='nx2a_test_ue_'))
         p = self.FakePort(root, answers)
+        p.root = root
         (p.dirs['v1'] / 'RomFS' / 'Content').mkdir(parents=True, exist_ok=True)
         (p.dirs['v1'] / 'RomFS' / 'Content' / 'pakchunk0-Switch.pak').write_bytes(b'pak')
         if stamp is not None:
@@ -923,6 +924,15 @@ class UnrealShaders(unittest.TestCase):
         p = self.port([[(b'one', 6)]], {b'one': b'123456'}, stamp='Content/pakchunk0-Switch.pak\t9\n')   # another pak: the stamp is not the one
         pipeline.Port.device_ue(p)
         self.assertEqual(p.asked, [[b'one']])
+
+    def test_a_stopped_decode_continues_with_the_streams_it_has(self):   # the streams a round decoded are on disk: the next run asks for the rest only
+        from porter.upstream import BuildError
+        p = self.port([[(b'one', 6), (b'two', 4)]], {b'one': b'123456'})   # the decoder fails on the second stream
+        with self.assertRaises(BuildError): pipeline.Port.device_ue(p)
+        self.assertEqual(p.asked, [[b'one', b'two'], [b'two']])   # the stream that was decoded is not asked for again
+        p = self.port([[(b'one', 6), (b'two', 4)]], {b'one': b'123456', b'two': b'5678'}, root=p.root)   # the run again, the decoder gets both
+        pipeline.Port.device_ue(p)
+        self.assertEqual(p.asked, [[b'two']])   # the stream on disk is not asked for again
 
 
 if __name__ == '__main__':
