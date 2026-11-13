@@ -28,6 +28,17 @@ class RuntimeUpdateStateTest {
         assertFalse(state.interrupted)
     }
 
+    @Test fun `the failure reason reaches the dialog and a retry clears it`() {
+        val state = RuntimeUpdateState()
+        state.begin("/pack/Game-data", "Game")
+        state.finish(false, "The game profile changed since this pack was built.")
+        assertEquals("The game profile changed since this pack was built.", state.reason)
+        state.begin(state.pack, state.name)
+        assertEquals("", state.reason)
+        state.dismiss()
+        assertEquals("", state.reason)
+    }
+
     @Test fun `a surviving pending marker restores a dismissible interruption prompt`() {
         val state = RuntimeUpdateState("/pack/Game-data")
         assertEquals(RuntimeUpdatePhase.FAILED, state.phase)

@@ -26,6 +26,7 @@ class RuntimeUpdateState private constructor(
     var pack by mutableStateOf(pending.orEmpty()); private set
     var name by mutableStateOf(pending?.let { File(it).name }.orEmpty()); private set
     var interrupted by mutableStateOf(pending != null); private set
+    var reason by mutableStateOf(""); private set
     var phase by mutableStateOf(if (pending == null) RuntimeUpdatePhase.IDLE else RuntimeUpdatePhase.FAILED); private set
     val running: Boolean get() = phase == RuntimeUpdatePhase.RUNNING
 
@@ -34,14 +35,16 @@ class RuntimeUpdateState private constructor(
         pack = path
         name = label
         interrupted = false
+        reason = ""
         savePending(path)
         phase = RuntimeUpdatePhase.RUNNING
         return true
     }
 
-    fun finish(success: Boolean) {
+    fun finish(success: Boolean, why: String = "") {
         if (!running) return
         savePending(null)
+        reason = if (success) "" else why
         phase = if (success) RuntimeUpdatePhase.SUCCEEDED else RuntimeUpdatePhase.FAILED
     }
 
@@ -52,5 +55,6 @@ class RuntimeUpdateState private constructor(
         pack = ""
         name = ""
         interrupted = false
+        reason = ""
     }
 }

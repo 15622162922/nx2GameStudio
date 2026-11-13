@@ -41,7 +41,11 @@ fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
                     CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
                     Text(stringResource(R.string.runtime_updating))
                 } else {
-                    Text(stringResource(if (state.interrupted) R.string.runtime_interrupted else R.string.runtime_update_failed))
+                    // the reason the update stopped: the porter's own line says why (a changed profile, a missing
+                    // tool, a failed compile); without it the player only sees that it failed
+                    val reason = state.reason
+                    if (reason.isNotBlank()) Text(reason)
+                    else Text(stringResource(if (state.interrupted) R.string.runtime_interrupted else R.string.runtime_update_failed))
                 }
             }
         },

@@ -59,10 +59,10 @@ class RuntimeUpdateService : Service() {
         val pack = state.pack
         val handler = Handler(mainLooper)
         Thread {
-            val success = compiler.rebuild(pack)
+            val result = compiler.rebuild(pack)
             handler.post {
                 working = false
-                state.finish(success)
+                state.finish(result.success, result.reason)
                 library.rescan()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()

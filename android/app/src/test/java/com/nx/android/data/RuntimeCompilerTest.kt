@@ -7,7 +7,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
 class RuntimeCompilerTest {
-    private fun compile(output: String, code: Int): Boolean {
+    private fun compile(output: String, code: Int): RuntimeUpdateResult {
         val launcher = object : GuestProcessLauncher {
             override fun guestEnv() = mutableMapOf<String, String>()
             override fun guest(args: List<String>, extra: Map<String, String>): Process {
@@ -27,10 +27,19 @@ class RuntimeCompilerTest {
     }
 
     @Test fun `runtime update needs both successful exit and the matching commit result`() {
-        assertTrue(compile("""{"ev":"result","data":"/packs/Game-data"}""", 0))
-        assertFalse(compile("""{"ev":"result","data":"/packs/Game-data"}""", 1))
-        assertFalse(compile("compiler exited without a result", 0))
-        assertFalse(compile("""{"ev":"result","data":"/packs/Other-data"}""", 0))
+        assertTrue(compile("""{"ev":"result","data":"/packs/Game-data"}""", 0).success)
+        assertFalse(compile("""{"ev":"result","data":"/packs/Game-data"}""", 1).success)
+        assertFalse(compile("compiler exited without a result", 0).success)
+        assertFalse(compile("""{"ev":"result","data":"/packs/Other-data"}""", 0).success)
+    }
+
+    @Test fun `the porter's failure line is the reason the player sees`() {
+        val failed = compile("""{"ev":"say","msg":"[RED] The game profile changed since this pack was built."}""", 1)
+        assertFalse(failed.success)
+        assertEquals("The game profile changed since this pack was built.", failed.reason)
+        val worked = compile("""{"ev":"result","data":"/packs/Game-data"}""", 0)
+        assertTrue(worked.success)
+        assertEquals("", worked.reason)
     }
 
     @Test fun `runtime command follows current frame generation policy without source keys`() {
