@@ -1,0 +1,7 @@
+# OCTOPATH TRAVELER 0 (Chinese release) on Android (keys in docs/ARCHITECTURE.md "Game profiles on Android")
+# Square Enix, Unreal Engine 5 on SDK 19.0.0, update 1.0.5; the same shaders as the international release (01005270232F2000), all translated. The profile is the one here as it was, no core change needed.
+status	experimental
+tested	v1 Xiaomi 23117RK66C (Android 16)
+package	org.nx2a.t01001300232f4000
+orientation	landscape
+requires	bcn
