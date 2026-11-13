@@ -110,7 +110,7 @@ data class Ported(
     val display: String = "", // 清单里的显示版本（游戏自己的版本号，如 1.1.1）：老的数据包没有这一项
     val romfsAt: String = "", // 清单里的 romfs_at：游戏的文件不在包里，在工作区（老的数据包没有这一项：它们自带 RomFS）
     val graphics: String = "", // 清单里的 graphics：游戏自己用的图形接口（vulkan / gl / nvn，空 = 不知道；老的数据包没有这一项）
-    val lan: Boolean = false, // 清单里的 lan：游戏能不能局域联机（老的数据包没有这一项：当作不知道）
+    val lan: Boolean? = null, // 清单里的 lan：游戏能不能局域联机（null = 清单里没有这一项：老的数据包，由档案补上）
 ) {
     /** The pack has its host: it is a port, not a leftover manifest. */
     val hasHost: Boolean get() = host.isFile

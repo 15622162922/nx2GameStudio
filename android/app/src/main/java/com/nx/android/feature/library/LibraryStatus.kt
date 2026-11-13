@@ -42,9 +42,12 @@ internal enum class GameNeed { GL, LAN, DRIVER, WIP, BOOTS, EXPERIMENTAL }
 
 internal fun needsOf(profile: GameProfile?, ported: Ported?): List<GameNeed> {
     if (profile == null) return emptyList()
+    // 已移植的游戏从数据包清单读（那是它被移植时的那份档案），清单里没有的由档案补上
+    val graphics = ported?.graphics?.takeIf { it.isNotEmpty() } ?: profile.graphics
+    val lan = ported?.lan ?: profile.lan
     val out = mutableListOf<GameNeed>()
-    if (profile.graphics == "gl") out += GameNeed.GL
-    if (profile.lan) out += GameNeed.LAN
+    if (graphics == "gl") out += GameNeed.GL
+    if (lan) out += GameNeed.LAN
     if (profile.requires.isNotEmpty()) out += GameNeed.DRIVER
     // 档案调通到哪一步：已经移植过的游戏那一句「实验性移植」已经说了，别的状态这里补上
     if (ported == null) {

@@ -54,4 +54,16 @@ class LibraryNeedsTest {
     fun `a ported game already says its state in the pack`() {
         assertEquals(emptyList<GameNeed>(), needsOf(profile(status = "experimental"), ported(status = "experimental")))
     }
+
+    @Test
+    fun `a pack that says nothing lets the profile answer`() {
+        val p = ported().copy(graphics = "", lan = null)
+        assertEquals(listOf(GameNeed.GL, GameNeed.LAN), needsOf(profile(graphics = "gl", lan = true), p))
+    }
+
+    @Test
+    fun `the pack wins when it says`() {
+        val p = ported().copy(graphics = "gl", lan = true)
+        assertEquals(listOf(GameNeed.GL, GameNeed.LAN), needsOf(profile(graphics = "nvn", lan = false), p))
+    }
 }

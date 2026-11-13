@@ -90,7 +90,7 @@ object LibraryFileScanner {
                       display = man.optString("display"),
                       romfsAt = man.optString("romfs_at"),
                       graphics = man.optString("graphics"),
-                      lan = man.optBoolean("lan"))
+                      lan = if (man.has("lan")) man.getBoolean("lan") else null)
     }
 
     /**
