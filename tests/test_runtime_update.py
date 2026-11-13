@@ -1,4 +1,5 @@
-"""Runtime updates use saved profiles and activate one complete component set without touching game data."""
+"""Runtime updates rebuild the runtime with the profile that made the pack, and refuse one that does not match."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,12 +27,14 @@ class RuntimeUpdateTest(unittest.TestCase):
             p = self.pack / name
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(b'preserve me')
-        profile = self.pack / 'profile' / self.title
-        profile.mkdir(parents=True)
-        (profile / 'game.tsv').write_text('effective game profile with adjusted memory')
-        (profile / 'android.tsv').write_text('effective android profile')
         self.dm = self.root / 'tool' / 'nxnative' / 'dm'
         (self.dm / 'android').mkdir(parents=True)
+        (self.dm / 'games').mkdir(parents=True)
+        # the fake profile header is the profile's own game.tsv: the test computes the fingerprint the same way
+        (self.dm / 'games' / 'game.py').write_text('''import pathlib, sys
+out = pathlib.Path(sys.argv[3]); d = pathlib.Path(sys.argv[2])
+out.write_text((d / 'game.tsv').read_text())
+''')
         self.build = self.dm / 'android' / 'build.py'
         self.build.write_text('''import os, pathlib, sys, struct
 args = sys.argv
@@ -55,6 +58,19 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
         patch.dict(os.environ, {'NX2A_WORK': str(self.root / 'work'),
                    'NX2A_PLAYER_API_REVISION': str(PLAYER_API_REVISION)}).start()
 
+    def profile(self, where, text='effective game profile with adjusted memory'):
+        """A profile folder (its name is the title ID) and the fingerprint its header has"""
+        d = where / self.title
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'game.tsv').write_text(text)
+        (d / 'android.tsv').write_text('effective android profile')
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    def record(self, fingerprint):
+        self.manifest.write_text(json.dumps({'title_id': self.title, 'name': 'Game',
+            'host': 'host/libdmplay.so', 'host_front': 2, 'player_api_revision': 0, 'profile_h': fingerprint}))
+        self.before['nx2a-data.json'] = self.manifest.read_bytes()   # the manifest the test wrote is the baseline
+
     def rebuild(self):
         return runtime_update.rebuild(self.pack, no_lsfg=True, jobs=1, emit=lambda _: None)
 
@@ -65,6 +81,8 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
 
     def test_update_without_source_keys_or_old_work(self):
         self.assertFalse((self.root / 'work').exists())
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         result = self.rebuild()
         self.assertEqual(result['data'], str(self.pack.resolve()))
         updated = json.loads(self.manifest.read_text())
@@ -75,14 +93,41 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
         self.assertTrue(all((host.parent / name).is_file() for name in runtime_update.HOOKS))
         self.assert_preserved(manifest=False)
 
-    def test_missing_profile_does_not_fall_back_to_current_game(self):
-        (self.pack / 'profile' / self.title / 'android.tsv').unlink()
-        with self.assertRaisesRegex(ValueError, 'no saved game profile'):
+    def test_the_workspace_profile_is_the_one_that_made_the_pack(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
+        self.rebuild()
+        self.assert_preserved(manifest=False)
+
+    def test_the_payload_profile_is_used_when_the_workspace_has_none(self):
+        fingerprint = self.profile(self.dm / 'games')
+        self.record(fingerprint)
+        self.rebuild()
+        self.assert_preserved(manifest=False)
+
+    def test_a_changed_profile_is_refused_before_compilation(self):
+        self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived', 'another game profile')
+        self.record(hashlib.sha256(b'effective game profile with adjusted memory').hexdigest())
+        with self.assertRaisesRegex(ValueError, 'profile changed since this pack was built'):
             self.rebuild()
-        self.assertEqual(self.manifest.read_bytes(), self.before['nx2a-data.json'])
+        self.assert_preserved()
         self.assertEqual(list(self.pack.glob('.runtime-*')), [])
 
+    def test_no_profile_anywhere_is_refused_before_compilation(self):
+        self.record(hashlib.sha256(b'effective game profile with adjusted memory').hexdigest())
+        with self.assertRaisesRegex(ValueError, 'No game profile for this game'):
+            self.rebuild()
+        self.assert_preserved()
+
+    def test_a_pack_without_a_fingerprint_is_refused(self):
+        self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        with self.assertRaisesRegex(ValueError, 'made before the game profile was recorded'):
+            self.rebuild()
+        self.assert_preserved()
+
     def test_failed_compilation_keeps_every_original_byte(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         self.build.write_text('raise SystemExit(1)')
         with self.assertRaisesRegex(RuntimeError, 'Runtime compilation failed'):
             self.rebuild()
@@ -90,6 +135,8 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
         self.assertEqual(list(self.pack.glob('.runtime-*')), [])
 
     def test_interrupted_activation_and_retry(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         with patch.object(runtime_update.os, 'replace', side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 self.rebuild()
@@ -103,6 +150,8 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
         self.assert_preserved(manifest=False)
 
     def test_cancellation_immediately_after_commit_keeps_activated_components(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         replace = os.replace
         def commit_then_cancel(source, destination):
             replace(source, destination)
@@ -117,25 +166,20 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
         self.assert_preserved(manifest=False)
 
     def test_payload_revision_mismatch_fails_before_compilation(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         with patch.dict(os.environ, {'NX2A_PLAYER_API_REVISION': str(PLAYER_API_REVISION + 1)}):
             with self.assertRaisesRegex(ValueError, 'tools do not match'):
                 self.rebuild()
         self.assert_preserved()
 
     def test_invalid_compiler_output_is_not_activated(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.record(fingerprint)
         self.build.write_text(self.build.read_text() + "\n(out / 'libdmplay.so').write_bytes(b'invalid')\n")
         with self.assertRaisesRegex(ValueError, 'ARM64'):
             self.rebuild()
         self.assert_preserved()
-
-    def test_profile_cannot_escape_pack(self):
-        path = self.pack / 'profile' / self.title / 'game.tsv'
-        path.unlink()
-        outside = self.root / 'outside.tsv'
-        outside.write_text('outside')
-        path.symlink_to(outside)
-        with self.assertRaisesRegex(ValueError, 'no saved game profile'):
-            self.rebuild()
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 """Rebuild only a pack's player runtime. An atomic manifest switch activates the complete component set."""
+import hashlib
 import json
 import os
 import re
@@ -16,6 +17,39 @@ from porter.revision import PLAYER_API_REVISION
 HOOKS = ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', 'libgsl_alloc_hook.so')
 
 
+def profile_candidates(title_id):
+    """Where the profile this pack was built with may live: the workspace's own copies first (the headroom copy,
+    the derived one, the provisional one), then the payload's registered profile."""
+    build = Path(os.environ.get('NX2A_WORK') or tempfile.gettempdir()) / f'{title_id}_build'
+    for name in ('profile-mem', 'profile-derived', 'profile'):
+        yield build / name / title_id
+    yield DM / 'games' / title_id
+
+
+def profile_fingerprint(directory):
+    """sha256 of the game_profile.h the profile in this folder makes (as the host build makes it), or None when the
+    folder holds no usable profile"""
+    if not (directory / 'game.tsv').is_file() or not (directory / 'android.tsv').is_file(): return None
+    with tempfile.TemporaryDirectory(prefix='nx2a_profile_') as t:
+        header = Path(t) / 'game_profile.h'
+        env = dict(os.environ, DM_GAMES_DIR=str(directory.parent), DM_GAMES_FIRST='1')
+        run = subprocess.run([sys.executable, str(DM / 'games/game.py'), 'header', str(directory), str(header)],
+                             capture_output=True, text=True, errors='replace', env=env)
+        if run.returncode or not header.is_file(): return None
+        return hashlib.sha256(header.read_bytes()).hexdigest()
+
+
+def find_profile(title_id, expected):
+    """(the candidate whose profile fingerprint is this pack's own, whether any candidate was there at all)"""
+    found = False
+    for candidate in profile_candidates(title_id):
+        fingerprint = profile_fingerprint(candidate)
+        if fingerprint is None: continue
+        found = True
+        if fingerprint == expected: return candidate, True
+    return None, found
+
+
 def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
     pack = Path(pack).resolve()
     expected = os.environ.get('NX2A_PLAYER_API_REVISION')
@@ -26,11 +60,14 @@ def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
     title_id = manifest.get('title_id', '')
     if not isinstance(title_id, str) or not re.fullmatch(r'[0-9A-Fa-f]{16}', title_id):
         raise ValueError('Invalid game identity. Port the game again from its original files.')
-    profile = pack / 'profile' / title_id
-    for name in ('game.tsv', 'android.tsv'):
-        source = profile / name
-        if not source.is_file() or not source.resolve().is_relative_to(pack):
-            raise ValueError('This pack has no saved game profile. Port the game again from its original files.')
+    fingerprint = manifest.get('profile_h')
+    if not isinstance(fingerprint, str) or not fingerprint:
+        raise ValueError('This pack was made before the game profile was recorded. Port the game again from its original files.')
+    profile, found = find_profile(title_id, fingerprint)
+    if profile is None:
+        if not found:
+            raise ValueError('No game profile for this game. Port the game again from its original files.')
+        raise ValueError('The game profile changed since this pack was built. Port the game again from its original files.')
     ndk, _ = toolchain.find_ndk(config.load())
     if ndk is None:
         raise ValueError('The Android compiler is unavailable. Prepare the environment and retry.')

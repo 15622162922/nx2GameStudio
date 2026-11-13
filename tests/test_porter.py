@@ -234,6 +234,32 @@ class DataPack(unittest.TestCase):
             self.assertNotIn('romfs_at', datapack.build(t / 'pc-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv'))   # the PC flow's pack carries its own RomFS
         finally: shutil.rmtree(t, ignore_errors=True)
 
+    def test_the_app_pack_carries_no_game_profile(self):   # the profile lives in the workspace or in the payload: the pack carries no copy of it
+        t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))
+        try:
+            port = pipeline.Port(pipeline.Options(t))
+            port.g = game.load(NEO); port.app_name = 'NEO'; port.work_root = t / 'work'; port.o.app = True; port.o.out = t
+            port.so = t / 'libdmplay.so'; port.so.write_bytes(b'ELF')
+            port.game = t / 'game'; (port.game / 'RomFS').mkdir(parents=True)
+            port.fps_files = {}; port.fps_env = []; port.ap = None; port.pkg_ver = 'v196608'; port.display = '1.03'
+            port.patched = t / 'patched'; port.patched.mkdir(); port.dmsv = None; port.aoc = None; port.sysdata = []
+            port.lang = 'en-US'; port.package = 'org.nx2a.test'
+            captured = {}
+            def build(dst, **kw):
+                captured.update(kw); return {'files': 1, 'bytes': 1}
+            with mock.patch.object(pipeline.datapack, 'build', side_effect=build), \
+                 mock.patch.object(port, 'button_font', return_value=([], {})), \
+                 mock.patch.object(port, 'shared_font', return_value=([], {})), \
+                 mock.patch.object(port, 'theme_files', return_value={}), \
+                 mock.patch.object(port, 'icon_png', return_value=None), \
+                 mock.patch.object(port, 'drivers', return_value=[]), \
+                 mock.patch.object(port, 'loader_libs', return_value=[]), \
+                 mock.patch.object(port, 'lists', return_value={}):
+                port.data()
+            self.assertEqual([name for name in captured['files'] if name.startswith('profile/')], [])
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+
     def test_a_leftover_half_made_pack(self):   # a port killed mid-way leaves one behind: it must not stop the next port (the log of 2026-11-09: FileNotFoundError, then exit 139)
         from unittest import mock
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_pack_'))

@@ -1066,8 +1066,6 @@ class Port:
         host = icon = None; drivers = []
         romfs, romfs_at = self.game / 'RomFS', None
         if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
-            for filename in ('game.tsv', 'android.tsv'):
-                files[f'profile/{self.g.id}/{filename}'] = self.g.dir / filename
             # the app's mode: the pack points at the build folder's own RomFS instead of copying it (the same game twice on the phone is too much).
             # The pack's env.txt says where the host reads it from, and the manifest says the same, so the app knows the pack needs that folder.
             # A game without a RomFS (an OpenGL ES one) has none to point at: the pack keeps no RomFS, as before.
