@@ -384,7 +384,8 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                         style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(titleId, versionTag(ported), statusLabel(status), experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
+                        (listOfNotNull(titleId, versionTag(ported), statusLabel(status), experimentalTag(ported), reportTag(ported)) +
+                            com.nx.android.feature.library.needsTags(lib.profileOf(titleId), ported)).joinToString("  ·  "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

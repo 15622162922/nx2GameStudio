@@ -10,3 +10,4 @@ status	playable
 tested	1.0.2 AYN Odin 2 (Adreno 740, Turnip)
 package	org.nx2a.pokemonmysterydungeondx
 orientation	landscape
+graphics	nvn

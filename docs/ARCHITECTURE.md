@@ -71,6 +71,8 @@ A profile is offered for Android when it has an `android.tsv`; the profiles with
 | `package` | The app's package name (default `org.nx2a.t<title ID in lowercase>`) |
 | `orientation` | `landscape` (default) or `any` |
 | `requires` | Device features the game needs, checked by the installer (the legacy path): `bcn` (BC texture compression) |
+| `graphics` | The graphics API the game itself uses: `vulkan` / `gl` / `nvn` (empty when it is not known). `gl` means the game draws with OpenGL ES: the phone's own EGL/GLES driver draws it (`dm/android/gl_android.c`) instead of the Vulkan replay |
+| `lan` | `1` when the game can be played over the local network with several devices (empty: not known). The library page says it before the port |
 | `sysdata` | System data titles the game reads from the console's firmware, 16-digit hex title IDs (`0100000000000802`: MiiModel, the Mii heads Mario Kart 8 Deluxe builds): the port extracts each from the player's firmware dump (`--firmware`) into the data pack's `sysdata/<title ID>/`, and the host mounts it (`DM_SYSDATA`, `dm/host/hle_fs.c`) in place of its stand-in. Never shipped with the tool |
 | `setting` | `<name>=<value>`: the host's defaults on first launch (`rumble`, `docked`, `fps`: the frame rate counter in the top left corner, off by default), written to the data pack's `settings.txt`, where the host also keeps the player's own gamepad layout from the app's layout editor (`ui=` rows) and its Snap to grid (`grid`, off by default). The gamepad's own two values (shown, opacity) are the app's preferences now, not the host's: the host keeps them as runtime state (`dm_pad_prefs`) and never writes them |
 | `env` | `<KEY>=<VALUE>`: a host switch the game needs on Android, written to the data pack's `env.txt` |

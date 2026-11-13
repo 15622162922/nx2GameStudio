@@ -11,3 +11,4 @@ status	playable
 tested	v458752 AYN Odin 2 (Snapdragon 8 Gen 2, Adreno 740, Android 13)
 package	org.nx2a.t01008db008c2c000
 orientation	landscape
+graphics	nvn

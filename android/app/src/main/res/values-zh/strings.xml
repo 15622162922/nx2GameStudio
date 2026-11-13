@@ -388,6 +388,12 @@
     <string name="builds_needs_storage">移植需要「所有文件访问」权限才能读取游戏文件</string>
     <string name="lib_run_config">运行配置</string>
     <string name="lib_port_config">移植配置</string>
+    <string name="lib_needs_gl">OpenGL ES</string>
+    <string name="lib_needs_lan">可局域联机</string>
+    <string name="lib_needs_driver">建议装驱动</string>
+    <string name="lib_needs_status_wip">部分可玩</string>
+    <string name="lib_needs_status_boots">只能开机</string>
+    <string name="lib_needs_status_experimental">实验性移植</string>
     <string name="lib_experimental">实验性移植</string>
     <string name="lib_close_current_game">先退出当前游戏（%1$s）再运行这个</string>
     <string name="lib_empty_title">游戏库是空的</string>

@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import com.nx.android.R
 import com.nx.android.core.ui.theme.NxPalette
+import com.nx.android.data.library.GameProfile
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.Ported
 
@@ -29,6 +30,45 @@ internal fun statusLabel(s: GameStatus): String = when (s) {
     GameStatus.DONE -> stringResource(R.string.common_done)
     GameStatus.NEEDS_BUILD -> stringResource(R.string.lib_needs_build_status)
 }
+
+/**
+ * 这款游戏需要什么：图形接口（OpenGL ES 的游戏手机自己画，Vulkan 的游戏走回放）、能不能局域联机、
+ * 设备要有什么（BC 纹理压缩：手机的 GPU 不支持就得装驱动）、档案调通到哪一步。
+ *
+ * 已移植的游戏从数据包清单读，没移植的从 App 自带的档案读；两处都没有就什么都不显示。
+ */
+/** 这款游戏需要什么：纯逻辑（测它），词是界面上的（映射它） */
+internal enum class GameNeed { GL, LAN, DRIVER, WIP, BOOTS, EXPERIMENTAL }
+
+internal fun needsOf(profile: GameProfile?, ported: Ported?): List<GameNeed> {
+    if (profile == null) return emptyList()
+    val out = mutableListOf<GameNeed>()
+    if (profile.graphics == "gl") out += GameNeed.GL
+    if (profile.lan) out += GameNeed.LAN
+    if (profile.requires.isNotEmpty()) out += GameNeed.DRIVER
+    // 档案调通到哪一步：已经移植过的游戏那一句「实验性移植」已经说了，别的状态这里补上
+    if (ported == null) {
+        when (profile.status) {
+            "wip" -> out += GameNeed.WIP
+            "boots" -> out += GameNeed.BOOTS
+            "experimental" -> out += GameNeed.EXPERIMENTAL
+        }
+    }
+    return out
+}
+
+@Composable
+internal fun needsTags(profile: GameProfile?, ported: Ported?): List<String> =
+    needsOf(profile, ported).map {
+        when (it) {
+            GameNeed.GL -> stringResource(R.string.lib_needs_gl)
+            GameNeed.LAN -> stringResource(R.string.lib_needs_lan)
+            GameNeed.DRIVER -> stringResource(R.string.lib_needs_driver)
+            GameNeed.WIP -> stringResource(R.string.lib_needs_status_wip)
+            GameNeed.BOOTS -> stringResource(R.string.lib_needs_status_boots)
+            GameNeed.EXPERIMENTAL -> stringResource(R.string.lib_needs_status_experimental)
+        }
+    }
 
 /**
  * 实验性移植的标记：档案还没在 Android 上调通（清单里的 status 是 experimental），玩家该知道

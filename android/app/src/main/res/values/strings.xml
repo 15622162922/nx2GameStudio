@@ -389,6 +389,12 @@
     <string name="builds_needs_storage">The app needs the all-files permission to read the game file</string>
     <string name="lib_run_config">Run configuration</string>
     <string name="lib_port_config">Port configuration</string>
+    <string name="lib_needs_gl">OpenGL ES</string>
+    <string name="lib_needs_lan">LAN play</string>
+    <string name="lib_needs_driver">a driver is recommended</string>
+    <string name="lib_needs_status_wip">partly playable</string>
+    <string name="lib_needs_status_boots">boots only</string>
+    <string name="lib_needs_status_experimental">experimental port</string>
     <string name="lib_experimental">Experimental port</string>
     <string name="lib_close_current_game">Close the game that is running (%1$s) before running this one</string>
     <string name="lib_empty_title">The library is empty</string>

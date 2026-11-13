@@ -8,4 +8,5 @@ status	playable
 tested	v65536 Xiaomi 23117RK66C (Snapdragon 8 Gen 3, Adreno 750, Android 16)
 package	org.nx2a.t0100b8a026f14000
 orientation	landscape
+graphics	nvn
 env	DM_LANG=zh-Hans

@@ -40,6 +40,7 @@ tested	v1114112 Samsung Galaxy S25 Ultra (Snapdragon 8 Elite for Galaxy, Adreno 
 package	org.nx2a.zeldabreathofthewild
 orientation	landscape
 requires	bcn
+graphics	nvn
 env	DM_VK_FDZ=0
 env	DM_NVN_ASYNC=1
 env	DM_PIN_REPLAY=prime

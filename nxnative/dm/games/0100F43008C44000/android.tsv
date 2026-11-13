@@ -20,5 +20,6 @@ status	playable
 tested	v393216 Lenovo Legion Y700 TB322FC (Snapdragon 8 Elite, Adreno 830, Android 16)
 package	org.nx2a.plza
 orientation	landscape
+graphics	nvn
 env	DM_FPS_HOLD=off
 env	DM_VK_CB_DRAWS=32

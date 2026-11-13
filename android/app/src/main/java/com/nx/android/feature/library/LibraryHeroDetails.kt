@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.nx.android.R
 import com.nx.android.core.ui.PreviewSurface
 import com.nx.android.core.ui.theme.NxPalette
+import com.nx.android.data.library.GameProfile
 import com.nx.android.domain.GameEntry
 import com.nx.android.domain.GameStatus
 
@@ -42,6 +43,7 @@ import com.nx.android.domain.GameStatus
 @Composable
 internal fun HeroDetails(
     entry: GameEntry,
+    profile: GameProfile? = null,
     status: GameStatus,
     stale: Boolean,
     locked: Boolean,
@@ -66,9 +68,9 @@ internal fun HeroDetails(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            listOfNotNull(titleId, versionTag(ported), statusLabel(status) +
+            (listOfNotNull(titleId, versionTag(ported), statusLabel(status) +
                 if (status == GameStatus.PORTING) " ${(portProgress * 100).toInt()}%" else "",
-                experimentalTag(ported), reportTag(ported)).joinToString("  ·  "),
+                experimentalTag(ported), reportTag(ported)) + needsTags(profile, ported)).joinToString("  ·  "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -11,4 +11,5 @@ status	playable
 tested	v0 (1.0.7) Sony XQ-DQ72 (Adreno 740) and OnePlus 15 (Snapdragon 8 Elite Gen 5), 2026-11-10
 package	org.nx2a.t01006c5015e84000
 orientation	landscape
+graphics	nvn
 setting	docked=0

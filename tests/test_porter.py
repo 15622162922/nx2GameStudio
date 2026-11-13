@@ -48,6 +48,16 @@ class AndroidProfiles(unittest.TestCase):
         for v in ('10', '85', '42'):
             with self.assertRaises(android_profile.ProfileError, msg=v): android_profile.load(profile_dir([('status', 'boots'), ('setting', f'opacity={v}')]).name)
 
+    def test_what_the_game_needs(self):   # graphics (vulkan | gl | nvn) and the local network: the library page says them before the port
+        d = profile_dir([('status', 'playable'), ('graphics', 'gl'), ('lan', '1'), ('requires', 'bcn')])
+        p = android_profile.load(d.name)
+        self.assertEqual(p.graphics, 'gl'); self.assertTrue(p.lan)
+        bare = android_profile.load(profile_dir([('status', 'boots')]).name)
+        self.assertEqual(bare.graphics, ''); self.assertFalse(bare.lan)   # not known is not the same as no
+        for rows in ([('status', 'boots'), ('graphics', 'directx')], [('status', 'boots'), ('lan', 'yes')]):
+            d = profile_dir(rows)
+            with self.assertRaises(android_profile.ProfileError, msg=rows): android_profile.load(d.name)
+
     def test_default_package(self):
         d = profile_dir([('status', 'boots')])
         self.assertEqual(android_profile.load(d.name).package, 'org.nx2a.t0100000000aaa000')
@@ -155,6 +165,7 @@ class DataPack(unittest.TestCase):
             self.assertEqual((o / 'settings.txt').read_text(), 'docked=0\noverlay=1\nrumble=1\n')
             self.assertEqual((man['files'], man['bytes'], man['dlc'], man['requires']), (4, 35, [1], ['bcn']))   # the installer checks requires
             self.assertEqual(man['status'], p.status)   # the app tells the player what to expect (an experimental port says so)
+            self.assertIn('graphics', man); self.assertIn('lan', man)   # what the game needs: the library page shows it from the pack
             self.assertEqual(datapack.read_manifest(o)['package'], 'org.nx2a.neo')
             datapack.build(t / 'touch-data', profile=p, version='v196608', display='1.03', patched=t / 'patched', romfs=t / 'romfs', shaders=t / 'shaders.dmsv',
                            settings=pipeline.TOUCH_SETTINGS)   # --touch: the gamepad starts hidden, the profile's other settings stay
