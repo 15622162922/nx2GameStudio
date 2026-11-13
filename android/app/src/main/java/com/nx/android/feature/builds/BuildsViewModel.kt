@@ -8,7 +8,11 @@ import com.nx.android.appstate.PortState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
 import com.nx.android.domain.porting.PortPhase
+import com.nx.android.domain.BuildOptions
 import com.nx.android.domain.GameConfig
+import com.nx.android.domain.GameInfo
+import com.nx.android.domain.GameInspector
+import com.nx.android.data.PrefsStore
 import com.nx.android.data.porting.BuildSessionRepository
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -17,6 +21,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class BuildsUiState(
     val target: String? = null,
@@ -34,11 +39,19 @@ data class BuildsUiState(
     val running: Boolean = false,
 )
 
+/** What the page has to say out loud by itself. */
+enum class BuildsNotice {
+    /** The game has no profile for Android: the experimental port is ticked and the player is told why. */
+    EXPERIMENTAL_AUTO,
+}
+
 @HiltViewModel
 class BuildsViewModel @Inject constructor(
     val library: LibraryState,
     val port: PortState,
     private val sessions: BuildSessionRepository,
+    inspector: GameInspector,
+    private val prefs: PrefsStore,
 ) : ViewModel() {
     var selectedBuildId by mutableStateOf("")
         private set
@@ -48,6 +61,17 @@ class BuildsViewModel @Inject constructor(
         private set
     var preparing by mutableStateOf(false)
         private set
+
+    /** What the selected game file holds (the porter's own reading of it) */
+    val gameInfo = GameInfoReader(inspector, viewModelScope)
+
+    /** A message for the screen: the counter gives every notice its own, so the same one can come twice. */
+    var noticeSeq by mutableStateOf(0)
+        private set
+    var notice by mutableStateOf<BuildsNotice?>(null)
+        private set
+
+    // Eagerly：这一页不在眼前时也跟着一份状态（切回来时第一帧就是选中的那个游戏，不是空的那一页）
     val uiState: StateFlow<BuildsUiState> = snapshotFlow {
         BuildsUiState(
             target = library.buildsTarget?.absolutePath,
@@ -64,7 +88,14 @@ class BuildsViewModel @Inject constructor(
             history = port.history,
             running = port.running,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BuildsUiState())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, BuildsUiState())
+
+    init {
+        // 每读完一次游戏信息就照着它做一次决定（读到的答案属于当前选中的那个文件）
+        viewModelScope.launch {
+            snapshotFlow { gameInfo.reads }.collect { applyProfile(gameInfo.info) }
+        }
+    }
 
     fun setTarget(file: File?, config: GameConfig? = null, savedConfigMissing: Boolean = false) {
         selectedBuildId = ""
@@ -72,6 +103,7 @@ class BuildsViewModel @Inject constructor(
         preparedConfigWasMissing = savedConfigMissing
         preparing = file != null
         library.buildsTarget = file
+        if (file == null) gameInfo.clear() else gameInfo.read(file, prefs.keys)
     }
 
     fun buildStarted() { preparing = false }
@@ -85,4 +117,23 @@ class BuildsViewModel @Inject constructor(
     }.getOrDefault("")
 
     fun clearLog() = port.clearLog()
+
+    /** The screen has said the notice out loud. */
+    fun clearNotice() { notice = null }
+
+    /**
+     * The game the porter has no profile for: the port can only run as an experimental one, so the option is
+     * ticked for the player and the reason is given. The choice is written to the game's own options, so the
+     * library's panel and the next build say the same.
+     */
+    private fun applyProfile(info: GameInfo?) {
+        if (info == null) return
+        val file = library.buildsTarget ?: return
+        val config = preparedConfig ?: library.configOf(file)
+        val updated = BuildOptions.withExperimental(config, info) ?: return
+        library.setConfig(file, updated)
+        preparedConfig = updated
+        notice = BuildsNotice.EXPERIMENTAL_AUTO
+        noticeSeq++
+    }
 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,9 +50,12 @@ import com.nx.android.appstate.PortState
 import com.nx.android.data.AppLog
 import com.nx.android.domain.ALIAS_AUTO
 import com.nx.android.domain.GameIdentity
+import com.nx.android.domain.GameInfo
+import com.nx.android.domain.GameProfileStatus
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
+import com.nx.android.domain.Ported
 import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.components.CapsuleButton
@@ -81,7 +85,18 @@ private fun sourceMatchesTarget(target: File, candidate: File): Boolean {
 fun BuildsRoute(viewModel: BuildsViewModel, keys: String, envReady: Boolean,
                 actions: AppActions, onRequest: (PickerRequest) -> Unit, onLog: (String) -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val locale = LocalAppLocale.current
     LaunchedEffect(uiState.running) { if (uiState.running) viewModel.buildStarted() }
+    // 页面自己要说的话（没有档案的游戏被勾上了实验性移植）：屏幕把它念出来
+    LaunchedEffect(viewModel.noticeSeq) {
+        when (viewModel.notice) {
+            BuildsNotice.EXPERIMENTAL_AUTO -> {
+                viewModel.clearNotice()
+                actions.onToast(locale.str(R.string.builds_experimental_auto))
+            }
+            null -> Unit
+        }
+    }
     BuildsScreen(viewModel.library, viewModel, uiState, keys, envReady, actions, onRequest, onLog)
 }
 
@@ -186,18 +201,26 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
     var cfg by remember(f.absolutePath, viewModel.preparedConfig) {
         mutableStateOf(viewModel.preparedConfig ?: lib.configOf(f))
     }
-    var configOpen by remember(f.absolutePath) { mutableStateOf(false) }
+    // 配置默认展开：选中游戏后玩家一眼看到当前选项
+    var configOpen by remember(f.absolutePath) { mutableStateOf(true) }
     val storageOk = actions.storageOk()
     val canStart = f.isFile && f.canRead() && envReady && storageOk && !port.running && keys.isNotBlank() && status != GameStatus.PORTING
-    val titleId = GameIdentity.titleIdIn(f.name)
 
     Section(stringResource(R.string.builds_target)) {
-        // 文件行：更换 / 清除（NX2Apple FilesCard 的 choose/change/clear）
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.builds_game_file), style = MaterialTheme.typography.bodyMedium)
-                Hint(f.absolutePath, size = 11.sp)
-            }
+        // 身份块：状态徽章、游戏名、title ID、这一轮会打包的版本、文件夹里的更新与 DLC
+        val info = viewModel.gameInfo.info
+        TargetIdentity(f, info, status, lib.portOf(f))
+
+        // 来源行：文件在哪（整条路径，省略中间的目录；按一下看全的）＋ 更换 / 清除
+        // 名字就是文件名的时候（没有档案），路径只给到文件夹——文件名上面已经写着
+        val source = if (info?.name?.isNotEmpty() == true) f.absolutePath else (f.parentFile?.path ?: f.absolutePath)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.builds_source, shortPath(source)),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).clickable { actions.onToast(f.absolutePath) },
+            )
             QuietButton(stringResource(R.string.builds_change), onClick = {
                 onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS,
                     File("/storage"), locale.str(R.string.builds_choose_game_file),
@@ -208,29 +231,14 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
             })
             QuietButton(stringResource(R.string.builds_clear), onClick = { viewModel.setTarget(null) })
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatusDot(statusColor(status))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    GameIdentity.labelFor(f, lib.portOf(f)),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2,
-                )
-                Text(
-                    listOfNotNull(titleId, statusLabel(status)).joinToString("  ·  "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Hint(stringResource(R.string.builds_updates_taken))
         if (viewModel.preparedConfigWasMissing) Hint(stringResource(R.string.builds_config_missing_saved))
 
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().clickable { configOpen = !configOpen },
         ) {
-            Text(stringResource(R.string.builds_config_of, GameIdentity.labelFor(f, lib.portOf(f))),
+            Text(stringResource(R.string.builds_options_title),
                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Icon(if (configOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                 null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -267,41 +275,84 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
     }
 }
 
-/** 运行中：目标卡让位，配置收起为一行，点开能看/改 */
+/**
+ * 目标卡的身份块：这是哪个游戏（状态徽章 + 名字）、它的 title ID、这一轮会打包哪个版本，
+ * 以及同一文件夹里有多少更新与 DLC。
+ *
+ * 名字与 title ID 各只在这里出现一次；源文件的路径另起一行。
+ * 移植器的读数没回来之前不显示猜测出来的东西：徽章、计数与打包版本都等它。
+ */
 @Composable
-private fun ConfigDisclosure(lib: LibraryState, f: File) {
-    var open by remember { mutableStateOf(false) }
-    Section(stringResource(R.string.builds_config_of, GameIdentity.labelFor(f, lib.portOf(f)))) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().clickable { open = !open },
-        ) {
-            val cfg = lib.configOf(f)
-            Text(
-                listOf(
-                    if (cfg.touch) stringResource(R.string.builds_touch) else null,
-                    if (cfg.fps60) stringResource(R.string.builds_60fps) else null,
-                    if (cfg.experimental) stringResource(R.string.builds_experimental_short) else null,
-                    if (cfg.aliasHeadroom >= 0) stringResource(R.string.builds_alias_short, cfg.aliasHeadroom) else null,
-                ).filterNotNull().ifEmpty { listOf(stringResource(R.string.builds_default_options)) }.joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+private fun TargetIdentity(f: File, info: GameInfo?, status: GameStatus, ported: Ported?) {
+    // 名字：读数回来后用档案里的（没有就用文件名的）
+    val name = info?.name?.takeIf { it.isNotEmpty() } ?: GameIdentity.labelFor(f, ported)
+    val titleId = info?.titleId?.takeIf { it.isNotEmpty() } ?: GameIdentity.titleIdIn(f.name)
+    // 打包版本（移植器说它会打哪个版本）
+    val packVersion = info?.packVersion?.takeIf { it.isNotEmpty() }
+        ?.let { stringResource(R.string.builds_info_pack, it) }
+    // 计数：更新与 DLC 只有和选中的文件在同一个文件夹里才会被扫到，0 不显示（那是假信息）
+    val facts = listOfNotNull(
+        info?.let { if (it.updateCount > 0) stringResource(R.string.builds_info_updates, it.updateCount) else null },
+        info?.let { if (it.dlcCount > 0) stringResource(R.string.builds_info_dlc, it.dlcCount) else null },
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (info != null) ProfileChip(info.status)
+            Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
-        if (open) {
-            val cfg = lib.configOf(f)
-            ConfigRow(stringResource(R.string.builds_touch_game), cfg.touch) { lib.setConfig(f, cfg.copy(touch = it)) }
-            ConfigRow(stringResource(R.string.builds_60fps), cfg.fps60) { lib.setConfig(f, cfg.copy(fps60 = it)) }
-            ConfigRow(stringResource(R.string.builds_experimental), cfg.experimental) { lib.setConfig(f, cfg.copy(experimental = it)) }
-            AliasRow(cfg.aliasHeadroom) { lib.setConfig(f, cfg.copy(aliasHeadroom = it)) }
+        if (titleId != null || packVersion != null || status != GameStatus.NOT_PORTED) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (titleId != null) {
+                    Text(titleId, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                }
+                if (packVersion != null) {
+                    Text(packVersion, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                }
+                // 库的状态：只有非常态才出现（"未移植" 是默认态，不占位）
+                if (status != GameStatus.NOT_PORTED) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        StatusDot(statusColor(status), 8.dp)
+                        Text(statusLabel(status), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        if (facts.isNotEmpty()) {
+            Text(facts.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
         }
     }
+}
+
+/** 档案状态：一种状态一个颜色，与游戏库那张卡上的是同一套 */
+@Composable
+private fun ProfileChip(status: GameProfileStatus) {
+    val (label, color) = when (status) {
+        GameProfileStatus.PLAYABLE -> stringResource(R.string.builds_info_playable) to NxPalette.Ready
+        GameProfileStatus.WIP -> stringResource(R.string.builds_info_wip) to NxPalette.Building
+        GameProfileStatus.BOOTS -> stringResource(R.string.builds_info_boots) to NxPalette.Building
+        GameProfileStatus.EXPERIMENTAL -> stringResource(R.string.builds_info_experimental) to NxPalette.Unbuilt
+        GameProfileStatus.IOS_ONLY -> stringResource(R.string.builds_info_ios_only) to NxPalette.Unbuilt
+        GameProfileStatus.UNSUPPORTED -> stringResource(R.string.builds_info_unsupported) to NxPalette.Brand
+    }
+    Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.18f)) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            StatusDot(color, 8.dp)
+            Text(label, fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** 路径省略中间：头一段与最后两段留着，中间用省略号（文件在哪，一眼看得出；全路径按一下就看全了） */
+internal fun shortPath(path: String): String {
+    val parts = path.split('/').filter { it.isNotEmpty() }
+    if (parts.size <= 4) return path
+    return "/" + parts[0] + "/…/" + parts.takeLast(2).joinToString("/")
 }
 
 // ---- 进度卡（运行时） -------------------------------------------------------------------------------------------

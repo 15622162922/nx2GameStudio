@@ -399,7 +399,9 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                 Tab.BUILDS -> BuildsRoute(buildsViewModel, prefs.keys, environmentSetup.ready, actions, onRequest, onLog)
             }
         }
-        if (port.running) ActivityBar(port, openBuilds = { tab = Tab.BUILDS.ordinal })
+        if (port.running || buildsViewModel.gameInfo.reading) {
+            ActivityBar(port, reading = buildsViewModel.gameInfo.reading, openBuilds = { tab = Tab.BUILDS.ordinal })
+        }
         }
         // 配置面板画在最上层：它的遮罩要盖住顶栏与整块页面
         val panelFile = remember { mutableStateOf<GameEntry?>(null) }
@@ -486,7 +488,7 @@ private fun TopIcon(icon: ImageVector, description: String, onClick: () -> Unit)
 
 /** The port's progress, always in sight at the bottom while it runs; tapping opens the builds page */
 @Composable
-private fun ActivityBar(port: PortState, openBuilds: () -> Unit) {
+private fun ActivityBar(port: PortState, reading: Boolean, openBuilds: () -> Unit) {
     val secs = elapsedSecs(port.startedAt)
     GlassSheet(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
         Column(Modifier.fillMaxWidth().clickable { openBuilds() }.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -495,30 +497,41 @@ private fun ActivityBar(port: PortState, openBuilds: () -> Unit) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = NxPalette.Building,
                 )
-                Text(
-                    GameIdentity.displayName(File(port.gameFile)),
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f), maxLines = 1,
-                )
-                Text(
-                    stringResource(R.string.app_stage_and_time,
-                        port.stageOf, port.stages, secs / 60, secs % 60),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (port.running) {
+                    Text(
+                        GameIdentity.displayName(File(port.gameFile)),
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f), maxLines = 1,
+                    )
+                    Text(
+                        stringResource(R.string.app_stage_and_time,
+                            port.stageOf, port.stages, secs / 60, secs % 60),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    // 正在读选中的游戏（移植器在看它是什么）：一句话，玩家知道还在忙
+                    Text(
+                        stringResource(R.string.builds_info_reading),
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f), maxLines = 1,
+                    )
+                }
             }
-            if (port.stageStep.isNotEmpty()) {
+            if (port.running && port.stageStep.isNotEmpty()) {
                 Text(
                     "${port.stageName} · ${port.stageStep}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                 )
             }
-            LinearProgressIndicator(
-                progress = { port.progress },
-                modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = NxPalette.Building,
-            )
+            if (port.running) {
+                LinearProgressIndicator(
+                    progress = { port.progress },
+                    modifier = Modifier.fillMaxWidth().height(5.dp),
+                    color = NxPalette.Building,
+                )
+            }
         }
     }
 }
