@@ -56,6 +56,8 @@ import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.components.ActionRow
 import com.nx.android.core.ui.components.ChoiceRow
+import com.nx.android.core.ui.components.FirmwareHint
+import com.nx.android.core.ui.components.FirmwareRow
 import com.nx.android.core.ui.components.Hint
 import com.nx.android.core.ui.components.InfoRow
 import com.nx.android.core.ui.components.NoteRow
@@ -227,6 +229,16 @@ private fun EnvironmentSection(ob: OnboardingState, actions: AppActions, onReque
         enabled = !ob.unpacking,
     ) { confirmReset = true }
     KeysRow(actions, onRequest)
+    // 固件：整机级的一份（可选）。导入 zip 解到 App 的私有目录，移植时统一带给移植器
+    FirmwareRow(
+        imported = actions.firmware(),
+        onImport = {
+            onRequest(PickerRequest(PickerMode.FILE, setOf("zip"), null, locale.str(R.string.fw_pick),
+                onPicked = { f -> actions.onImportFirmware(f) }))
+        },
+        onClear = { actions.onClearFirmware() },
+    )
+    FirmwareHint()
     ActionRow(title = stringResource(R.string.settings_diagnostic_log), label = stringResource(R.string.builds_log_view),
         onClick = onDiagnosticLog)
     ActionRow(title = stringResource(R.string.settings_diagnostic_log), label = stringResource(R.string.common_share),

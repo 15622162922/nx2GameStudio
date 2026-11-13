@@ -33,14 +33,13 @@ class GameConfigJsonTest {
         assertEquals(0, GameConfig().copy(aliasHeadroom = 0).aliasHeadroom)
     }
 
-    /** 玩家的覆盖：自己的系统字体、自己的固件 dump、多线程回放 */
+    /** 玩家的覆盖：自己的系统字体、多线程回放 */
     @Test
-    fun `the player's own font, firmware and replay survive the round trip`() {
-        val c = GameConfig(sharedFont = "/sdcard/font.ttf", firmware = "/sdcard/sysdata", mtReplay = true)
+    fun `the player's own font and the replay survive the round trip`() {
+        val c = GameConfig(sharedFont = "/sdcard/font.ttf", mtReplay = true)
         val back = GameConfigJson.decode(GameConfigJson.encode(c))
         assertEquals(c, back)
         assertEquals("/sdcard/font.ttf", back.sharedFont)
-        assertEquals("/sdcard/sysdata", back.firmware)
         assertTrue(back.mtReplay)
     }
 
@@ -49,7 +48,6 @@ class GameConfigJsonTest {
         val old = JSONObject().put("touch", true).put("alias", 8)
         val c = GameConfigJson.decode(old)
         assertEquals("", c.sharedFont)
-        assertEquals("", c.firmware)
         assertFalse(c.mtReplay)
         assertEquals(8, c.aliasHeadroom)
     }
@@ -58,7 +56,6 @@ class GameConfigJsonTest {
     fun `a fresh config carries no override`() {
         val c = GameConfig()
         assertEquals("", c.sharedFont)
-        assertEquals("", c.firmware)
         assertFalse(c.mtReplay)
     }
 

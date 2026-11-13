@@ -22,6 +22,8 @@ class PrefsStore @Inject constructor(@ApplicationContext ctx: Context) {
     companion object {
         // the old app's key, unchanged
         const val KEYS = "keys"
+        // the imported firmware package (a zip): its file name; the unpacked copy is in the app's own folder
+        const val FIRMWARE = "firmware"
         // the old app's global port options: a game without its own config keeps them as the defaults
         const val LEGACY_TOUCH = "touch"
         const val LEGACY_FPS60 = "fps60"

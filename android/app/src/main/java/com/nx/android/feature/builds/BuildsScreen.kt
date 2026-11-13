@@ -62,6 +62,7 @@ import com.nx.android.domain.Ported
 import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.components.CapsuleButton
+import com.nx.android.core.ui.components.FirmwareRow
 import com.nx.android.core.ui.components.Hint
 import com.nx.android.feature.filepicker.PickerMode
 import com.nx.android.feature.filepicker.PickerRequest
@@ -164,7 +165,6 @@ private fun TaskDetail(lib: LibraryState, record: PortState.Record, viewModel: B
                 stringResource(R.string.builds_experimental).takeIf { config.experimental },
                 if (config.aliasHeadroom >= 0) stringResource(R.string.builds_alias_short, config.aliasHeadroom) else null,
                 config.sharedFont.takeIf { it.isNotBlank() }?.let { stringResource(R.string.builds_shared_font_short, File(it).name) },
-                config.firmware.takeIf { it.isNotBlank() }?.let { stringResource(R.string.builds_firmware_short, File(it).name) },
                 stringResource(R.string.builds_mt_replay).takeIf { config.mtReplay },
             ).ifEmpty { listOf(stringResource(R.string.builds_default_options)) }
             Hint(stringResource(R.string.builds_used_options, options.joinToString(" · ")))
@@ -289,19 +289,16 @@ private fun TargetCard(lib: LibraryState, port: BuildsUiState, viewModel: Builds
                     onClear = { cfg = cfg.copy(sharedFont = ""); lib.setConfig(f, cfg) },
                 )
                 Hint(stringResource(R.string.builds_shared_font_hint), size = 11.sp)
-                PathOptionRow(
-                    label = stringResource(R.string.builds_firmware),
-                    value = cfg.firmware,
-                    empty = stringResource(R.string.builds_firmware_none),
-                    onPick = {
-                        onRequest(PickerRequest(PickerMode.DIR, emptySet(), null,
-                            locale.str(R.string.builds_firmware_pick), onPicked = { dir ->
-                                cfg = cfg.copy(firmware = dir.absolutePath); lib.setConfig(f, cfg)
-                            }))
+                // 固件：整机级的一份（环境里导入的，迁移器统一带上），这里只是换一份 / 导入
+                FirmwareRow(
+                    imported = actions.firmware(),
+                    onImport = {
+                        onRequest(PickerRequest(PickerMode.FILE, setOf("zip"), null,
+                            locale.str(R.string.fw_pick), onPicked = { f -> actions.onImportFirmware(f) }))
                     },
-                    onClear = { cfg = cfg.copy(firmware = ""); lib.setConfig(f, cfg) },
+                    onClear = { actions.onClearFirmware() },
                 )
-                Hint(stringResource(R.string.builds_firmware_hint), size = 11.sp)
+                Hint(stringResource(R.string.fw_hint), size = 11.sp)
                 ConfigRow(stringResource(R.string.builds_mt_replay), cfg.mtReplay) { cfg = cfg.copy(mtReplay = it); lib.setConfig(f, cfg) }
                 Hint(stringResource(R.string.builds_mt_replay_hint), size = 11.sp)
             }

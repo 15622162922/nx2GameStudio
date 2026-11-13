@@ -151,7 +151,6 @@ class PortService : Service() {
             experimental = intent.getBooleanExtra(EXP, false),
             aliasHeadroom = intent.getIntExtra(ALIAS, ALIAS_AUTO),
             sharedFont = intent.getStringExtra(FONT) ?: "",
-            firmware = intent.getStringExtra(FIRMWARE) ?: "",
             mtReplay = intent.getBooleanExtra(MT, false),
         )
         val began = try { operations.beginBuild(game, cfg) } catch (e: Exception) {

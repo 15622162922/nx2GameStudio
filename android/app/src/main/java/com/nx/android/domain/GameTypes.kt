@@ -58,8 +58,6 @@ data class GameConfig(
     val aliasHeadroom: Int = ALIAS_AUTO,
     /** 玩家自己的系统字体（.ttf 的路径）：空 = 用 App 自带的那份（包里带 CJK 字形） */
     val sharedFont: String = "",
-    /** 玩家自己主机的固件 dump 里的系统内容文件夹：空 = 不带（游戏不问系统数据时无所谓） */
-    val firmware: String = "",
     /** 多线程回放：游戏的 Vulkan 命令录到自己的线程上（热闹场景里更快；要关掉得重新移植） */
     val mtReplay: Boolean = false,
 )
@@ -67,18 +65,19 @@ data class GameConfig(
 /**
  * 按游戏配置的存取：JSON 一个游戏一条。纯值，不碰 Android，测试跑在 JVM 上。
  * 旧版本存下的配置没有 "alias" 这一项，读出来是 Auto，构建行为与那时一致；
- * "font" / "fw" / "mt" 同样是新加的，老配置读出来是"没填 / 关"。
+ * "font" / "mt" 同样是新加的，老配置读出来是"没填 / 关"。
+ * 固件不是按游戏的：它是整机级的一份（环境里导入，移植时统一带上），所以不在这里。
  */
 object GameConfigJson {
 
     fun encode(c: GameConfig): JSONObject = JSONObject()
         .put("touch", c.touch).put("fps60", c.fps60).put("exp", c.experimental)
         .put("alias", c.aliasHeadroom)
-        .put("font", c.sharedFont).put("fw", c.firmware).put("mt", c.mtReplay)
+        .put("font", c.sharedFont).put("mt", c.mtReplay)
 
     fun decode(o: JSONObject): GameConfig = GameConfig(
         o.optBoolean("touch"), o.optBoolean("fps60"), o.optBoolean("exp"), o.optInt("alias", ALIAS_AUTO),
-        o.optString("font", ""), o.optString("fw", ""), o.optBoolean("mt", false))
+        o.optString("font", ""), o.optBoolean("mt", false))
 }
 
 /** Moves filename-keyed legacy options to title IDs once the library can identify their games. */

@@ -54,16 +54,16 @@ class PortRunnerTest {
         assertTrue(a.contains("--no-lsfg"))
     }
 
-    /** 玩家的覆盖：自己的系统字体、自己的固件 dump、多线程回放 */
+    /** 玩家的覆盖：自己的系统字体、整机那一份固件、多线程回放 */
     @Test
-    fun `the player's own font and firmware go on the command line`() {
-        val a = args(-1, sharedFont = "/sdcard/font.ttf", firmware = "/sdcard/sysdata")
+    fun `the player's own font and the firmware folder go on the command line`() {
+        val a = args(-1, sharedFont = "/sdcard/font.ttf", firmware = "/data/user/0/com.nx.android/files/firmware")
         val i = a.indexOf("--shared-font")
         assertTrue("the font is there", i >= 0)
         assertEquals("/sdcard/font.ttf", a[i + 1])
         val j = a.indexOf("--firmware")
         assertTrue("the firmware folder is there", j >= 0)
-        assertEquals("/sdcard/sysdata", a[j + 1])
+        assertEquals("/data/user/0/com.nx.android/files/firmware", a[j + 1])
     }
 
     @Test

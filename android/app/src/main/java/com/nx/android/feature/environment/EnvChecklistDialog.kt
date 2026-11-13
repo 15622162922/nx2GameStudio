@@ -63,6 +63,8 @@ fun EnvChecklistDialog(
     portRunning: Boolean,
     onPrepareEnv: () -> Unit,
     onPickKeys: () -> Unit,
+    firmware: String,
+    onImportFirmware: () -> Unit,
     onRunOnboarding: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -113,6 +115,14 @@ fun EnvChecklistDialog(
                         if (state.keysOk) state.keysPath else stringResource(R.string.set_keys_not_set),
                         action = if (state.keysOk) null else stringResource(R.string.common_modify),
                         onAction = onPickKeys,
+                    )
+                    // 固件：整机级的一份，可选项（只有读主机系统数据的游戏才需要）
+                    CheckLine(
+                        stringResource(R.string.fw_title),
+                        if (firmware.isNotBlank()) EnvCheck.Level.OK else EnvCheck.Level.HINT,
+                        if (firmware.isNotBlank()) firmware else stringResource(R.string.fw_not_imported),
+                        action = if (firmware.isNotBlank()) null else stringResource(R.string.fw_import),
+                        onAction = onImportFirmware,
                     )
                     // 子进程限制：Android 会停掉本应用的子进程，移植器就是其中之一（它是活最久的那个）
                     PhantomLine(state, viewModel::refreshPhantom) { phantomOpen = true }
