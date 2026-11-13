@@ -15,6 +15,18 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha10 - 2026-11-13
+
+### Before you update
+
+- Nothing to redo: the player API did not move, so the data packs of alpha09 keep working.
+
+### New
+
+- FINAL FANTASY RESONANCE (Asian release) plays on Android now: its own profile, its own host rows, its own gamepad theme. Unreal Engine 5.6.1, 73,512 shaders, all translated. The international release is untouched.
+- The older pack of the same game goes when the new one lands: its saves move into the new pack first, and two packs that both hold saves are left alone.
+- The cover is read again when it failed (the card showed a letter instead of the game's own picture until the app was restarted), and a pack that is only a manifest never wins the card.
+
 ## v0.3.0-alpha09 - 2026-11-13
 
 ### Before you update
