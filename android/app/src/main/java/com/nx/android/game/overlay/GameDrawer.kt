@@ -79,14 +79,15 @@ import com.nx.android.core.ui.theme.GlassSheet
 import com.nx.android.core.ui.theme.NxPalette
 import kotlinx.coroutines.delay
 
-/** 抽屉的三个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
+/** 抽屉的四个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
 enum class DrawerTab(@StringRes val label: Int) {
-    HUD(R.string.drawer_tab_hud), FRAMEGEN(R.string.drawer_tab_framegen), CONTROLS(R.string.drawer_tab_controls)
+    PERF(R.string.drawer_tab_perf), HUD(R.string.drawer_tab_hud),
+    FRAMEGEN(R.string.drawer_tab_framegen), CONTROLS(R.string.drawer_tab_controls)
 }
 
 /**
  * 游戏内抽屉（:play 进程自己的 UI）：虚拟手柄的菜单按钮、物理手柄菜单键或系统返回手势唤出，
- * 玻璃卡样式与应用一致，三个标签页（HUD / 插帧 / 操作）+ 底部动作行。
+ * 玻璃卡样式与应用一致，四个标签页（性能 / HUD / 插帧 / 操作）+ 底部动作行。
  *
  * 帧率档位与帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
  * （震动、底座模式，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
@@ -168,17 +169,12 @@ fun GameDrawer(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 when (DrawerTab.entries[tab]) {
+                                    // 性能页：帧率档位与底座模式（两个都是性能取舍，与帧生成无关）
+                                    DrawerTab.PERF -> PerfRows(ratePin, onRatePin, rateSupported)
                                     DrawerTab.HUD -> HudRows(hudStats, onHudStats, hudDevice, onHudDevice,
                                         hudFields, onHudFields, hudFahrenheit, onHudFahrenheit)
-                                    // 插帧页：帧率档位在上（它与帧生成无关，自己就能用），帧生成在下
-                                    DrawerTab.FRAMEGEN -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        if (rateSupported) {
-                                            RateRows(ratePin, onRatePin)
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                        }
-                                        if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
+                                    DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
-                                    }
                                     DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
                                         onLayoutEditor, onResetPadLayout)
                                 }
@@ -346,19 +342,28 @@ private fun HudRows(
 }
 
 /**
- * 帧率档位组：钉住呈现的那一档（宿主 perf_android.c 的 fps_pin），不再自动在 60/40/30 之间切换。
- * 宿主那边每 30 帧重读一次这个值，所以改档即时生效；档位是 0（跟随游戏）时放它自由自适应。
+ * 性能页：帧率档位（钉住呈现的那一档）与底座模式（更清晰的画面，更耗电）。
+ * 宿主那边每 30 帧重读一次档位，所以改档即时生效；底座模式是宿主自己的设置，即改即生效。
  */
 @Composable
-private fun RateRows(pin: Int, onPick: (RatePin) -> Unit) {
-    GroupLabel(stringResource(R.string.drawer_group_rate))
-    // 选项的词先取好：回调里不能取词
-    val labels = rateLabels()
-    OptionRow(Icons.Filled.Speed, stringResource(R.string.drawer_rate_row), labels, rateLabel(pin)) { name ->
-        val i = labels.indexOf(name)
-        onPick(RatePin(if (i >= 0) RatePin.PINS[i] else 0))
+private fun PerfRows(pin: Int, onPick: (RatePin) -> Unit, rateSupported: Boolean) {
+    if (rateSupported) {
+        GroupLabel(stringResource(R.string.drawer_group_rate))
+        // 选项的词先取好：回调里不能取词
+        val labels = rateLabels()
+        OptionRow(Icons.Filled.Speed, stringResource(R.string.drawer_rate_row), labels, rateLabel(pin)) { name ->
+            val i = labels.indexOf(name)
+            onPick(RatePin(if (i >= 0) RatePin.PINS[i] else 0))
+        }
+        Hint(stringResource(R.string.drawer_rate_hint))
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
-    Hint(stringResource(R.string.drawer_rate_hint))
+    GroupLabel(stringResource(R.string.drawer_group_picture))
+    var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
+    ToggleRow(Icons.Filled.Tv, stringResource(R.string.drawer_docked), stringResource(R.string.drawer_docked_hint), docked) {
+        docked = it; Native.menuSet(4, if (it) 1.0 else 0.0)
+    }
 }
 
 /** 档位的选项：跟随游戏在前，后面是宿主的三档（顺序与 RatePin.PINS 一致） */
@@ -370,7 +375,7 @@ private fun rateLabels() = listOf(stringResource(R.string.drawer_follow_game), "
 private fun rateLabel(pin: Int) =
     rateLabels().getOrNull(RatePin.indexOf(pin)) ?: stringResource(R.string.drawer_follow_game)
 
-/** 操作页：手柄（显示、浓淡、布局）与宿主的震动、底座模式 */
+/** 操作页：手柄（显示、浓淡、布局）与宿主的震动 */
 @Composable
 private fun ControlRows(
     padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
@@ -381,7 +386,6 @@ private fun ControlRows(
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
     var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
-    var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
 
     GroupLabel(stringResource(R.string.drawer_group_pad))
     ToggleRow(Icons.Filled.SportsEsports, stringResource(R.string.drawer_virtual_pad), null, shown) { shown = it; onPadShown(it) }
@@ -391,7 +395,6 @@ private fun ControlRows(
     Spacer(Modifier.height(4.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ToggleRow(Icons.Filled.Vibration, stringResource(R.string.drawer_rumble), null, rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
-    ToggleRow(Icons.Filled.Tv, stringResource(R.string.drawer_docked), null, docked) { docked = it; Native.menuSet(4, if (it) 1.0 else 0.0) }
 }
 
 /** 手柄浓淡：标题行带当前值，滑杆占一整行（与上面那些行一样从文字列开始） */

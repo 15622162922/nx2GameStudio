@@ -228,11 +228,14 @@
     <string name="fg_hint">游戏运行中在抽屉里打开帧生成即可使用；DLL 的更新会自动拷到私有目录。</string>
     <string name="drawer_tab_framegen">帧生成</string>
     <string name="drawer_tab_hud">HUD</string>
+    <string name="drawer_tab_perf">性能</string>
     <string name="drawer_tab_controls">操作</string>
     <string name="drawer_group_info">画面信息</string>
     <string name="drawer_group_rate">帧率</string>
+    <string name="drawer_group_picture">画面</string>
     <string name="drawer_rate_row">帧率档位</string>
-    <string name="drawer_rate_hint">把帧率钉在你选的档位，不再自动在 60/40/30 之间切换；游戏自身限 30 的仍是 30。</string>
+    <string name="drawer_rate_hint">游戏帧率常在 30–60 之间来回跳时，试试钉在 60；觉得游戏跑得太快时，改用 30。游戏自身限 30 的仍是 30。</string>
+    <string name="drawer_docked_hint">开启后按电视的分辨率渲染，画面更清晰，也更耗电；关闭后帧率更高。</string>
     <string name="drawer_group_pad">手柄</string>
     <string name="drawer_no_framegen">这个游戏不支持帧生成</string>
     <string name="drawer_pause_game">暂停游戏</string>

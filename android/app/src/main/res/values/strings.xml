@@ -229,11 +229,14 @@
     <string name="fg_hint">Turn it on in the drawer\'s frame generation page while a game runs; a new DLL is copied to the private folder on its own.</string>
     <string name="drawer_tab_framegen">Frame generation</string>
     <string name="drawer_tab_hud">HUD</string>
+    <string name="drawer_tab_perf">Performance</string>
     <string name="drawer_tab_controls">Controls</string>
     <string name="drawer_group_info">On-screen information</string>
     <string name="drawer_group_rate">Frame rate</string>
+    <string name="drawer_group_picture">Picture</string>
     <string name="drawer_rate_row">Frame rate step</string>
-    <string name="drawer_rate_hint">Holds the frame rate at the step you pick instead of letting it step 60/40/30 on its own. A game capped at 30 fps stays at 30.</string>
+    <string name="drawer_rate_hint">If the frame rate keeps bouncing between 30 and 60, try pinning it to 60; if the game runs faster than it should, pin it to 30. A game capped at 30 fps stays at 30.</string>
+    <string name="drawer_docked_hint">Docked mode renders at the TV\'s resolution: a sharper picture that costs more power. Turn it off for a higher frame rate.</string>
     <string name="drawer_group_pad">Gamepad</string>
     <string name="drawer_no_framegen">This game has no frame generation</string>
     <string name="drawer_pause_game">Pause the game</string>
