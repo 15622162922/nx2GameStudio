@@ -184,6 +184,15 @@ Events: with `--progress json`, every line on stdout is one JSON object, the pro
 
 **Show gamepad** is saved in `settings.txt`. When enabled, the on-screen controls hide on a mapped controller button press or when stick, D-pad or trigger motion reaches the same activation thresholds as gameplay. A touch restores the controls for the next press, including while a controller is still attached. Button releases still reach the game but leave the restored touch controls visible. The last used controller disconnecting also restores the controls. When **Show gamepad** is off, only the draggable menu button is visible and all other touches go to the game. The menu button stays available in either mode. The controller count (`pad_watch`) is used for vibration routing.
 
+**Motion aiming** (`DM_MOTION`, `DM_MOTION_RAW`, `DM_MOTION_LOG`): the device's own turn moves player 1's six-axis
+sensor (`dm_motion_set`, `hle_hid.c`), as the Joy-Cons turn with the console in handheld mode (The Legend of Zelda:
+Tears of the Kingdom aims its bow by them). The gyroscope's samples are mapped into the screen's frame (the display's
+rotation, read through JNI), the accelerometer's give gravity's direction. The app's settings page has the two
+switches (the **Motion** section): the motion on or off (the default follows the device's gyroscope) and keeping the
+measured direction of a flick instead of the host's made-up waveform. They are handed to the host as env rows when the
+game starts and written into the game's control file (`DM_CTL`) while it runs, so a change takes effect at once,
+without restarting the game.
+
 ## What the player installs
 
 The player gets the bundle (`dist/nx2android-<version>-<os>-<cpu>.zip` from `python packaging/build_bundle.py`, for Windows and macOS): unzip, start `nx2android.exe` (`nx2android` on a Mac), nothing to install with pip. It does not ship toolchains; the Setup tab (`nx2android.exe -m porter doctor`, or `python -m porter doctor` from the repository) checks them and the free disk space, and its **Download missing tools** button (`porter tools --download`, `porter/fetch.py`) fetches the missing NDK, .NET SDK and platform-tools from Google's SDK repository and Microsoft's release list, checks each archive against the checksum its list gives, and unpacks them into the player's nx2android folder (`toolchains/`), which the finders search:

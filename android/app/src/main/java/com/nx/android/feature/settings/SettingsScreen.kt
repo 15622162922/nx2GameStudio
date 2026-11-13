@@ -52,6 +52,12 @@ import com.nx.android.data.AppLocale
 import com.nx.android.domain.drivers.Driver
 import com.nx.android.domain.drivers.DriverRepository
 import com.nx.android.data.LosslessDll
+import com.nx.android.data.CtlWriter
+import com.nx.android.data.MotionKnobs
+import com.nx.android.data.MotionSettings
+import com.nx.android.data.PrefsStore
+import com.nx.android.data.hasGyroscope
+import com.nx.android.appstate.PlayerState
 import com.nx.android.app.AppActions
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.components.ActionRow
@@ -66,6 +72,7 @@ import com.nx.android.feature.filepicker.PickerRequest
 import com.nx.android.core.ui.components.QuietButton
 import com.nx.android.core.ui.components.StatusDot
 import com.nx.android.core.ui.components.SubtitleRow
+import com.nx.android.core.ui.components.SwitchRow
 import com.nx.android.core.ui.components.rememberPageScroll
 import com.nx.android.core.ui.components.step
 import com.nx.android.core.ui.failureText
@@ -79,7 +86,7 @@ import java.io.File
  * 设置页：左边一栏分区，右边一栏内容。
  *
  * 它是一整页，盖住顶栏与下面的页面（从顶栏的设置图标进来，关掉才回到底下的页面）。
- * 分区固定五个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
+ * 分区固定六个（见 [SettingsSection]），顺序不变，内容按分区给。左栏选中的那一个在右边
  * 展开，右边自己滚；分区换了，右边的滚动位置回到顶上。
  *
  * 设置的内容还是原来那些：环境的状态与准备/重置、prod.keys 的路径、Vulkan 驱动（装/删/
@@ -98,12 +105,14 @@ enum class SettingsSection(@StringRes val title: Int) {
     STORAGE(R.string.set_section_storage),
     DRIVERS(R.string.driver_section),
     DISPLAY(R.string.set_section_display),
+    MOTION(R.string.set_section_motion),
     ABOUT(R.string.set_section_about),
 }
 
 @Composable
 fun SettingsScreen(ob: OnboardingState, drivers: List<Driver>, driverRepository: DriverRepository, update: UpdateViewModel,
                    storageViewModel: StorageViewModel,
+                   prefs: PrefsStore, player: PlayerState,
                    actions: AppActions, onRequest: (PickerRequest) -> Unit,
                    onDrivers: () -> Unit,
                    section: SettingsSection, onSelectSection: (SettingsSection) -> Unit,
@@ -149,6 +158,7 @@ fun SettingsScreen(ob: OnboardingState, drivers: List<Driver>, driverRepository:
                         SettingsSection.STORAGE -> StorageSection(storageViewModel)
                         SettingsSection.DRIVERS -> DriversSection(drivers, driverRepository, actions, onRequest, onDrivers)
                         SettingsSection.DISPLAY -> DisplaySection(actions, onRequest)
+                        SettingsSection.MOTION -> MotionSection(prefs, player)
                         SettingsSection.ABOUT -> AboutSection(ob, update, actions)
                     }
                 }
@@ -356,6 +366,41 @@ private fun DisplaySection(actions: AppActions, onRequest: (PickerRequest) -> Un
         },
     )
     NoteRow(stringResource(R.string.fg_hint))
+}
+
+/**
+ * 体感：设备转动带动游戏里的六轴传感器（王国之泪的弓就是靠它瞄）。
+ *
+ * 开不开默认按设备有没有陀螺仪；「保留甩动方向」用实测的方向，不用宿主生成的波形。
+ * 改动立刻生效：正在跑的游戏从 DM_CTL 读到（宿主每 100 ms 读一次），不用重启它。
+ */
+@Composable
+private fun MotionSection(prefs: PrefsStore, player: PlayerState) {
+    val context = LocalContext.current
+    val gyro = remember { hasGyroscope(context) }
+    var knobs by remember { mutableStateOf(MotionSettings(prefs).load(gyro)) }
+    val ctl = remember { CtlWriter(context.filesDir) }
+    val runningId = player.titleId.takeIf { player.running && it.isNotEmpty() }
+
+    fun apply(k: MotionKnobs) {
+        knobs = k
+        MotionSettings(prefs).save(k)
+        if (runningId != null) ctl.env(runningId, k.ctlLines())
+    }
+
+    SwitchRow(
+        title = stringResource(R.string.motion_on),
+        checked = knobs.on,
+        note = if (gyro) stringResource(R.string.motion_on_note) else stringResource(R.string.motion_no_gyro),
+        onChange = { apply(knobs.copy(on = it)) },
+    )
+    SwitchRow(
+        title = stringResource(R.string.motion_raw),
+        checked = knobs.raw,
+        note = stringResource(R.string.motion_raw_note),
+        onChange = { apply(knobs.copy(raw = it)) },
+    )
+    if (runningId != null) NoteRow(stringResource(R.string.motion_running_note))
 }
 
 /**

@@ -431,7 +431,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
         // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
         if (settingsOpen) {
             SettingsScreen(onboarding, installedDrivers, drivers, updateViewModel,
-                storageViewModel, actions,
+                storageViewModel, prefs, player, actions,
                 onRequest, onDrivers,
                 section = settingsSection, onSelectSection = { settingsSection = it },
                 onDiagnosticLog = onDiagnosticLog,

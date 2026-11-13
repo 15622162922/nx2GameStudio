@@ -179,6 +179,13 @@
     <string name="set_keys_not_set">还没有设置</string>
     <string name="set_section_storage">存储</string>
     <string name="set_section_display">画面</string>
+    <string name="set_section_motion">体感</string>
+    <string name="motion_on">体感瞄准</string>
+    <string name="motion_on_note">设备的转动带动游戏里的六轴传感器（王国之泪的弓）。</string>
+    <string name="motion_no_gyro">这台设备没有陀螺仪。</string>
+    <string name="motion_raw">保留甩动方向</string>
+    <string name="motion_raw_note">游戏读实测的方向，不用宿主生成的波形。</string>
+    <string name="motion_running_note">正在跑的游戏立刻就改。</string>
     <string name="set_section_about">关于</string>
     <string name="set_version">版本</string>
     <string name="set_rerun_onboarding">重新运行引导</string>

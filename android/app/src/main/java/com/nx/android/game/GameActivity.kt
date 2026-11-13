@@ -46,7 +46,9 @@ import com.nx.android.R
 import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
+import com.nx.android.data.MotionSettings
 import com.nx.android.data.PrefsStore
+import com.nx.android.data.hasGyroscope
 import com.nx.android.data.RatePin
 import com.nx.android.data.RateSettings
 import com.nx.android.data.drivers.Drivers
@@ -236,7 +238,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         hudFields = HudField.of(prefs.str(PrefsStore.HUD_FIELDS, "").split(",").filter { it.isNotBlank() })
             .ifEmpty { HudField.DEFAULT }
         hudFahrenheit = prefs.bool(PrefsStore.HUD_TEMP_F, false)
-        val env = fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()
+        // 体感的两行也交给宿主：开不开（默认按设备有没有陀螺仪）与保留甩动方向
+        val env = (fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()) +
+            MotionSettings(PrefsStore(this)).load(hasGyroscope(this)).envLines()
         if (!Native.start(pack, filesDir.path, titleId, resources.displayMetrics.densityDpi, env, this)) {
             endProcess()   // the save import asked to end: it happens at the next start
             return
