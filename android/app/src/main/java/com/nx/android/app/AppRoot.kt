@@ -399,6 +399,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
             onRefresh = { lib.rescan() },
             onSettings = { settingsOpen = true },
             chip = environmentCheckUiState.chip,
+            firmwareImported = environmentCheckUiState.firmwareImported,
             onChip = onEnvCheck,
         )
         // 有新版本时的弹框：冷启动查到了新版本才出现
@@ -444,7 +445,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
 @Composable
 private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit,
                    onSettings: () -> Unit,
-                   chip: EnvCheck.Chip, onChip: () -> Unit) {
+                   chip: EnvCheck.Chip, firmwareImported: Boolean, onChip: () -> Unit) {
     val time by produceState(initialValue = "") {
         val format = SimpleDateFormat("HH:mm", Locale.getDefault())
         while (true) {
@@ -481,7 +482,7 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit
         // 设置：它是一整页，从这个图标进来
         TopIcon(Icons.Filled.Settings, stringResource(R.string.app_tab_settings), onSettings)
         Spacer(Modifier.width(6.dp))
-        EnvChip(chip, onChip)
+        EnvChip(chip, firmwareImported, onChip)
         Text(time, style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
     }

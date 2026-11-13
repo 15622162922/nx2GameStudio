@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
         onImportFirmware = { zip -> importFirmware(zip) },
         onClearFirmware = {
             firmwareRepo.clear()
+            envCheck.refresh()   // the chip's colour follows it at once
             toast(locale.str(R.string.fw_cleared))
         },
         onShareLog = {
@@ -248,7 +249,7 @@ class MainActivity : ComponentActivity() {
             val n = withContext(Dispatchers.IO) {
                 runCatching { firmwareRepo.unpack(zip) }
             }
-            n.onSuccess { toast(locale.str(R.string.fw_imported, zip.name, it)) }
+            n.onSuccess { toast(locale.str(R.string.fw_imported, zip.name, it)); envCheck.refresh() }   // the chip's colour follows it at once
                 .onFailure { toast(locale.str(R.string.fw_import_failed, zip.name)) }
         }
     }
