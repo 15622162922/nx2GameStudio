@@ -1,5 +1,6 @@
 # FINAL FANTASY RESONANCE (Asian release): Square Enix, Unreal Engine 5.6.1 (SDK MW+EpicGames+UnrealEngine-5_6_1 in main; the desktop renderer, SF_GLSL_SWITCH shaders), SDK 20.5.17, NVN, CRIWARE sound;
-# update 1.0.1 (v65536). The Asian release of the same game (its NACP lists Korean, Traditional Chinese and Simplified Chinese, with the English name in all three): the same engine, the same SDK build and the
+# update 1.0.1 (v65536): the version number is this release's own update NCA's (0x10000, its second version; the international release's update 1.0.1 carries the same number, both series
+# numbering their second version so). The Asian release of the same game (its NACP lists Korean, Traditional Chinese and Simplified Chinese, with the English name in all three): the same engine, the same SDK build and the
 # same assets as the international release (0100606026F12000), but its own main build, whose engine data sits at the same addresses and whose game shaders have their own hashes.
 # Started from the NSP script's provisional profile (dm/games/profile_guess.py) and brought up on the phone (docs/agents)
 # Format: see dm/games/README.md
