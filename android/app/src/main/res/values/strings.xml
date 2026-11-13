@@ -49,6 +49,7 @@
     <string name="main_share_log">Share the log</string>
     <string name="main_log_empty">The log is still empty</string>
     <string name="main_log_cleared">The log has been cleared</string>
+    <string name="main_log_bundle_failed">The log could not be packed</string>
     <string name="main_no_permission_settings">This device has no permission settings page</string>
     <string name="main_no_battery_settings">This device has no battery settings page</string>
     <string name="port_notification_channel">Port progress</string>

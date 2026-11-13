@@ -48,6 +48,7 @@
     <string name="main_share_log">分享日志</string>
     <string name="main_log_empty">日志还是空的</string>
     <string name="main_log_cleared">日志已清空</string>
+    <string name="main_log_bundle_failed">日志打包失败</string>
     <string name="main_no_permission_settings">这台设备没有可用的权限设置页</string>
     <string name="main_no_battery_settings">这台设备没有可用的电池设置页</string>
     <string name="port_notification_channel">移植进度</string>
