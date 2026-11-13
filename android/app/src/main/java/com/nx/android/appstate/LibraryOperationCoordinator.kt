@@ -108,7 +108,7 @@ class LibraryOperationCoordinator @Inject constructor(
         if (workspace == null) return false
         return repository.packsOf(entry).any { pack ->
             val at = LibraryFileScanner.portFromPack(pack)?.romfsAt.orEmpty()
-            at.isNotEmpty() && File(at).toPath().startsWith(workspace.toPath())
+            GameCleanup.packReadsWorkspace(at, workspace)
         }
     }
 

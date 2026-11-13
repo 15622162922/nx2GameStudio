@@ -35,6 +35,13 @@ data class GameEntry(
     val label: String get() = pack?.name?.trim()?.takeIf { it.isNotEmpty() }
         ?: sourcePath?.let { GameIdentity.displayName(File(it)) }
         ?: titleId
+
+    /**
+     * 数据包读的是工作区里的 RomFS（清单的 romfs_at 指进工作区）：工作区是游戏的一部分，
+     * 单独清构建缓存会让它跑不起来——那种卡不摆「清除构建缓存」。
+     */
+    val romfsSharedWithWorkspace: Boolean
+        get() = pack != null && GameCleanup.packReadsWorkspace(pack.romfsAt, work)
 }
 
 

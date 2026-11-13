@@ -223,6 +223,8 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
         val s = File(it.pack, "saves")
         s.isDirectory && s.listFiles()?.isNotEmpty() == true
     } == true
+    // 数据包读的是工作区里的 RomFS：工作区是游戏的一部分，清构建缓存会让它跑不起来——那种卡不摆这个按钮
+    val cacheLocked = e.romfsSharedWithWorkspace
 
     /**
      * 破坏性动作：正在构建 / 正在运行就说清楚为什么，不能动；能动就把要删的东西算出来给确认框。
@@ -408,11 +410,13 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                                 leadingIcon = { Icon(Icons.Filled.SdCard, null, Modifier.size(18.dp)) },
                                 onClick = { menuOpen = false; askMove() },
                             )
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(locale.str(R.string.lib_remove_cache_action)) },
-                                leadingIcon = { Icon(Icons.Filled.CleaningServices, null, Modifier.size(18.dp)) },
-                                onClick = { menuOpen = false; askRemoval(Removal.CACHE) },
-                            )
+                            if (!cacheLocked) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(locale.str(R.string.lib_remove_cache_action)) },
+                                    leadingIcon = { Icon(Icons.Filled.CleaningServices, null, Modifier.size(18.dp)) },
+                                    onClick = { menuOpen = false; askRemoval(Removal.CACHE) },
+                                )
+                            }
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text(locale.str(R.string.lib_remove_action), color = NxPalette.Danger) },
                                 leadingIcon = { Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = NxPalette.Danger) },
@@ -490,8 +494,11 @@ private fun GameDetailScreen(lib: LibraryState, port: PortState, player: PlayerS
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         // 清构建缓存：游戏照常能玩，只把能再生的东西清掉
-                        QuietButton(locale.str(R.string.lib_remove_cache_action),
-                            { askRemoval(Removal.CACHE) }, modifier = Modifier.weight(1f))
+                        // （数据包读的是工作区里的 RomFS 时不行：那种卡只留删除游戏）
+                        if (!cacheLocked) {
+                            QuietButton(locale.str(R.string.lib_remove_cache_action),
+                                { askRemoval(Removal.CACHE) }, modifier = Modifier.weight(1f))
+                        }
                         QuietButton(locale.str(R.string.lib_remove_action),
                             { askRemoval(Removal.DELETE) }, modifier = Modifier.weight(1f))
                     }

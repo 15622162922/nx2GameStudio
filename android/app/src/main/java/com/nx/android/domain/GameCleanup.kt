@@ -68,5 +68,16 @@ object GameCleanup {
         return File(workRoot, "${titleId.uppercase(Locale.US)}_build")
     }
 
+    /**
+     * 数据包读的是工作区里的 RomFS（清单的 romfs_at 指进工作区，移植时没有复制一份进包）：
+     * 那个文件夹是游戏的一部分，单独清掉工作区游戏就跑不起来了。
+     *
+     * 老的包自带 RomFS（没有 romfs_at）：工作区随便删。
+     */
+    fun packReadsWorkspace(romfsAt: String, workspace: File?): Boolean {
+        if (romfsAt.isEmpty() || workspace == null) return false
+        return File(romfsAt).toPath().startsWith(workspace.toPath())
+    }
+
 
 }

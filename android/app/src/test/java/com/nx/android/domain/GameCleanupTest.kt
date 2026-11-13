@@ -135,4 +135,35 @@ class GameCleanupTest {
         val own = GameCleanup.plan("0100000000010000", emptyList(), ws, emptyList())
         assertFalse(own.workspaceInUse)   // 老的包自带 RomFS：工作区随便删
     }
+
+    /** 共用 RomFS 的新包：romfs_at 指进工作区；老包自带 RomFS（没有 romfs_at）：工作区随便删 */
+    @Test
+    fun `a pack reading the work folder's romfs is told apart from an old self-contained one`() {
+        val t = Tree()
+        val ws = t.workspace("0100000000010000")
+        val romfs = File(ws, "extract/v1/RomFS").apply { mkdirs() }
+
+        assertTrue(GameCleanup.packReadsWorkspace(romfs.absolutePath, ws))
+        assertFalse(GameCleanup.packReadsWorkspace("", ws))              // 老的包自带 RomFS
+        assertFalse(GameCleanup.packReadsWorkspace("/elsewhere/RomFS", ws))  // 指向工作区以外
+        assertFalse(GameCleanup.packReadsWorkspace(romfs.absolutePath, null)) // 工作区不知道
+    }
+
+    /** 卡片知道自己的包是不是读着工作区里的 RomFS：那种卡不摆「清除构建缓存」 */
+    @Test
+    fun `a card knows when its pack shares the romfs with the work folder`() {
+        val t = Tree()
+        val ws = t.workspace("0100000000010000")
+        val romfs = File(ws, "extract/v1/RomFS").apply { mkdirs() }
+        val pack = t.pack("Game-data")
+
+        val shared = Ported(pack, File(pack, "host/libdmplay.so"), null, "0100000000010000",
+            romfsAt = romfs.absolutePath)
+        assertTrue(GameEntry("0100000000010000", shared, ws, null).romfsSharedWithWorkspace)
+
+        val own = Ported(pack, File(pack, "host/libdmplay.so"), null, "0100000000010000")
+        assertFalse(GameEntry("0100000000010000", own, ws, null).romfsSharedWithWorkspace)
+        assertFalse(GameEntry("0100000000010000", shared, null, null).romfsSharedWithWorkspace) // 工作区不知道
+        assertFalse(GameEntry("0100000000010000", null, ws, null).romfsSharedWithWorkspace)         // 没有包
+    }
 }
