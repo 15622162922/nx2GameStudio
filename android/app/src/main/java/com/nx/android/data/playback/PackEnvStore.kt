@@ -33,7 +33,14 @@ internal object PackEnvStore {
     fun driverChoices(pack: File, installed: List<Pair<String, String>>): List<Pair<String, String?>> =
         listOf("" to null) + installed + drivers(pack).map { it to it }
 
-    /** The rows' current values (DM_LANG, DM_VK_DRIVER), null when the row is absent */
+    /**
+     * The rows' current values (DM_LANG, DM_VK_DRIVER), null when the row is absent.
+     *
+     * The driver's row has three states: absent (null) — the player never picked a driver, an empty value ("") —
+     * the player picked the device's own driver, and a value — the player picked that driver. The host reads an
+     * empty value as no driver at all (the device's own one), so the difference between absent and empty is the
+     * app's own: absent is where the default goes, empty is a choice the app keeps.
+     */
     fun current(pack: File): Pair<String?, String?> {
         var lang: String? = null; var drv: String? = null
         for (l in lines(pack)) {
@@ -43,7 +50,18 @@ internal object PackEnvStore {
         return lang to drv
     }
 
-    /** Sets the rows (null removes one); the file's other lines keep their places */
+    /**
+     * The default driver: writes [driver] into the pack's row when the row is not there at all (the player never
+     * picked one). An empty row — the player picked the device's own driver — is left alone: the default never
+     * takes that choice back.
+     */
+    fun ensureDriverDefault(pack: File, driver: String) {
+        val (lang, drv) = current(pack)
+        if (drv != null) return
+        set(pack, lang, driver)
+    }
+
+    /** Sets the rows (null removes one, an empty driver writes an empty row); the file's other lines keep their places */
     fun set(pack: File, lang: String?, driver: String?) {
         val rest = lines(pack).filter { l ->
             val (k, _) = splitRow(l)

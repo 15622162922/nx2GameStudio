@@ -11,6 +11,8 @@ interface DriverRepository {
 
     suspend fun refresh(): List<Driver>
     suspend fun ensureShipped(): Boolean
+    /** The driver the app ships, when it is installed (the built-in one), null when there is none. */
+    suspend fun builtIn(): Driver?
     suspend fun install(file: File): Result<Driver>
     suspend fun download(release: DriverRelease, onProgress: (Float) -> Unit): Result<Driver>
     suspend fun remove(id: String): Boolean

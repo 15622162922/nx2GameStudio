@@ -39,6 +39,11 @@ class DriverRepositoryImpl @Inject constructor(
         withContext(io) { store.ensureShipped() }.also { refresh() }
     }
 
+    /** The driver the app ships: the one in the app's own folder with the built-in mark. */
+    override suspend fun builtIn(): Driver? = withContext(io) {
+        store.list().firstOrNull { it.shipped }
+    }
+
     override suspend fun install(file: File): Result<Driver> = mutationLock.withLock {
         withContext(io) { store.install(file) }.also { refresh() }
     }

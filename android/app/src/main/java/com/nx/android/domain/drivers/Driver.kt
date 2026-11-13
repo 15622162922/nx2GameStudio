@@ -14,7 +14,7 @@ data class Driver(
     val label: String get() = if (version.isBlank()) name else "$name · $version"
 }
 
-enum class DriverNote { GPU_8XX, GPU_7XX, GPU_7XX_ONE_UI }
+enum class DriverNote { GPU_8XX, GPU_7XX, GPU_7XX_ONE_UI, GPU_6XX_7XX_8XX, GPU_7XX_8XX_SWITCH }
 
 data class DriverRelease(
     val file: String,

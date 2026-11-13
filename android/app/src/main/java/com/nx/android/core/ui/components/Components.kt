@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,12 +31,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nx.android.R
 import com.nx.android.core.ui.theme.GlassPanel
 import com.nx.android.core.ui.theme.NxPalette
 
@@ -133,35 +136,48 @@ fun rememberPageScroll(): ScrollState =
  *
  * `fallback` is what the button shows when the current value is not among the options (a driver was deleted, the
  * pack's file is gone).
+ *
+ * `hint` is a line the player asks for: a question mark beside the row shows it, and hides it again.
  */
 @Composable
 fun PickRow(label: String, options: List<Pair<String, String>>, current: String?, onSelect: (String) -> Unit,
-            fallback: String) {
+            fallback: String, hint: String? = null) {
     var open by remember { mutableStateOf(false) }
+    var hintOpen by remember { mutableStateOf(false) }
     // 现在的值不在选项里（驱动被删了、包里的文件没了）：显示它最后的名字，别把整条路径摊出来
     val shown = options.firstOrNull { it.first == current }?.second
         ?: current?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
         ?: fallback
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
-        Box {
-            // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
-            QuietButton(shown, onClick = { open = !open },
-                modifier = Modifier.width(200.dp),
-                trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
-            androidx.compose.material3.DropdownMenu(
-                expanded = open,
-                onDismissRequest = { open = false },
-                modifier = Modifier.width(200.dp),
-            ) {
-                for ((value, name) in options.distinctBy { it.first }) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text(name, fontWeight = if (value == current) FontWeight.Bold else FontWeight.Normal) },
-                        onClick = { open = false; onSelect(value) },
-                    )
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(90.dp))
+            Box {
+                // 按钮定宽：箭头钉在右端，两个字段的箭头排成一列（值的长度不再影响它的位置）
+                QuietButton(shown, onClick = { open = !open },
+                    modifier = Modifier.width(200.dp),
+                    trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
+                androidx.compose.material3.DropdownMenu(
+                    expanded = open,
+                    onDismissRequest = { open = false },
+                    modifier = Modifier.width(200.dp),
+                ) {
+                    for ((value, name) in options.distinctBy { it.first }) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(name, fontWeight = if (value == current) FontWeight.Bold else FontWeight.Normal) },
+                            onClick = { open = false; onSelect(value) },
+                        )
+                    }
+                }
+            }
+            if (hint != null) {
+                androidx.compose.material3.IconButton(onClick = { hintOpen = !hintOpen },
+                    modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.HelpOutline, stringResource(R.string.common_hint),
+                        modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+        if (hint != null && hintOpen) Hint(hint, size = 11.sp)
     }
 }
 

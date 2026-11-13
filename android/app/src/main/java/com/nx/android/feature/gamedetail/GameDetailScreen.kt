@@ -682,7 +682,10 @@ private fun RunOptions(
         PickRow(stringResource(R.string.driver_section),
             options.driverChoices(installed.map { it.library.absolutePath to it.label })
                 .map { (value, name) -> value to (name ?: systemDriver) }, options.driver,
-            onSelect = { value -> onSelectDriver(value.takeIf { it.isNotEmpty() }) }, fallback = systemDriver)
+            // the device's own driver is an empty value, not the absence of the row: the app keeps that choice
+            // (an absent row is where the default driver goes)
+            onSelect = { value -> onSelectDriver(value) }, fallback = systemDriver,
+            hint = stringResource(R.string.driver_pick_hint))
     } else {
         androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
     }

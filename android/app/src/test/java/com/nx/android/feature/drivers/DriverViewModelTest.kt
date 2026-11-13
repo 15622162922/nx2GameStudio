@@ -55,6 +55,7 @@ class DriverViewModelTest {
         override val shippedRelease = release
         override suspend fun refresh(): List<Driver> = drivers.value
         override suspend fun ensureShipped(): Boolean = true
+        override suspend fun builtIn(): Driver? = null
         override suspend fun install(file: File): Result<Driver> = Result.failure(UnsupportedOperationException())
         override suspend fun download(release: DriverRelease, onProgress: (Float) -> Unit): Result<Driver> {
             onProgress(0.5f)

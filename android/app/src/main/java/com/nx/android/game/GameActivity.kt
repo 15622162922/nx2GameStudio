@@ -47,6 +47,8 @@ import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
 import com.nx.android.data.PrefsStore
+import com.nx.android.data.drivers.Drivers
+import com.nx.android.data.playback.PackEnvStore
 import com.nx.android.game.hud.HudField
 import com.nx.android.core.ui.ProvideAppLocale
 import com.nx.android.game.overlay.GameDrawer
@@ -220,6 +222,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         // the title id keeps this game's saves, temp and log apart from the others' (host_start_common)
         fgSettings = titleId?.let { FrameGenSettings(PrefsStore(this), it) }
+        // the default driver: a game whose driver was never picked runs on the app's built-in one (the row goes
+        // into the pack's env.txt, which the host reads). A driver the player picked is left alone.
+        applyDefaultDriver(java.io.File(pack))
         // the performance HUD's own preferences: the two lines, the fields, the temperature's unit
         val prefs = PrefsStore(this)
         hudStats = prefs.bool(PrefsStore.HUD_STATS, false)
@@ -239,6 +244,16 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    /**
+     * The default driver: the app's built-in one (the driver it ships), written into the pack when the player
+     * never picked a driver for this game. The row is written once — a driver the player picked (the device's own
+     * one included) stays what it is.
+     */
+    private fun applyDefaultDriver(pack: java.io.File) {
+        val builtIn = Drivers.list(this).firstOrNull { it.shipped } ?: return
+        PackEnvStore.ensureDriverDefault(pack, builtIn.library.absolutePath)
+    }
 
     // ---- 性能 HUD 的开关与字段（App 的偏好，唯一真值）----
 

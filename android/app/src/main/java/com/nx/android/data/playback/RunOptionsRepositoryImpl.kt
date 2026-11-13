@@ -1,6 +1,7 @@
 package com.nx.android.data.playback
 
 import com.nx.android.core.di.IoDispatcher
+import com.nx.android.domain.drivers.DriverRepository
 import com.nx.android.domain.playback.RunOptionsRepository
 import com.nx.android.domain.playback.RunOptionsSnapshot
 import dagger.Binds
@@ -19,6 +20,7 @@ import kotlinx.coroutines.withContext
 @Singleton
 class RunOptionsRepositoryImpl @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val driverRepository: DriverRepository,
 ) : RunOptionsRepository {
     private val locks = ConcurrentHashMap<String, Mutex>()
 
@@ -35,7 +37,13 @@ class RunOptionsRepositoryImpl @Inject constructor(
 
     private fun lock(pack: File): Mutex = locks.computeIfAbsent(pack.canonicalPath) { Mutex() }
 
-    private fun snapshot(pack: File): RunOptionsSnapshot {
+    /**
+     * The default driver: a game whose driver was never picked runs on the app's built-in one. The row is written
+     * once — from then on the player's own choice is what the row says, the device's own driver included (an empty
+     * row). No built-in driver (an app built without it, or it could not be unpacked) leaves the row as it is.
+     */
+    private suspend fun snapshot(pack: File): RunOptionsSnapshot {
+        applyDefaultDriver(pack)
         val current = PackEnvStore.current(pack)
         return RunOptionsSnapshot(
             languages = PackEnvStore.languages(pack),
@@ -43,6 +51,12 @@ class RunOptionsRepositoryImpl @Inject constructor(
             language = current.first,
             driver = current.second,
         )
+    }
+
+    private suspend fun applyDefaultDriver(pack: File) {
+        if (PackEnvStore.current(pack).second != null) return
+        val builtIn = driverRepository.builtIn() ?: return
+        PackEnvStore.ensureDriverDefault(pack, builtIn.library.absolutePath)
     }
 }
 

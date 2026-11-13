@@ -14,7 +14,8 @@ import java.net.URL
 
 /** 一个可以拿到的驱动：叫什么、在哪儿、给哪一家的 GPU */
 /**
- * App 能拿到的驱动：Adreno-Tools-Drivers 的 release v39 的三个构建，各自有固定的地址。
+ * App 能拿到的驱动：Adreno-Tools-Drivers 的 release v39 的三个构建，加上 Turnip 710 的两个构建
+ * （通用版与专为 Switch 模拟器调优的版本），各自有固定的地址。
  *
  * 不去问 GitHub「最近有什么」：未认证的 API 每个地址每小时只给 60 次，手机在同一个出口地址后面，
  * 列表页常常打不开；固定的地址不会。版本要更新，就换一个地址。
@@ -22,10 +23,16 @@ import java.net.URL
 object DriverCatalog {
 
     private const val BASE = "https://github.com/StevenMXZ/Adreno-Tools-Drivers/releases/download/v39/"
+    private const val TURNIP_710 = "https://github.com/Vauzi-17/710/releases/download/4.6/"
 
     val RELEASES = listOf(
         DriverRelease("Turnip_Gen8_V39.zip", "Turnip Gen8 V39", "Turnip Gen8 V39",
             DriverNote.GPU_8XX, BASE + "Turnip_Gen8_V39.zip"),
+        // the Switch build first: it is the one this app's games want (a Switch emulator runs on it)
+        DriverRelease("Turnip-710-720-722-v4.6-sw.zip", "Turnip 710 v4.6 (Switch)", "710 720 & 722 v4.6-sw",
+            DriverNote.GPU_7XX_8XX_SWITCH, TURNIP_710 + "Turnip-710-720-722-v4.6-sw.zip"),
+        DriverRelease("Turnip-710-720-722-v4.6.zip", "Turnip 710 v4.6", "710 720 & 722 v4.6",
+            DriverNote.GPU_6XX_7XX_8XX, TURNIP_710 + "Turnip-710-720-722-v4.6.zip"),
         DriverRelease("Turnip_v27.0.0-R2.zip", "Turnip 27.0.0-R2", "Turnip 27.0.0-R2",
             DriverNote.GPU_7XX, BASE + "Turnip_v27.0.0-R2.zip"),
         DriverRelease("Turnip_v27.0.0-R2-Oneui.zip", "Turnip 27.0.0-R2 (OneUI)", "Turnip 27.0.0-R2-Oneui",

@@ -33,6 +33,7 @@
     <string name="common_on">On</string>
     <string name="common_off">Off</string>
     <string name="common_unavailable">Unavailable</string>
+    <string name="common_hint">Hint</string>
     <string name="common_cancelled">Cancelled</string>
     <string name="common_failed">Failed</string>
     <string name="common_done">Done</string>
@@ -206,6 +207,9 @@
     <string name="driver_note_8xx">Adreno 8xx (a840 / a830 / a829 / a825 / 810)</string>
     <string name="driver_note_7xx">Adreno 7xx</string>
     <string name="driver_note_7xx_oneui">Adreno 7xx, with the OneUI patch</string>
+    <string name="driver_note_6xx_7xx_8xx">Adreno 6xx / 7xx / 8xx (the universal build)</string>
+    <string name="driver_note_7xx_8xx_switch">Adreno 7xx / 8xx, tuned for Switch emulators</string>
+    <string name="driver_pick_hint">The built-in Turnip is the default. For a build tuned for Switch emulators, download Turnip 710 (Switch) in Settings → Vulkan driver; a new driver takes effect at the next start.</string>
     <string name="driver_system_default">The device\'s own</string>
     <string name="driver_refused_no_driver">This archive holds no driver</string>
     <string name="driver_refused_no_library">This archive holds no driver library</string>

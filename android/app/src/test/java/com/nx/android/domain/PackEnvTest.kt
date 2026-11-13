@@ -49,6 +49,32 @@ class PackEnvTest {
     }
 
     @Test
+    fun `an empty driver row is the player's own choice, an absent row is the default's place`() {
+        val p = pack()
+        File(p, "env.txt").writeText("DM_VK_DRIVER=\n")
+        assertEquals("", PackEnvStore.current(p).second)
+        // the default does not take that choice back
+        PackEnvStore.ensureDriverDefault(p, "/app/files/drivers/Turnip/libvulkan_freedreno.so")
+        assertEquals("", PackEnvStore.current(p).second)
+        p.deleteRecursively()
+    }
+
+    @Test
+    fun `the default driver goes into a pack whose driver was never picked`() {
+        val p = pack()
+        File(p, "env.txt").writeText("# Written by nx2android's porter\nDM_ROOT=/sdcard/x\n")
+        PackEnvStore.ensureDriverDefault(p, "/app/files/drivers/Turnip/libvulkan_freedreno.so")
+        assertEquals("/app/files/drivers/Turnip/libvulkan_freedreno.so", PackEnvStore.current(p).second)
+        val body = File(p, "env.txt").readText()
+        assertTrue(body.contains("# Written by nx2android's porter"))
+        assertTrue(body.contains("DM_ROOT=/sdcard/x"))
+        // it is written once: a second call leaves the row alone
+        PackEnvStore.ensureDriverDefault(p, "/other/driver.so")
+        assertEquals("/app/files/drivers/Turnip/libvulkan_freedreno.so", PackEnvStore.current(p).second)
+        p.deleteRecursively()
+    }
+
+    @Test
     fun `the driver's field offers the device's own, the installed and the pack's own`() {
         val p = pack()
         File(p, "drivers.txt").writeText("libvulkan_freedreno.so\n")

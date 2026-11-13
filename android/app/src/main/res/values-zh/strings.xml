@@ -32,6 +32,7 @@
     <string name="common_on">开</string>
     <string name="common_off">关</string>
     <string name="common_unavailable">不可用</string>
+    <string name="common_hint">提示</string>
     <string name="common_cancelled">已取消</string>
     <string name="common_failed">失败</string>
     <string name="common_done">已完成</string>
@@ -205,6 +206,9 @@
     <string name="driver_note_8xx">Adreno 8xx（a840 / a830 / a829 / a825 / 810）</string>
     <string name="driver_note_7xx">Adreno 7xx</string>
     <string name="driver_note_7xx_oneui">Adreno 7xx，OneUI 的补丁</string>
+    <string name="driver_note_6xx_7xx_8xx">Adreno 6xx / 7xx / 8xx（通用版）</string>
+    <string name="driver_note_7xx_8xx_switch">Adreno 7xx / 8xx，为 Switch 模拟器调优</string>
+    <string name="driver_pick_hint">默认用内置的 Turnip。想换成专为 Switch 模拟器调优的版本，到 设置 → Vulkan 驱动 下载 Turnip 710（Switch）；换了驱动下次启动生效。</string>
     <string name="driver_system_default">系统默认</string>
     <string name="driver_refused_no_driver">这个压缩包里没有驱动</string>
     <string name="driver_refused_no_library">这个压缩包里没有驱动库</string>

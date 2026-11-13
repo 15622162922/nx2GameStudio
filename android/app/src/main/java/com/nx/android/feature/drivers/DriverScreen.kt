@@ -119,4 +119,6 @@ private fun DriverNote.toResource(): Int = when (this) {
     DriverNote.GPU_8XX -> R.string.driver_note_8xx
     DriverNote.GPU_7XX -> R.string.driver_note_7xx
     DriverNote.GPU_7XX_ONE_UI -> R.string.driver_note_7xx_oneui
+    DriverNote.GPU_6XX_7XX_8XX -> R.string.driver_note_6xx_7xx_8xx
+    DriverNote.GPU_7XX_8XX_SWITCH -> R.string.driver_note_7xx_8xx_switch
 }
