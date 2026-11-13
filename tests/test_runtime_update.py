@@ -119,9 +119,15 @@ for name in ('libhook_impl.so', 'libmain_hook.so', 'libfile_redirect_hook.so', '
             self.rebuild()
         self.assert_preserved()
 
-    def test_a_pack_without_a_fingerprint_is_refused(self):
-        self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
-        with self.assertRaisesRegex(ValueError, 'made before the game profile was recorded'):
+    def test_a_pack_without_a_fingerprint_is_trusted_and_gets_one(self):
+        fingerprint = self.profile(self.root / 'work' / f'{self.title}_build' / 'profile-derived')
+        self.rebuild()
+        updated = json.loads(self.manifest.read_text())
+        self.assertEqual(updated['profile_h'], fingerprint)   # the profile the runtime was built from is recorded now
+        self.assert_preserved(manifest=False)
+
+    def test_a_pack_without_a_fingerprint_fails_when_no_profile_is_anywhere(self):
+        with self.assertRaisesRegex(ValueError, 'No game profile for this game'):
             self.rebuild()
         self.assert_preserved()
 

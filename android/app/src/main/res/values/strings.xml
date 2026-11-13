@@ -478,8 +478,9 @@
     <string name="runtime_update_failed">The runtime could not be updated. Retry, or port the entire game again using its original files. Your saves are kept.</string>
     <string name="runtime_play_failed">The game could not run correctly. You can try porting it again from its original files in game details. Your saves are kept.</string>
     <string name="runtime_busy">Close the running game or wait for the current build to finish.</string>
-    <string name="runtime_updating">Updating the game runtime. This may take a few minutes.</string>
-    <string name="runtime_updated">Runtime updated.</string>
+    <string name="runtime_updating">Updating the game runtime. This takes about a minute.</string>
+    <string name="runtime_updated">Runtime updated. If the game misbehaves afterwards, port it again from its original files.</string>
+    <string name="runtime_update_hint">If the game misbehaves after this update, port it again from its original files.</string>
     <string name="runtime_retry">Retry</string>
     <string name="runtime_full_port">Port entire game again</string>
     <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the entire game again using its original files. Your game data is kept.</string>

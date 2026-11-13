@@ -40,14 +40,18 @@ def profile_fingerprint(directory):
 
 
 def find_profile(title_id, expected):
-    """(the candidate whose profile fingerprint is this pack's own, whether any candidate was there at all)"""
+    """(the profile to rebuild with, its fingerprint, whether any candidate was there at all)
+
+    A pack that recorded no fingerprint (made before the profiles were fingerprinted) cannot be checked: it gets
+    the first profile there is, and the fingerprint of that one is recorded when the runtime is rebuilt. The player
+    is told to port the game again if it misbehaves afterwards."""
     found = False
     for candidate in profile_candidates(title_id):
         fingerprint = profile_fingerprint(candidate)
         if fingerprint is None: continue
         found = True
-        if fingerprint == expected: return candidate, True
-    return None, found
+        if expected is None or fingerprint == expected: return candidate, fingerprint, True
+    return None, None, found
 
 
 def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
@@ -61,9 +65,8 @@ def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
     if not isinstance(title_id, str) or not re.fullmatch(r'[0-9A-Fa-f]{16}', title_id):
         raise ValueError('Invalid game identity. Port the game again from its original files.')
     fingerprint = manifest.get('profile_h')
-    if not isinstance(fingerprint, str) or not fingerprint:
-        raise ValueError('This pack was made before the game profile was recorded. Port the game again from its original files.')
-    profile, found = find_profile(title_id, fingerprint)
+    if not isinstance(fingerprint, str) or not fingerprint: fingerprint = None   # an old pack: trusted, not checked
+    profile, chosen, found = find_profile(title_id, fingerprint)
     if profile is None:
         if not found:
             raise ValueError('No game profile for this game. Port the game again from its original files.')
@@ -114,6 +117,7 @@ def rebuild(pack, *, no_lsfg=False, jobs=None, emit=print):
                     os.fsync(dst.fileno())
             manifest['host'] = f'{stage.name}/libdmplay.so'
             manifest['player_api_revision'] = PLAYER_API_REVISION
+            manifest['profile_h'] = chosen   # the profile this runtime was built from (a pack without one gets it now)
             manifest.pop('host_front', None)
             # The manifest is the commit point. Before it changes the old component set remains active.
             pending = stage / 'manifest.json'

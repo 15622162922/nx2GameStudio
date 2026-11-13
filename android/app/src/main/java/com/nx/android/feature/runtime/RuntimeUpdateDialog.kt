@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +47,9 @@ fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
                     val reason = state.reason
                     if (reason.isNotBlank()) Text(reason)
                     else Text(stringResource(if (state.interrupted) R.string.runtime_interrupted else R.string.runtime_update_failed))
+                    // a pack that could not be checked is rebuilt with the profile at hand: if the game misbehaves
+                    // afterwards, porting it again is the way out
+                    Text(stringResource(R.string.runtime_update_hint), style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
