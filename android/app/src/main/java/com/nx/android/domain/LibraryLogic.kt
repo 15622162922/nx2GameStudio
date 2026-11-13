@@ -63,12 +63,14 @@ object LibraryLogic {
      *
      * 同一个 title ID 可能有两个包（包名取自档案的 ipa 键：游戏先用临时档案构建过，后来换成正式档案，
      * 包名跟着变了，旧包就留在了那里）。库里只显示一个，比的必须是包本身的好坏，不能看扫到的顺序：
-     * 能跑的优先 → 档案状态（正式调通的压过临时档案的）→ 新旧 → 手机自己的存储 → 包名。
+     * 有宿主的包优先（只有清单的空壳不算移植）→ 能跑的优先 → 档案状态（正式调通的压过临时档案的）→
+     * 新旧 → 手机自己的存储 → 包名。
      */
     fun preferPack(current: Ported?, currentInternal: Boolean,
                    candidate: Ported, candidateInternal: Boolean): Pair<Ported, Boolean> {
         if (current == null) return candidate to candidateInternal
-        val better = if (candidate.runnable != current.runnable) candidate.runnable
+        val better = if (candidate.hasHost != current.hasHost) candidate.hasHost
+            else if (candidate.runnable != current.runnable) candidate.runnable
             else comparePacks(candidate, candidateInternal, current, currentInternal) > 0
         return if (better) candidate to candidateInternal else current to currentInternal
     }

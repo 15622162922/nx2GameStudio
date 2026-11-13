@@ -202,6 +202,17 @@ class LibraryLogicTest {
         assertEquals(OlderPackAction.REMOVE, LibraryLogic.olderPackAction(oldHasSaves = false, newHasSaves = true))
     }
 
+    /** 只有清单的空壳不是移植：不管它多新，都比不过有宿主的那个包（卡片得显示真的那个） */
+    @Test
+    fun `a pack without a host never wins over the port it sits beside`() {
+        val port = port(hostExists = true).copy(playerApiRevision = 0, name = "Real")   // 有宿主，前端旧了
+        val stub = packWith("Stub", runnable = false)                                   // 只有清单，没有宿主
+        stub.pack.setLastModified(2_000_000L)
+        port.pack.setLastModified(1_000_000L)
+        assertEquals(port.pack, LibraryLogic.preferPack(port, true, stub, true).first.pack)
+        assertEquals(port.pack, LibraryLogic.preferPack(stub, true, port, true).first.pack)
+    }
+
     @Test
     fun `a remembered source path supplies the label even when the file is gone`() {
         val card = entry(source = "/sdcard/Games/Hades II [0100000000010000].nsp")
