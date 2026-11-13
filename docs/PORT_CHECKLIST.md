@@ -8,7 +8,7 @@ Left out because they have an official Android release: Unpacking (ported here a
 
 **Credit.** A ported game names the person who brought it up (`ported by @handle`), taken from the commit that added its profile. The ports from before this was written down are credited to the author of the commit that introduced them.
 
-**26 / 94 ported**
+**27 / 94 ported**
 
 - [x] 13 Sentinels: Aegis Rim · `01003FC01670C000` · ported by @shirai91
 - [ ] Ace Attorney Investigations Collection · `010005501E68C000` · profile here
@@ -64,6 +64,7 @@ Left out because they have an official Android release: Unpacking (ported here a
 - [ ] NieR:Automata The End of YoRHa Edition · `010056B015FE8000` · upstream profile · 60 fps with 1.0.3
 - [ ] OCTOPATH TRAVELER · `010057D006492000` · profile here
 - [x] Octopath Traveler 0 · `01005270232F2000`
+- [x] Octopath Traveler 0 (Chinese release) · `01001300232F4000` · ported by @zFitness
 - [ ] Octopath Traveler II · `0100A3501946E000` · upstream profile · 60 fps with 1.1.1
 - [x] Paper Mario: The Origami King · `0100A3900C3E2000` · ported by @shirai91
 - [x] Paper Mario: The Thousand-Year Door · `0100ECD018EBE000` · ported by @shirai91
