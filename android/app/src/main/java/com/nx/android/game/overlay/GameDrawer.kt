@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Opacity
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SportsEsports
@@ -72,6 +73,7 @@ import com.nx.android.data.LosslessDll
 import com.nx.android.data.RatePin
 import com.nx.android.game.hud.HudField
 import com.nx.android.game.Native
+import com.nx.android.game.input.PadStyle
 import com.nx.android.core.ui.components.CapsuleButton
 import com.nx.android.core.ui.components.Hint
 import com.nx.android.core.ui.components.QuietButton
@@ -110,6 +112,8 @@ fun GameDrawer(
     onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int,
     onPadOpacity: (Int) -> Unit,
+    padStyle: () -> PadStyle,
+    onPadStyle: (PadStyle) -> Unit,
     hudStats: () -> Boolean,
     onHudStats: (Boolean) -> Unit,
     hudDevice: () -> Boolean,
@@ -176,7 +180,7 @@ fun GameDrawer(
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
                                     DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
-                                        onLayoutEditor, onResetPadLayout)
+                                        padStyle, onPadStyle, onLayoutEditor, onResetPadLayout)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -380,16 +384,28 @@ private fun rateLabel(pin: Int) =
 private fun ControlRows(
     padShown: () -> Boolean, onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int, onPadOpacity: (Int) -> Unit,
+    padStyle: () -> PadStyle, onPadStyle: (PadStyle) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
+    var style by remember { mutableStateOf(padStyle()) }
     var rumble by remember { mutableStateOf(Native.menuGet(2) != 0) }
+    // 两个选项的文案（自带 / 默认）：下拉里显示的就是它们
+    val packLabel = stringResource(R.string.drawer_pad_style_pack)
+    val defaultLabel = stringResource(R.string.drawer_pad_style_default)
 
     GroupLabel(stringResource(R.string.drawer_group_pad))
     ToggleRow(Icons.Filled.SportsEsports, stringResource(R.string.drawer_virtual_pad), null, shown) { shown = it; onPadShown(it) }
     OpacityRow(opacity) { opacity = it; onPadOpacity(it) }
+    // 按键风格：自带（数据包的主题贴图）或默认（app 里的默认主题包）。只换皮，布局与命中不变
+    OptionRow(Icons.Filled.Palette, stringResource(R.string.drawer_pad_style), listOf(packLabel, defaultLabel),
+        if (style == PadStyle.DEFAULT) defaultLabel else packLabel) { name ->
+        val picked = if (name == defaultLabel) PadStyle.DEFAULT else PadStyle.PACK
+        style = picked
+        onPadStyle(picked)
+    }
     ActionRow(Icons.Filled.Tune, stringResource(R.string.drawer_layout_editor), onClick = onLayoutEditor)
     ActionRow(Icons.Filled.RestartAlt, stringResource(R.string.drawer_pad_reset_layout), onClick = onResetPadLayout)
     Spacer(Modifier.height(4.dp))

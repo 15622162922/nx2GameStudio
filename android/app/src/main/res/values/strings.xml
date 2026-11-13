@@ -256,6 +256,9 @@
     <string name="drawer_fg_hint">The switch and the multiplier take effect at once; the DLL and its pick are on the settings page (they need a restart). Lossless Scaling\'s own files are neither shipped nor downloaded.</string>
     <string name="drawer_virtual_pad">On-screen gamepad</string>
     <string name="drawer_pad_opacity">Gamepad opacity</string>
+    <string name="drawer_pad_style">Gamepad style</string>
+    <string name="drawer_pad_style_pack">Bundled</string>
+    <string name="drawer_pad_style_default">Default</string>
     <string name="drawer_rumble">Rumble</string>
     <string name="drawer_docked">Docked mode</string>
     <string name="hud_stats">Performance HUD</string>

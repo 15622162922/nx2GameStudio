@@ -364,6 +364,8 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onPadShown = { padView.shown = it },
                 padOpacity = { padView.opacity },
                 onPadOpacity = { padView.opacity = it },
+                padStyle = { padView.style },
+                onPadStyle = { padView.style = it },
                 hudStats = { hudStats },
                 onHudStats = { saveHudStats(it) },
                 hudDevice = { hudDevice },

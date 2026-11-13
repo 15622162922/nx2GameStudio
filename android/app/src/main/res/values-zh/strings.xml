@@ -255,6 +255,9 @@
     <string name="drawer_fg_hint">开关与倍率即时生效；DLL 与它的选择在设置页（重启项）。Lossless Scaling 的资源不会被内置或下载。</string>
     <string name="drawer_virtual_pad">虚拟手柄</string>
     <string name="drawer_pad_opacity">手柄不透明度</string>
+    <string name="drawer_pad_style">按键风格</string>
+    <string name="drawer_pad_style_pack">自带</string>
+    <string name="drawer_pad_style_default">默认</string>
     <string name="drawer_rumble">震动</string>
     <string name="drawer_docked">底座模式</string>
     <string name="hud_stats">性能 HUD</string>
