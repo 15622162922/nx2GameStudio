@@ -35,6 +35,21 @@ class ProfileReaderTest {
     }
 
     @Test
+    fun `the profile folder is the upper case title id`() {
+        val dir = java.io.File.createTempFile("nx2a_profiles", "")
+        dir.delete(); dir.mkdirs()
+        try {
+            val d = java.io.File(dir, "01001300232F4000"); d.mkdirs()
+            java.io.File(d, "android.tsv").writeText("status\tplayable\ngraphics\tnvn\n")
+            assertTrue(profileFile(dir, "01001300232F4000")?.isFile == true)
+            assertTrue(profileFile(dir, "01001300232f4000")?.isFile == true)   // 小写也认
+            assertEquals(null, profileFile(dir, "0100000000000000"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `lan is only yes when it says one`() {
         assertFalse(parseProfile("lan\t0\n").lan)
         assertFalse(parseProfile("lan\n").lan)

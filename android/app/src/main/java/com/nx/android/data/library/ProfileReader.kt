@@ -38,10 +38,21 @@ class ProfileReader @Inject constructor(
     }
 
     private fun read(titleId: String): GameProfile? {
-        val f = File(dir, titleId.lowercase() + "/android.tsv")
-        if (!f.isFile) return null
+        val f = profileFile(dir, titleId) ?: return null
         return try { parseProfile(f.readText(Charsets.UTF_8)) } catch (_: Exception) { null }
     }
+}
+
+/**
+ * 一款游戏的档案文件：档案的文件夹名是**大写**的 title ID（01001300232F4000），清单里也是。
+ * 两个写法都试一遍，认到哪个算哪个。纯函数：测试在 JVM 上跑。
+ */
+fun profileFile(gamesDir: File, titleId: String): File? {
+    for (id in listOf(titleId, titleId.uppercase())) {
+        val f = File(File(gamesDir, id), "android.tsv")
+        if (f.isFile) return f
+    }
+    return null
 }
 
 /**
