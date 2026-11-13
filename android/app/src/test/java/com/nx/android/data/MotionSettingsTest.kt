@@ -26,12 +26,4 @@ class MotionSettingsTest {
     fun `the motion off says so`() {
         assertEquals("DM_MOTION=0", MotionKnobs(on = false, raw = false).envLines()[0])
     }
-
-    @Test
-    fun `the ctl rows are the env rows the host reads while it runs`() {
-        assertEquals(
-            listOf("env DM_MOTION=0", "env DM_MOTION_RAW=1"),
-            MotionKnobs(on = false, raw = true).ctlLines().toList(),
-        )
-    }
 }

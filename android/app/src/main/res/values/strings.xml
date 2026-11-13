@@ -180,13 +180,11 @@
     <string name="set_keys_not_set">Not set yet</string>
     <string name="set_section_storage">Storage</string>
     <string name="set_section_display">Display</string>
-    <string name="set_section_motion">Motion</string>
     <string name="motion_on">Motion aiming</string>
     <string name="motion_on_note">The device\'s turn moves the controller\'s six-axis sensor (the bow in TotK).</string>
     <string name="motion_no_gyro">This device has no gyroscope.</string>
     <string name="motion_raw">Keep the flick\'s direction</string>
     <string name="motion_raw_note">The game reads the measured direction, not the host\'s made-up waveform.</string>
-    <string name="motion_running_note">The running game takes the change at once.</string>
     <string name="set_section_about">About</string>
     <string name="set_version">Version</string>
     <string name="set_rerun_onboarding">Run the setup again</string>
@@ -245,6 +243,7 @@
     <string name="drawer_rate_hint">If the frame rate keeps bouncing between 30 and 60, try pinning it to 60; if the game runs faster than it should, pin it to 30. A game capped at 30 fps stays at 30.</string>
     <string name="drawer_docked_hint">Docked mode renders at the TV\'s resolution: a sharper picture that costs more power. Turn it off for a higher frame rate.</string>
     <string name="drawer_group_pad">Gamepad</string>
+    <string name="drawer_group_motion">Motion</string>
     <string name="drawer_no_framegen">This game has no frame generation</string>
     <string name="drawer_pause_game">Pause the game</string>
     <string name="drawer_resume_game">Resume the game</string>

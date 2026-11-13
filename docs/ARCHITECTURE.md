@@ -187,11 +187,11 @@ Events: with `--progress json`, every line on stdout is one JSON object, the pro
 **Motion aiming** (`DM_MOTION`, `DM_MOTION_RAW`, `DM_MOTION_LOG`): the device's own turn moves player 1's six-axis
 sensor (`dm_motion_set`, `hle_hid.c`), as the Joy-Cons turn with the console in handheld mode (The Legend of Zelda:
 Tears of the Kingdom aims its bow by them). The gyroscope's samples are mapped into the screen's frame (the display's
-rotation, read through JNI), the accelerometer's give gravity's direction. The app's settings page has the two
-switches (the **Motion** section): the motion on or off (the default follows the device's gyroscope) and keeping the
-measured direction of a flick instead of the host's made-up waveform. They are handed to the host as env rows when the
-game starts and written into the game's control file (`DM_CTL`) while it runs, so a change takes effect at once,
-without restarting the game.
+rotation, read through JNI), the accelerometer's give gravity's direction. The game's drawer has the two
+switches (the **Controls** tab: the motion on or off - the default follows the device's gyroscope - and keeping the
+measured direction of a flick instead of the host's made-up waveform). They are handed to the host as env rows when the
+game starts and reach the running game over JNI (`motionSet`, the same way the frame rate step does), so a change
+takes effect at once, without restarting the game. One game has one pair (like the drawer's other rows).
 
 ## What the player installs
 

@@ -10,9 +10,9 @@ import org.junit.Test
 class SettingsSectionTest {
 
     @Test
-    fun theSettingsPageHasSixSections() {
+    fun theSettingsPageHasFiveSections() {
         assertEquals(
-            listOf("ENVIRONMENT", "STORAGE", "DRIVERS", "DISPLAY", "MOTION", "ABOUT"),
+            listOf("ENVIRONMENT", "STORAGE", "DRIVERS", "DISPLAY", "ABOUT"),
             SettingsSection.entries.map { it.name },
         )
     }

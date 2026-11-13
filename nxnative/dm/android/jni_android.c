@@ -260,6 +260,25 @@ Java_com_nx_android_game_Native_frameGenStatus(JNIEnv *E, jclass c) {
     return (*E)->NewStringUTF(E, out);
 }
 
+// The drawer's motion switches: the device's turn moves player 1's six-axis sensor (the host's dm_motion_set, fed by
+// the front end's sensors). The front end re-reads the environment every 250 ms (front_player.c's motion poll), so
+// setting it here reaches the running game at once.
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_motionSet(JNIEnv *E, jclass c, jboolean on, jboolean raw) {
+    (void)E; (void)c;
+    setenv("DM_MOTION", on ? "1" : "0", 1);
+    setenv("DM_MOTION_RAW", raw ? "1" : "0", 1);
+}
+
+// The motion switches as the host sees them: bit 1 = the device's motion moves the controller, bit 2 = a flick keeps
+// its measured direction (the host's made-up waveform stops).
+JNIEXPORT jint JNICALL
+Java_com_nx_android_game_Native_motionGet(JNIEnv *E, jclass c) {
+    (void)E; (void)c;
+    const char *m = getenv("DM_MOTION"), *r = getenv("DM_MOTION_RAW");
+    return (m && atoi(m) ? 1 : 0) | (r && atoi(r) ? 2 : 0);
+}
+
 // The drawer's frame rate step: the adaptive rate (perf_android.c) steps 60 -> 40 -> 30 on its own, and DM_FPS_PIN holds one of those steps.
 // fps_pin reads the variable again every 30 frames, so setting it here takes effect at once. 0 = free again (the rate adapts), 60/40/30 = hold that step.
 // The app calls this after the game starts: the pack's env.txt is read while the host boots, and the later setenv is the one that stays.
