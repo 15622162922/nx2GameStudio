@@ -69,6 +69,7 @@ import com.nx.android.R
 import com.nx.android.data.FrameGenKnobs
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
+import com.nx.android.data.RatePin
 import com.nx.android.game.hud.HudField
 import com.nx.android.game.Native
 import com.nx.android.core.ui.components.CapsuleButton
@@ -78,16 +79,16 @@ import com.nx.android.core.ui.theme.GlassSheet
 import com.nx.android.core.ui.theme.NxPalette
 import kotlinx.coroutines.delay
 
-/** 抽屉的两个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
+/** 抽屉的三个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
 enum class DrawerTab(@StringRes val label: Int) {
-    DISPLAY(R.string.drawer_tab_display), CONTROLS(R.string.drawer_tab_controls)
+    HUD(R.string.drawer_tab_hud), FRAMEGEN(R.string.drawer_tab_framegen), CONTROLS(R.string.drawer_tab_controls)
 }
 
 /**
  * 游戏内抽屉（:play 进程自己的 UI）：虚拟手柄的菜单按钮、物理手柄菜单键或系统返回手势唤出，
- * 玻璃卡样式与应用一致，两个标签页（显示 / 操作）+ 底部动作行。
+ * 玻璃卡样式与应用一致，三个标签页（HUD / 插帧 / 操作）+ 底部动作行。
  *
- * 帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
+ * 帧率档位与帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
  * （震动、底座模式，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
  * 没有布局编辑器、没有存档选择器、没有软键盘——游戏的文本输入走系统输入法（App 弹自己的对话框）。
  *
@@ -103,6 +104,7 @@ fun GameDrawer(
     open: Boolean,
     onOpenChange: (Boolean) -> Unit,
     settings: FrameGenSettings?,
+    onRatePin: (RatePin) -> Unit,
     padShown: () -> Boolean,
     onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int,
@@ -129,9 +131,14 @@ fun GameDrawer(
         ) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable { onOpenChange(false) }) {
                 var status by remember { mutableStateOf("-1 not tried") }
-                LaunchedEffect(open) {   // 打开期间 2 Hz 轮询宿主的状态串
+                var ratePin by remember { mutableStateOf(0) }
+                // 宿主有没有帧率档位这个入口：老包里的旧宿主没有，调用会抛 UnsatisfiedLinkError——
+                // 那就整个不显示（玩家不该点一个按不动的开关）
+                val rateSupported = remember { runCatching { Native.perfPinGet() }.isSuccess }
+                LaunchedEffect(open) {   // 打开期间 2 Hz 轮询宿主的状态串与帧率档位
                     while (open) {
                         runCatching { status = Native.frameGenStatus() }
+                        if (rateSupported) runCatching { ratePin = Native.perfPinGet() }
                         delay(500)
                     }
                 }
@@ -161,9 +168,17 @@ fun GameDrawer(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 when (DrawerTab.entries[tab]) {
-                                    DrawerTab.DISPLAY -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
-                                        else DisplayRows(settings, status,
-                                            hudStats, onHudStats, hudDevice, onHudDevice, hudFields, onHudFields, hudFahrenheit, onHudFahrenheit)
+                                    DrawerTab.HUD -> HudRows(hudStats, onHudStats, hudDevice, onHudDevice,
+                                        hudFields, onHudFields, hudFahrenheit, onHudFahrenheit)
+                                    // 插帧页：帧率档位在上（它与帧生成无关，自己就能用），帧生成在下
+                                    DrawerTab.FRAMEGEN -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        if (rateSupported) {
+                                            RateRows(ratePin, onRatePin)
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        }
+                                        if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
+                                        else FrameGenRows(settings, status)
+                                    }
                                     DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
                                         onLayoutEditor, onResetPadLayout)
                                 }
@@ -284,18 +299,14 @@ private fun ActionRow(
     }
 }
 
-/** 显示页：帧生成（即改即生效）+ 画面上的信息（性能 HUD 与设备信息线） */
+/** HUD 页：画面上的信息（性能 HUD 与设备信息线） */
 @Composable
-private fun DisplayRows(
-    settings: FrameGenSettings, status: String,
+private fun HudRows(
     hudStats: () -> Boolean, onHudStats: (Boolean) -> Unit,
     hudDevice: () -> Boolean, onHudDevice: (Boolean) -> Unit,
     hudFields: () -> Set<HudField>, onHudFields: (Set<HudField>) -> Unit,
     hudFahrenheit: () -> Boolean, onHudFahrenheit: (Boolean) -> Unit,
 ) {
-    FrameGenRows(settings, status)
-    Spacer(Modifier.height(4.dp))
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     GroupLabel(stringResource(R.string.drawer_group_info))
     var stats by remember { mutableStateOf(hudStats()) }
     var device by remember { mutableStateOf(hudDevice()) }
@@ -333,6 +344,31 @@ private fun DisplayRows(
         }
     }
 }
+
+/**
+ * 帧率档位组：钉住呈现的那一档（宿主 perf_android.c 的 fps_pin），不再自动在 60/40/30 之间切换。
+ * 宿主那边每 30 帧重读一次这个值，所以改档即时生效；档位是 0（跟随游戏）时放它自由自适应。
+ */
+@Composable
+private fun RateRows(pin: Int, onPick: (RatePin) -> Unit) {
+    GroupLabel(stringResource(R.string.drawer_group_rate))
+    // 选项的词先取好：回调里不能取词
+    val labels = rateLabels()
+    OptionRow(Icons.Filled.Speed, stringResource(R.string.drawer_rate_row), labels, rateLabel(pin)) { name ->
+        val i = labels.indexOf(name)
+        onPick(RatePin(if (i >= 0) RatePin.PINS[i] else 0))
+    }
+    Hint(stringResource(R.string.drawer_rate_hint))
+}
+
+/** 档位的选项：跟随游戏在前，后面是宿主的三档（顺序与 RatePin.PINS 一致） */
+@Composable
+private fun rateLabels() = listOf(stringResource(R.string.drawer_follow_game), "60", "40", "30")
+
+/** 当前档位的词（宿主不认得的值就是自由自适应） */
+@Composable
+private fun rateLabel(pin: Int) =
+    rateLabels().getOrNull(RatePin.indexOf(pin)) ?: stringResource(R.string.drawer_follow_game)
 
 /** 操作页：手柄（显示、浓淡、布局）与宿主的震动、底座模式 */
 @Composable
