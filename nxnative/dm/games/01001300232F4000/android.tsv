@@ -4,7 +4,7 @@
 # p50 13-15 / p90 18 / p95 20 ms; the host's governor steps down to 40 fps in the heavier scenes (82 frames late of 4,864), no crash, no audio underrun, the game's own
 # Simplified Chinese text draws with the shared font. About 1.9 GB resident. The one red line is the window surface's format (its picture is lighter).
 status	playable
-tested	v1 Xiaomi 23117RK66C (Android 16)
+tested	v327680 Xiaomi 23117RK66C (Android 16)
 package	org.nx2a.t01001300232f4000
 orientation	landscape
 requires	bcn
