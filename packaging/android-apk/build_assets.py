@@ -29,6 +29,9 @@ SKIP_DIRS = {'__pycache__', '.git', '.github', '.githooks', '.claude', '.idea', 
 # tools, so only the tool's tree is stripped of them.
 TOOL_SKIP = SKIP_DIRS | {'bin', 'obj'}
 SKIP_FILES = {'.DS_Store'}
+# The two fonts the shared font is built from (dm/tools/cjk_font.py): the phone never rebuilds it, so the built font
+# and the license texts travel and the sources do not (4.25 MB of sources for 3.16 MB of built font).
+SKIP_SOURCES = {'DroidSansFallbackFull.ttf', 'OpenSans-Regular.ttf'}
 # The Python modules the porter needs on the phone (the desktop GUI's PySide6 is not among them).
 MODULES = ['lz4', 'capstone', 'pillow', 'fonttools', 'pyyaml', 'pycryptodome', 'backports.zstd']
 # The NuGet packages the C# tools need (nx_extract reads the NCAs): the phone restores them from its own folder.
@@ -40,7 +43,7 @@ def copy_tree(src: Path, dst: Path, skip=SKIP_DIRS):
     for p in sorted(src.rglob('*')):
         rel = p.relative_to(src)
         if any(part in skip for part in rel.parts): continue
-        if p.name in SKIP_FILES or p.name.endswith(('.pyc', '.apk', '.dmsv', '.spv', '.pdb')): continue   # the debug symbols carry the build machine's paths
+        if p.name in SKIP_FILES or p.name in SKIP_SOURCES or p.name.endswith(('.pyc', '.apk', '.dmsv', '.spv', '.pdb')): continue   # the debug symbols carry the build machine's paths
         target = dst / rel
         if p.is_dir():
             target.mkdir(parents=True, exist_ok=True)

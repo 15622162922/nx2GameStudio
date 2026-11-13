@@ -36,6 +36,7 @@ describes what every one of them is, which version it is and where it is used.
 | `stb_image.h` (2.23), `stb_image_write.h` (1.13), `tinyexr.h` | MIT / public domain | `nxnative/dm/third_party/flip/tool/` | in each file's header |
 | DroidSansFallbackFull | Apache-2.0 | `nxnative/dm/tools/DroidSansFallbackFull.ttf` | `nxnative/dm/tools/DroidSansFallbackFull.NOTICE` |
 | OpenSans-Regular | Apache-2.0 | `nxnative/dm/tools/OpenSans-Regular.ttf` | `nxnative/dm/tools/OpenSans-Regular.NOTICE` |
+| The shared font the app ships (`shared_cjk.ttf`, built from the two above by `dm/tools/cjk_font.py`) | Apache-2.0 | `nxnative/dm/tools/shared_cjk.ttf` | the two NOTICE files above |
 | The LSFG frame generation port | GPL-3.0-or-later | `nxnative/dm/android/lsfg/` | `nxnative/dm/android/lsfg/LICENSE.md`, full text in `nxnative/dm/android/lsfg/COPYING` |
 
 The LSFG port is from the Eden emulator's frame generation, which builds on

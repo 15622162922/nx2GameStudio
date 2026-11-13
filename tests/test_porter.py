@@ -313,30 +313,35 @@ class DataPack(unittest.TestCase):
         finally:
             shutil.rmtree(t, ignore_errors=True)
 
-    def test_cjk_font(self):   # the Chinese and Korean stand-in: the Latin base with the CJK glyphs merged in (Mario vs. Donkey Kong's Chinese menus drew '?' without it, and with the CJK font alone the game crashed on a null glyph)
+    def test_the_shared_font(self):   # the game's Chinese text: the shared font is the player's own or the one the tools ship (the shape a game that parses it expects)
         try: from fontTools.ttLib import TTFont
         except ImportError: self.skipTest('no fontTools')
         from types import SimpleNamespace
         t = Path(tempfile.mkdtemp(prefix='nx2a_test_cjk_'))
         try:
-            port = SimpleNamespace(aw=t / 'android', logs=t / 'logs', env=dict(os.environ, PYTHONUTF8='1'), package='org.nx2a.test',
+            port = SimpleNamespace(o=SimpleNamespace(shared_font=None, app=False), package='org.nx2a.test',
                                    data_dir=lambda: t / 'out-data')
-            env, files = pipeline.Port.cjk_font(port)
-            self.assertEqual(env, [f'DM_SHARED_FONT_CJK={t / "out-data"}/cjk.ttf']); self.assertEqual(list(files), ['cjk.ttf'])
-            f = TTFont(files['cjk.ttf'])
+            env, files = pipeline.Port.shared_font(port)
+            self.assertEqual(env, [f'DM_SHARED_FONT={datapack.files_folder("org.nx2a.test")}/standard.ttf'])   # the desktop: the install puts the pack in the app's files folder
+            self.assertEqual(list(files), ['standard.ttf'])
+            f = TTFont(files['standard.ttf'])
             cmap = f.getBestCmap()
             self.assertTrue({0x4E00, 0x4E2D, 0x6587} <= set(cmap))   # three CJK code points
             self.assertIn(0x549A, cmap)                              # a GB2312 level 2 character (the game's title has one: it drew as '?')
+            self.assertIn(ord('東'), cmap)                            # a traditional character (GB2312 is simplified only: a traditional game drew it as '?')
+            self.assertIn(ord('咚'), cmap)                            # the game's own title character
             self.assertTrue({0x41, 0x61, 0x30} <= set(cmap))         # A, a, 0
             self.assertEqual(f['post'].formatType, 2.0)             # the glyph names, which the game builds its glyph table from
             self.assertEqual(f['head'].unitsPerEm, 2048)
-            # the font is made again when the tool or the fonts change: a font left by another tool was kept once, and the game crashed on it
-            key = files['cjk.ttf'].with_suffix('.key')
-            self.assertTrue(key.is_file())
-            made = files['cjk.ttf'].stat().st_mtime_ns
-            key.write_text('stale\n')
-            pipeline.Port.cjk_font(port)
-            self.assertNotEqual(files['cjk.ttf'].stat().st_mtime_ns, made)   # made again
+            # the app's mode: the shipped font stays where it lies (the payload), so the pack does not carry it
+            app = SimpleNamespace(o=SimpleNamespace(shared_font=None, app=True), package='org.nx2a.test', data_dir=lambda: t / 'out-data')
+            env, files = pipeline.Port.shared_font(app)
+            self.assertEqual(env, [f'DM_SHARED_FONT={pipeline.SHARED_CJK}']); self.assertEqual(files, {})
+            # the player's own font wins: it goes in the pack, and the host reads it from there
+            mine = t / 'mine.ttf'; shutil.copyfile(pipeline.SHARED_CJK, mine)
+            own = SimpleNamespace(o=SimpleNamespace(shared_font=mine, app=True), package='org.nx2a.test', data_dir=lambda: t / 'out-data')
+            env, files = pipeline.Port.shared_font(own)
+            self.assertEqual(env, [f'DM_SHARED_FONT={t / "out-data"}/standard.ttf']); self.assertEqual(files, {'standard.ttf': mine})
         finally:
             shutil.rmtree(t, ignore_errors=True)
 

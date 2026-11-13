@@ -16,6 +16,8 @@ from porter.upstream import BuildError, PROG, android_profile, game, nacp, nsp, 
 PY = sys.executable
 # The overlay's font (Port.ui_font)
 UI_FONT = DM / 'third_party/fusion-pixel-font/fusion-pixel-12px-proportional-zh_tw.nxpf'
+# The shared font the tools ship: the game's Chinese and Korean text (the console's own shared fonts 1-4; dm/tools/cjk_font.py builds it)
+SHARED_CJK = DM / 'tools/shared_cjk.ttf'
 
 
 def ui_font_assets():   # {name under assets/: file}: the overlay's font and its license files (Port.ui_font; porter host puts them in an APK ported before them)
@@ -1047,11 +1049,10 @@ class Port:
     def data(self):
         PROG.stage('data pack', step='button-icon font')
         font_env, font_files = self.button_font()
-        if self.o.shared_font:   # the host serves it for every shared-font type but the button icons (hle_sdk16.c font_get)
-            font_env, font_files = font_env + [f'DM_SHARED_FONT={datapack.files_folder(self.package)}/standard.ttf'], {**font_files, 'standard.ttf': self.o.shared_font}
-        cjk_env, cjk_files = self.cjk_font()
+        shared_env, shared_files = self.shared_font()
+        font_env, font_files = font_env + shared_env, {**font_files, **shared_files}
         dst = self.data_dir()
-        files = {**self.fps_files, **font_files, **cjk_files}
+        files = {**self.fps_files, **font_files}
         host = icon = None; drivers = []
         romfs, romfs_at = self.game / 'RomFS', None
         if self.o.app:   # the app runs the game itself: the pack carries what the APK used to (the host with the player's entry, the drivers, the icon, the gamepad's theme)
@@ -1070,7 +1071,7 @@ class Port:
             drivers = sorted({f'drivers/{d.name}' for d in self.drivers() + self.loader_libs()})
         man = datapack.build(dst, profile=self.ap, version=self.pkg_ver, display=self.display, patched=self.patched, romfs=romfs, romfs_at=romfs_at, shaders=self.dmsv,
                              aoc=self.aoc, sysdata=self.sysdata, language=self.lang, package=self.package, env=self.fps_env + font_env + (['DM_VK_MT_REPLAY=1'] if self.o.mt_replay else [])
-                             + ([f'DM_VK_DRIVER={driver_lib_name(self.o.vulkan_driver)}'] if self.o.vulkan_driver else []) + cjk_env, settings=TOUCH_SETTINGS if self.o.touch else None,
+                             + ([f'DM_VK_DRIVER={driver_lib_name(self.o.vulkan_driver)}'] if self.o.vulkan_driver else []), settings=TOUCH_SETTINGS if self.o.touch else None,
                              files=files, text=self.lists(), host=host, icon=icon, drivers=drivers, profile_h=getattr(self, 'profile_h', None),
                              pack_base=str(dst) if self.o.app else None,   # the app's mode: the pack lives in the app's own folder, not in the app's files folder
                              progress=lambda what: PROG.set(step=f'linking {what}'))
@@ -1087,19 +1088,24 @@ class Port:
         return {'languages.txt': '\n'.join(langs) + ('\n' if langs else ''),
                 'drivers.txt': ''.join(f'{d.name}\n' for d in self.drivers())}
 
-    def cjk_font(self):
-        """The Chinese and Korean system font (the shared font types 1-4): the host has none of the console's own, and the
-        system's Latin font has no CJK glyphs, so a game in Chinese drew its menus as "?" (dm/host/hle_sdk16.c).
-        dm/tools/cjk_font.py finds a font with the CJK glyphs on the machine that ports and writes it into the pack.
-        Returns (env.txt rows, pack files); none without fontTools or a font with CJK glyphs"""
-        out = self.aw / 'cjk.ttf'
-        try:
-            nsp.run([PY, DM / 'tools/cjk_font.py', str(out)], self.logs / 'cjk_font.log', env=self.env)
-        except Exception as e:
-            say(f'[RED] the Chinese font: {e}: the game\'s Chinese text will draw as "?"')
+    def shared_font(self):
+        """The font the game's shared font is: the player's own (--shared-font) or the one the tools ship
+        (dm/tools/shared_cjk.ttf: the Latin base with the CJK glyphs merged in, the shape a game that parses the
+        shared font expects, dm/tools/cjk_font.py builds it). The host has none of the console's own fonts, and
+        the system's Latin one has no CJK glyphs, so a game in Chinese drew its menus as "?" (dm/host/hle_sdk16.c).
+        The app's mode points at the shipped font where it lies (the payload), so the pack does not carry it and
+        the path does not change when the pack moves; the desktop's mode puts it in the pack, which the install
+        copies into the app's files folder on the device.
+        Returns (env.txt rows, pack files); none without a font"""
+        if self.o.shared_font:   # the player's own font: it goes in the pack, the install puts it where the host reads it
+            dest = self.data_dir() if self.o.app else datapack.files_folder(self.package)
+            return [f'DM_SHARED_FONT={dest}/standard.ttf'], {'standard.ttf': self.o.shared_font}
+        if not SHARED_CJK.is_file():
+            say('[RED] the shared font is missing (dm/tools/shared_cjk.ttf): the game\'s Chinese text will draw as "?"')
             return [], {}
-        if not out.is_file(): return [], {}
-        return [f'DM_SHARED_FONT_CJK={self.data_dir()}/cjk.ttf'], {'cjk.ttf': out}
+        if self.o.app: return [f'DM_SHARED_FONT={SHARED_CJK}'], {}
+        dest = datapack.files_folder(self.package)
+        return [f'DM_SHARED_FONT={dest}/standard.ttf'], {'standard.ttf': SHARED_CJK}
 
     def button_font(self):
         """The stand-in for the system's Nintendo extension shared font: the controller-button icons in game text (U+E0E0 = A; Super Mario Bros. Wonder's menus showed '?' without it), which

@@ -6,16 +6,23 @@ Korean one, the Nintendo extension (the button icons) and the Chinese extension.
 serves stand-ins (dm/host/hle_sdk16.c): the standard font is the system's Latin one (Roboto on Android), and the
 Chinese and Korean types need a font with CJK glyphs, or the game's Chinese text draws as "?".
 
-This tool makes such a font and writes it into the data pack; the port then points DM_SHARED_FONT_CJK at it:
+This tool builds that font: shared_cjk.ttf, the file the tools ship and the port puts in the data pack, with
+DM_SHARED_FONT pointing at it (the game's shared font is then this one for every type but the button icons).
 
     python3 cjk_font.py <out file> [--font <file>]
+
+The port does not build it: the phone would need the tools for it, and a font made on one machine differs from
+one made on another. The file beside this script (shared_cjk.ttf) is the one that ships; rebuild it with this
+tool when the character set below changes.
 
 The font is made of two of the fonts that come with the tools (both Apache-2.0):
   * OpenSans-Regular.ttf, the Latin base: the console's own shared fonts are like this (a plain TrueType font
     with its glyph names in a "post" table of format 2.0), and a game that reads the font the console's way
     expects that shape;
-  * DroidSansFallbackFull.ttf (AOSP's), for the CJK glyphs themselves: the 6763 characters of GB2312
-    (the 3755 commonest simplified Chinese ones and 2914 more) and the ASCII ones.
+  * DroidSansFallbackFull.ttf (AOSP's), for the CJK glyphs themselves: the 6,669 characters of GB2312 (the
+    commonest simplified Chinese ones and the rest), the 13,706 of Big5 (the traditional Chinese ones: 9,379 of
+    them are not in GB2312, and a game in traditional Chinese drew every one of them as "?"), the zhuyin symbols
+    and the ASCII ones.
 
 The two are merged into one font, the CJK ones scaled to the base's units per em. A game parses this font
 itself: Mario vs. Donkey Kong (1.0.1, SDK 15) draws its Chinese text from the shared font and builds its glyph
@@ -28,7 +35,7 @@ Where the font comes from:
 
 Nothing found: no font is written and the port says so (the game's Chinese text then draws as "?").
 """
-import argparse, hashlib, os, shutil, sys
+import argparse, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -51,6 +58,23 @@ def gb2312():
     return out
 
 
+def big5():
+    """The characters of Big5, the traditional Chinese standard, as code points (13,706: the 5,401 commonest
+    ones and the rest). They are cut in too: GB2312 is simplified Chinese only, so a game in traditional Chinese
+    (zh-TW, zh-HK) drew every character outside it as "?". The codec is big5hkscs, which is Big5 plus Hong Kong's
+    extra characters (a game from Hong Kong uses them)."""
+    out = set()
+    for hi in range(0x81, 0xFF):
+        for lo in range(0x40, 0xFF):
+            try:
+                s = bytes([hi, lo]).decode('big5hkscs')
+            except UnicodeDecodeError:
+                continue
+            # four of the Hong Kong's pairs stand for two characters (a base and a combining mark): the base is the one the font has
+            out.add(ord(s[0]))
+    return out
+
+
 def cjk_face(src: Path, out: Path, units: int) -> bool:
     """The CJK glyphs of a font, cut down to the common Chinese characters and scaled to the base's units"""
     try:
@@ -60,7 +84,7 @@ def cjk_face(src: Path, out: Path, units: int) -> bool:
     except ImportError:
         print(f'>> no fontTools (pip install fonttools): {src} cannot be read', file=sys.stderr)
         return False
-    uni = set(range(0x20, 0x7f)) | gb2312() | set(range(0x3000, 0x3040)) | set(range(0xff00, 0xff60))
+    uni = set(range(0x20, 0x7f)) | gb2312() | big5() | set(range(0x3000, 0x3040)) | set(range(0x3105, 0x3130)) | set(range(0xff00, 0xff60))
     try:
         f = TTFont(str(src))
         o = subset.Options()
@@ -104,19 +128,6 @@ def build(base: Path, cjk: Path, out: Path) -> bool:
     return True
 
 
-def inputs_key(base: Path) -> str:
-    """A stamp of what the font is made of (this tool, the Latin base, the CJK glyphs), so a font made by
-    another tool, with another base or before this tool's own change is not kept"""
-    h = hashlib.sha256()
-    for p in (Path(__file__), base, SHIPPED):
-        try:
-            st = p.stat()
-            h.update(f'{p.name}:{st.st_size}:{int(st.st_mtime)}\n'.encode())
-        except OSError:
-            h.update(f'{p.name}:-\n'.encode())
-    return h.hexdigest()
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('out')
@@ -135,15 +146,9 @@ def main():
     if not SHIPPED.is_file():
         print(f'>> the CJK glyphs are missing: {SHIPPED}', file=sys.stderr)
         return 1
-    key = inputs_key(base)
-    kf = out.with_suffix('.key')
-    if out.is_file() and out.stat().st_size > 0 and kf.is_file() and kf.read_text().strip() == key:
-        print(f'>> the Chinese font is already there: {out}')
-        return 0
     if not build(base, SHIPPED, out):
         return 1
-    kf.write_text(key + '\n')
-    print(f'>> the Chinese font: {base} + {SHIPPED.name} -> {out} ({out.stat().st_size:,} bytes)')
+    print(f'>> the shared font: {base} + {SHIPPED.name} -> {out} ({out.stat().st_size:,} bytes)')
     return 0
 
 
