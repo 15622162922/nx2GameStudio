@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vibration
@@ -437,7 +438,7 @@ private fun ControlRows(
             if (motionHasGyro) null else stringResource(R.string.motion_no_gyro), on, enabled = motionHasGyro) {
             onMotion(!on, raw)
         }
-        ToggleRow(Icons.Filled.ScreenRotation, stringResource(R.string.motion_raw), stringResource(R.string.motion_raw_note), raw) {
+        ToggleRow(Icons.Filled.TouchApp, stringResource(R.string.motion_raw), stringResource(R.string.motion_raw_note), raw) {
             onMotion(on, !raw)
         }
     }
