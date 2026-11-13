@@ -15,6 +15,18 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha09 - 2026-11-13
+
+### Before you update
+
+- The player API moved to revision 2 (the frame rate step), so a pack made with an older one is marked as needing a runtime update. "Update runtime" in the library rebuilds it in place: the game does not have to be ported again, and your saves are kept.
+
+### New
+
+- The shared runtime log is a bundle now: the device's and the app's own facts, the game's own facts (its name, title ID, version, profile status) and the host's logs of the last run and the one before it. The host renames its log at every start, so a crash's backtrace was in the log the share never took.
+- A frame rate step in the drawer: follow the game, 60, 40 or 30. The pick takes effect at once and is remembered per game. A game capped at 30 fps stays at 30.
+- The drawer has a performance page now - the first one, and the one it opens on: the frame rate step and the docked mode, each with a line saying when it helps.
+
 ## v0.3.0-alpha08 - 2026-11-13
 
 ### Before you update
