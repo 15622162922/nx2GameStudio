@@ -341,9 +341,15 @@
     <string name="builds_info_experimental">实验性档案</string>
     <string name="builds_info_ios_only">仅 iOS 档案</string>
     <string name="builds_info_unsupported">尚未适配</string>
-    <string name="builds_info_updates">更新 %1$d</string>
-    <string name="builds_info_dlc">DLC %1$d</string>
     <string name="builds_info_pack">打包 %1$s</string>
+    <string name="builds_files_title">识别到的文件</string>
+    <string name="builds_files_base">本体</string>
+    <string name="builds_files_update">更新</string>
+    <string name="builds_files_dlc">DLC</string>
+    <string name="builds_files_folder">%1$s/</string>
+    <string name="builds_files_more">还有 %1$d 个（点一下看全）</string>
+    <string name="builds_files_reading">正在读取游戏文件…</string>
+    <string name="builds_files_hint">本体旁边的更新与 DLC（放它的一级子文件夹里也行）会自动一起打包。</string>
     <string name="builds_info_reading">正在读取游戏信息…</string>
     <string name="builds_experimental_auto">这个游戏还没有适配档案，已勾选实验性移植（可能无法启动）。</string>
     <string name="builds_log_unavailable">这次构建的日志不可用或不完整。</string>
