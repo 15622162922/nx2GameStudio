@@ -44,17 +44,41 @@ object LogBundle {
     fun build(device: String, version: String, work: File, buildLogs: List<Pair<String, File>>, out: File, tag: String = ""): File? {
         val stages = stageLogs(work)
         val main = AppLog.logFile()?.takeIf { it.isFile && it.length() > 0 }   // an empty log is no log
-        if (stages.isEmpty() && buildLogs.isEmpty() && (main == null || !main.isFile)) return null
+        if (stages.isEmpty() && buildLogs.isEmpty() && main == null) return null
         out.mkdirs()
         out.listFiles()?.filter { it.isFile && it.lastModified() < System.currentTimeMillis() - KEEP_MILLIS }
             ?.forEach { it.delete() }
-        val zip = File(out, fileName(version, tag))
+        val files = mutableListOf<Triple<String, File, Long>>()
+        if (main != null) files.add(Triple("log.txt", main, MAIN_LIMIT))
+        for ((name, file) in stages) files.add(Triple(name, file, STAGE_LIMIT))
+        for ((name, file) in buildLogs) files.add(Triple("builds/$name", file, STAGE_LIMIT))
+        return pack(out, fileName(version, tag), listOf("device.txt" to device), files)
+    }
+
+    /**
+     * The game's runtime log bundle: the device's and the app's own facts, the game's own facts and the
+     * host's logs (the last run and the one before it). Nothing when there is no log to share.
+     *
+     * @param device the device's and the app's own facts as text
+     * @param game the game's own facts as text
+     * @param logs the host's logs, named for their entries
+     * @param out the folder the bundle goes to
+     * @param name the bundle's file name
+     */
+    fun gameBundle(device: String, game: String, logs: List<Pair<String, File>>, out: File, name: String): File? {
+        if (logs.isEmpty()) return null
+        val files = logs.map { Triple(it.first, it.second, MAIN_LIMIT) }
+        return pack(out, name, listOf("device.txt" to device, "game.txt" to game), files)
+    }
+
+    /** Writes the zip: the texts as they are, the files capped (a big one gives its tail) */
+    private fun pack(out: File, name: String, texts: List<Pair<String, String>>, files: List<Triple<String, File, Long>>): File? {
+        out.mkdirs()
+        val zip = File(out, name)
         return try {
             ZipOutputStream(zip.outputStream().buffered()).use { zos ->
-                putText(zos, "device.txt", device)
-                if (main != null) put(zos, "log.txt", main, MAIN_LIMIT)
-                for ((name, file) in stages) put(zos, name, file, STAGE_LIMIT)
-                for ((name, file) in buildLogs) put(zos, "builds/$name", file, STAGE_LIMIT)
+                for ((n, t) in texts) putText(zos, n, t)
+                for ((n, f, limit) in files) put(zos, n, f, limit)
             }
             zip
         } catch (e: Exception) {
@@ -74,7 +98,7 @@ object LogBundle {
     /**
      * The device's and the app's own facts: what the phone is, and which build of the app it runs.
      */
-    private fun deviceText(context: Context): String {
+    fun deviceText(context: Context): String {
         val b = StringBuilder()
         fun row(key: String, value: String?) {
             if (!value.isNullOrBlank()) b.append(key).append(": ").append(value).append('\n')
