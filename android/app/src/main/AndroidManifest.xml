@@ -19,6 +19,11 @@
     <!-- The vibration: the gamepad's tick when a button goes down, and the game's own rumble (the host's
          haptics thread). Without it the system's Vibrator throws and nothing moves. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- The local play over the LAN (the host's DM_LAN): the Wi-Fi state to tell a local network from a
+         mobile one, and the multicast lock, or the search broadcasts never arrive and no game finds
+         another. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:name=".NxApp"
