@@ -15,6 +15,29 @@ The release page has the APK and the full notes: <https://github.com/zFitness/nx
 - **The whole repository is now GPL-3.0-or-later.** It was MIT, with the frame generation as the one GPL component in the tree. The MIT terms let anyone take the code and ship a closed app from it; the GPL terms require a derivative to be distributed under the same license, with its source and the notices kept. The license follows the code that was taken, not what the build linked: the frame generation can be left out of a build (`-PnxLsfg=false`), and the result is still GPL. The third-party components keep their own licenses, the upstream engine's copyright notice is kept, and the full license text travels with the app and the desktop bundle.
 - **The license files are laid out so that a machine reads them.** `LICENSE` is the GPL-3.0 text alone, so GitHub shows the repository as GPL-3.0 instead of "Other"; `NOTICE.md` says what those terms cover, who holds the copyright on what (the upstream engine and the upstream desktop tool are named, with their MIT text quoted), and which parts keep a license of their own. The app's own notice no longer says that selling it is not allowed: the GPL lets a distributor charge for a copy, so the notice says what the license actually says.
 
+## v0.3.0-alpha08 - 2026-11-13
+
+### Before you update
+
+- Nothing to redo: the data packs of alpha07 keep working, and a game that
+  needs a new runtime is still updated on its own from the library.
+
+### New
+
+- "Share the log" packs a zip now: the device's and the app's own facts, the
+  app's log, the stage logs of every game in the work folder (the host's
+  build, the Oodle decoder's run, the extractor's, the shaders', the porter's
+  traceback) and the build history's logs. Each log says how much of it was
+  cut.
+- A game's updates and its DLC are found in a first-level subfolder next to
+  the base game, so the usual layout of a download now ports with its DLC.
+  Only the picked game's files are taken from there, and the report says
+  which subfolder each update and DLC came from.
+- The builds page says what it found and how long it runs: the target (which
+  game, which file, is it adapted), the files the porter found (the base
+  game, its updates and its DLC, each with its version and the subfolder it
+  came from) and the build options.
+
 ## v0.3.0-alpha07 - 2026-11-13
 
 ### Before you update
