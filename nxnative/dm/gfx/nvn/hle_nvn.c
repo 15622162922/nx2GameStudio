@@ -199,7 +199,9 @@ NVN(nvnDeviceSetWindowOriginMode, void, NVNdevice *d, NVNwindowOriginMode m) { (
 NVN(nvnDeviceSetDepthMode, void, NVNdevice *d, NVNdepthMode m) { ((dev_t_ *)d)->depth_mode = m; mtl_set_depth_zero(m != 0); LOG("[nvn] depth mode %s", m ? "near=0 (as D3D / Metal)" : "near=-w (GL)"); }
 // The getters answer with the mode the device is in: the Set functions keep it. A game that reads it back expects the same value it set: Dragon Ball Xenoverse 2
 // set both to 1 (upper left, near=0) at the start and asked again after 52 s; the unimplemented stub answered 0 (lower left, near=-w) every time, the game went on
-// with a null object and crashed on it (subsdk5+0x73b80, called from subsdk4+0x1d5668).
+// with a null object and crashed on it (subsdk5+0x73b80, called from subsdk4+0x1d5668). Mega Man Battle Network Legacy Collection Vol. 1 sets the upper-left origin and reads it
+// back: the unimplemented getter's 0 (lower left, GL) made it draw its render-to-texture menu layers flipped, a mirrored copy of the menu over the top of the screen;
+// Pokémon Sword 1.3.2 asks for both right after creating its device.
 NVN(nvnDeviceGetWindowOriginMode, NVNwindowOriginMode, const NVNdevice *d) { return (NVNwindowOriginMode)((const dev_t_ *)d)->origin; }
 NVN(nvnDeviceGetDepthMode, NVNdepthMode, const NVNdevice *d) { return (NVNdepthMode)((const dev_t_ *)d)->depth_mode; }
 NVN(nvnDeviceFinalizeCommandHandle, void, NVNdevice *d, NVNcommandHandle h) { (void)d; (void)h; }
@@ -857,6 +859,7 @@ static void hostseg_release(uintptr_t lo, uintptr_t hi) {
 }
 NVN(nvnCommandBufferAddCommandMemory, void, NVNcommandBuffer *c, const NVNmemoryPool *p, ptrdiff_t off, size_t n) {
     const pool_t *pl = (const pool_t *)p;
+    if (pl) __atomic_store_n(&CB(c)->cmd_size, n, __ATOMIC_RELAXED);   // GetCommandMemorySize: the memory the game added, whether the host records into it or into a segment it lends
     if (!pl || n < 64) { if (cs_on()) { pthread_mutex_lock(&g_cs_mu); g_cs.hostseg++; pthread_mutex_unlock(&g_cs_mu); } uint32_t sz = HOSTSEG_SZ; if (!pl && n >= 64) { sz = HOSTSEG_MIN; while (sz < n && sz < HOSTSEG_SZ) sz <<= 1; }
         cmd_new_segment(CB(c), hostseg_take(CB(c), sz), sz); return; }
     if (!pl->mem) { LOG("[RED] AddCommandMemory: pool has no CPU storage"); return; }
@@ -2419,9 +2422,13 @@ NVN_NOPROTO(nvnWindowSetNumActiveTextures, void, NVNwindow *w, int n) { (void)w;
 NVN(nvnCommandBufferGetCommandMemoryUsed, size_t, const NVNcommandBuffer *c) { const cmd_t *m = (const cmd_t *)c;
     return m->begin ? (size_t)m->used : 0; }
 NVN(nvnCommandBufferGetControlMemoryUsed, size_t, const NVNcommandBuffer *c) { (void)c; return 0; }
-// Size and free bytes of the command memory the game last added (DRAGON QUEST XI S, Unreal Engine 4.18): as in NVN, size = used + free; free is what is left in the current segment
+// Free bytes of the command memory (DRAGON QUEST XI S, Unreal Engine 4.18): what is left in the current segment
 NVN(nvnCommandBufferGetCommandMemoryFree, size_t, const NVNcommandBuffer *c) { const cmd_t *m = (const cmd_t *)c; return m->cur && m->end > m->cur ? (size_t)(m->end - m->cur) : 0; }
-NVN(nvnCommandBufferGetCommandMemorySize, size_t, const NVNcommandBuffer *c) { return h_nvnCommandBufferGetCommandMemoryUsed(c) + h_nvnCommandBufferGetCommandMemoryFree(c); }
+// Size, as NVN defines it: the byte count the game last passed to AddCommandMemory (cmd_size), which records and host-lent segments leave alone. It used to be used + free summed
+// per call. Super Smash Bros. Ultimate's two render dispatch threads take command buffers from one pool under a lock, and when it runs out std::sort it by this size while the other
+// thread is still recording into a buffer it took: a record landing between the two reads gave one buffer two sizes within one sort, and libc++'s unguarded partition can then run
+// off the vector (upstream nxnative 843081d0: CRASH sig=11 addr=0x50 pc=main+0x385201c, rare as a battle starts; read from the disassembly, not caught live)
+NVN(nvnCommandBufferGetCommandMemorySize, size_t, const NVNcommandBuffer *c) { return __atomic_load_n(&((const cmd_t *)c)->cmd_size, __ATOMIC_RELAXED); }
 NVN_NOPROTO(nvnCommandBufferSetCommandMemoryCallbackEnabled, void, NVNcommandBuffer *c, uint32_t on) { (void)c; (void)on; }
 
 // nvnProgramSetShadersExt (NVN 55): each stage is 0x18 bytes = NVNshaderData{data, control} + one 8-byte extension field (filled from SMBW main 0x1074ff0).
