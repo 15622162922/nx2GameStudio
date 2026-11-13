@@ -432,6 +432,7 @@ int dm_java_input(const dm_java_event *e) { return handle_event(e); }
 static ASensorEventQueue *g_sq; static const ASensor *g_accel, *g_gyro;
 static _Atomic int g_motion_on = 1;   // the device's motion drives the controller's six-axis sensor
 static _Atomic int g_motion_raw;      // keep the measured direction of a flick: the game's own gestures read it, the made-up waveform stops
+static _Atomic int g_motion_log;      // log the mapped values once a second (DM_MOTION_LOG=1)
 static int64_t g_mo_next;             // the next read of the switches (the app's ctl file changes them while the game runs)
 // the display's rotation, read through JNI (the Activity's window): 0..3 = 0, 90, 180, 270 degrees
 static JNIEnv *g_menv; static jobject g_display; static jmethodID g_mRotation; static int g_rot;
@@ -463,8 +464,8 @@ static void motion_feed(const ASensorEvent *e, const double acc[3]) {
     float fa[3], fg[3];
     for (int i = 0; i < 3; i++) { fg[i] = (float)(gm[i] / (2 * M_PI)); fa[i] = (float)(-am[i] / ASENSOR_STANDARD_GRAVITY); }
     dm_motion_set(fa, fg, e->timestamp);
-    const char *lg = getenv("DM_MOTION_LOG"); static int64_t logged;
-    if (lg && atoi(lg) > 0 && e->timestamp - logged >= 1000000000) { logged = e->timestamp;
+    static int64_t logged;
+    if (atomic_load(&g_motion_log) && e->timestamp - logged >= 1000000000) { logged = e->timestamp;
         LOG("front end: motion (rotation %d) acc %+.2f %+.2f %+.2f G, gyro %+.3f %+.3f %+.3f rev/s", g_rot * 90, fa[0], fa[1], fa[2], fg[0], fg[1], fg[2]); }
 }
 static void shake_sensor(int on) {
@@ -497,6 +498,8 @@ static void motion_poll(int64_t now) {
     }
     const char *r = getenv("DM_MOTION_RAW");
     atomic_store(&g_motion_raw, r && atoi(r) > 0);
+    const char *lg = getenv("DM_MOTION_LOG");
+    atomic_store(&g_motion_log, lg && atoi(lg) > 0);
 }
 static int on_sensor(int fd, int events, void *data) {
     (void)fd; (void)events; (void)data;

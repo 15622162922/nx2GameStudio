@@ -62,6 +62,7 @@ static ASensorEventQueue *g_sq;
 static const ASensor *g_accel, *g_gyro;
 static _Atomic int g_motion_on = 1;      // the front end's own state (front_player.c)
 static _Atomic int g_motion_raw;
+static _Atomic int g_motion_log;
 static int64_t g_mo_next;
 static int has_gyro, g_rot;
 static void *g_ilooper;
