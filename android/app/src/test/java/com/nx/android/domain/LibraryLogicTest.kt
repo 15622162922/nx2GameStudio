@@ -173,6 +173,35 @@ class LibraryLogicTest {
             LibraryLogic.preferPack(card, false, internalRunnable, true).first.pack)
     }
 
+    /** 同一个 title ID 的两个包：正式档案的那个（boots）压过临时档案的那个（experimental），与扫到的顺序无关 */
+    @Test
+    fun `a pack of a real profile wins over the provisional one`() {
+        val provisional = packWith("Provisional", runnable = true).copy(status = "experimental")
+        val real = packWith("Real", runnable = true).copy(status = "boots")
+        assertEquals(real.pack, LibraryLogic.preferPack(provisional, true, real, true).first.pack)
+        assertEquals(real.pack, LibraryLogic.preferPack(real, true, provisional, true).first.pack)
+    }
+
+    /** 两个包一样时：新的那个赢（和目录名的先后无关） */
+    @Test
+    fun `the newer pack wins when the two are alike`() {
+        val older = packWith("A pack", runnable = true).copy(status = "boots")
+        val newer = packWith("Z pack", runnable = true).copy(status = "boots")
+        older.pack.setLastModified(1_000_000L)
+        newer.pack.setLastModified(2_000_000L)
+        assertEquals(newer.pack, LibraryLogic.preferPack(older, true, newer, true).first.pack)
+        assertEquals(newer.pack, LibraryLogic.preferPack(newer, true, older, true).first.pack)
+    }
+
+    /** 旧包的处理：没存档就删，有存档而新包没有就搬过去，两边都有就都不动 */
+    @Test
+    fun `an older pack is removed, its saves move, and two packs with saves stay`() {
+        assertEquals(OlderPackAction.REMOVE, LibraryLogic.olderPackAction(oldHasSaves = false, newHasSaves = false))
+        assertEquals(OlderPackAction.MOVE_SAVES_AND_REMOVE, LibraryLogic.olderPackAction(oldHasSaves = true, newHasSaves = false))
+        assertEquals(OlderPackAction.KEEP, LibraryLogic.olderPackAction(oldHasSaves = true, newHasSaves = true))
+        assertEquals(OlderPackAction.REMOVE, LibraryLogic.olderPackAction(oldHasSaves = false, newHasSaves = true))
+    }
+
     @Test
     fun `a remembered source path supplies the label even when the file is gone`() {
         val card = entry(source = "/sdcard/Games/Hades II [0100000000010000].nsp")
