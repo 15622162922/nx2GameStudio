@@ -125,6 +125,12 @@ and directional cap throws and Tears of the Kingdom bow aiming is still required
 before enabling the opt-in in a profile. Host sensor tests verify routing and
 axis preservation, not game recognition or device behavior.
 
+The phone app has the same two switches on its settings page (the **Motion** section): they are
+handed to the host as env rows when the game starts and written into the game's control file
+(`DM_CTL`) while it runs, so a change takes effect at once, without restarting the game. The
+display's rotation comes from the app's Activity through JNI (`Display.getRotation()`): the app's
+player front end has no Activity of its own, so it asks for it.
+
 ## Tests
 
 ```
