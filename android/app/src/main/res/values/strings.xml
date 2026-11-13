@@ -118,7 +118,6 @@
     <string name="env_reset_action">Reset</string>
     <string name="env_chip_checking">Checking</string>
     <string name="env_chip_ready">Ready</string>
-    <string name="env_chip_no_firmware">No firmware</string>
     <string name="env_chip_not_ready">Not ready</string>
     <string name="env_check_title">Environment check</string>
     <string name="env_check_env">The environment</string>
@@ -319,7 +318,7 @@
     <string name="fw_not_imported">not imported</string>
     <string name="fw_import">Import zip</string>
     <string name="fw_pick">Choose the firmware package (zip)</string>
-    <string name="fw_hint">One copy of the console\'s system data, one for the machine, and it is optional: only a game that reads the console\'s system data needs it - Mario Kart 8 Deluxe builds its Mii heads from it. You can skip it if you do not play those. Import the firmware zip (the kind an emulator uses): the app unpacks it into its own folder and the port carries it.</string>
+    <string name="fw_hint">Optional: only a game that reads the console\'s system data needs it (Mario Kart 8 Deluxe\'s Mii heads). Import a firmware zip (the kind an emulator uses) and you are done.</string>
     <string name="fw_imported">%1$s imported (%2$d files)</string>
     <string name="fw_import_failed">The firmware could not be imported: %1$s</string>
     <string name="fw_cleared">The firmware was removed</string>

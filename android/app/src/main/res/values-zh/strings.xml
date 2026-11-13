@@ -117,7 +117,6 @@
     <string name="env_reset_action">重置</string>
     <string name="env_chip_checking">检查中</string>
     <string name="env_chip_ready">就绪</string>
-    <string name="env_chip_no_firmware">缺固件</string>
     <string name="env_chip_not_ready">未就绪</string>
     <string name="env_check_title">环境检查</string>
     <string name="env_check_env">移植环境</string>
@@ -318,7 +317,7 @@
     <string name="fw_not_imported">没导入</string>
     <string name="fw_import">导入 zip</string>
     <string name="fw_pick">选固件包（zip）</string>
-    <string name="fw_hint">主机系统数据的一份，整机一份，可选项：只有读主机系统数据的游戏才需要——比如马力欧卡丁车 8 豪华版用它捏 Mii 头像。不玩这类游戏可以不导入。导入那种固件 zip（模拟器用的那种），App 解开放在自己的目录里，移植时带给移植器。</string>
+    <string name="fw_hint">可选：只有读主机系统数据的游戏需要它（比如马力欧卡丁车 8 豪华版的 Mii 头像）。导入固件 zip（模拟器用的那种）即可。</string>
     <string name="fw_imported">已导入 %1$s（%2$d 个文件）</string>
     <string name="fw_import_failed">固件导入失败：%1$s</string>
     <string name="fw_cleared">固件已清除</string>

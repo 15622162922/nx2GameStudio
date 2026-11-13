@@ -24,7 +24,6 @@ data class EnvironmentCheckUiState(
     val noOutput: Boolean = false,
     val phantom: PhantomCheck.Status = PhantomCheck.Status.UNKNOWN,
     val phantomKnown: Boolean = false,
-    val firmwareImported: Boolean = true,
 )
 
 @HiltViewModel
@@ -44,7 +43,6 @@ class EnvironmentCheckViewModel @Inject constructor(
             noOutput = checks.noOutput,
             phantom = checks.phantom,
             phantomKnown = checks.phantomKnown,
-            firmwareImported = checks.firmwareImported,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EnvironmentCheckUiState())
 
