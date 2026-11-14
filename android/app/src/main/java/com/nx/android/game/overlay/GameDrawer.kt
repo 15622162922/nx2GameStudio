@@ -85,15 +85,16 @@ import com.nx.android.core.ui.theme.GlassSheet
 import com.nx.android.core.ui.theme.NxPalette
 import kotlinx.coroutines.delay
 
-/** 抽屉的四个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
+/** 抽屉的五个标签页（存档的导出与导入在库页的抽屉里，这里不再有） */
 enum class DrawerTab(@StringRes val label: Int) {
     PERF(R.string.drawer_tab_perf), HUD(R.string.drawer_tab_hud),
-    FRAMEGEN(R.string.drawer_tab_framegen), CONTROLS(R.string.drawer_tab_controls)
+    FRAMEGEN(R.string.drawer_tab_framegen), CONTROLS(R.string.drawer_tab_controls),
+    AUDIO(R.string.drawer_tab_audio)
 }
 
 /**
  * 游戏内抽屉（:play 进程自己的 UI）：虚拟手柄的菜单按钮、物理手柄菜单键或系统返回手势唤出，
- * 玻璃卡样式与应用一致，四个标签页（性能 / HUD / 插帧 / 操作）+ 底部动作行。
+ * 玻璃卡样式与应用一致，五个标签页（性能 / HUD / 插帧 / 操作 / 音频）+ 底部动作行。
  *
  * 帧率档位与帧生成即改即生效（JNI）；手柄的显示与浓淡是 App 自己的偏好（唯一真值），其余是宿主自己的设置
  * （震动、底座模式，即改即生效并存进包的 settings.txt）。宿主不再画任何面板：没有暂停菜单、
@@ -214,9 +215,10 @@ fun GameDrawer(
                                             onMotion(on, raw)
                                             // 即时反馈：开关的显示别等下一轮轮询（宿主的 env 已经改了）
                                             motionState = (if (on) 1 else 0) or (if (raw) 2 else 0)
-                                        },
-                                        audioSupported, audioId, audioDevices,
-                                        onAudio = { id -> audioId = id; Native.audioSet(id) })
+                                        })
+                                    // 音频页：声音走哪个设备（宿主换了流，即时出声）
+                                    DrawerTab.AUDIO -> AudioRows(audioSupported, audioId, audioDevices,
+                                        onPick = { id -> audioId = id; Native.audioSet(id) })
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -453,10 +455,6 @@ private fun ControlRows(
     motion: () -> Int,
     motionHasGyro: Boolean,
     onMotion: (Boolean, Boolean) -> Unit,
-    audioSupported: Boolean,
-    audioId: Int,
-    audioDevices: List<AudioOutput>,
-    onAudio: (Int) -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -498,14 +496,21 @@ private fun ControlRows(
             onMotion(on, !raw)
         }
     }
-    // 声音输出：跟随系统，或系统现在有的那些设备（蓝牙耳机、USB 声卡……）。宿主那边换过去即刻生效。
-    // 老宿主没有这个入口，整组不显示。
-    if (audioSupported) {
-        Spacer(Modifier.height(4.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        GroupLabel(stringResource(R.string.drawer_group_audio))
-        AudioRow(audioId, audioDevices, onAudio)
+}
+
+/**
+ * 音频页：游戏的声音走哪个设备（蓝牙耳机、USB 声卡……）。
+ * 宿主那边换过去即刻出声（共享的音频后端把在播的流停掉、在新设备上重启），不用重启游戏。
+ * 老宿主没有这个入口（老包），这一页给一句话说明，别留一个空页。
+ */
+@Composable
+private fun AudioRows(supported: Boolean, current: Int, devices: List<AudioOutput>, onPick: (Int) -> Unit) {
+    if (!supported) {
+        HintRow(stringResource(R.string.drawer_audio_unsupported))
+        return
     }
+    GroupLabel(stringResource(R.string.drawer_group_audio))
+    AudioRow(current, devices, onPick)
 }
 
 /**

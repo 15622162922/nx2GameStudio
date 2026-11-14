@@ -236,6 +236,8 @@
     <string name="drawer_tab_hud">HUD</string>
     <string name="drawer_tab_perf">性能</string>
     <string name="drawer_tab_controls">操作</string>
+    <string name="drawer_tab_audio">音频</string>
+    <string name="drawer_audio_unsupported">这个包的运行库还没有选声音输出的开关 —— 更新运行库后就有。</string>
     <string name="drawer_group_info">画面信息</string>
     <string name="drawer_group_rate">帧率</string>
     <string name="drawer_group_picture">画面</string>

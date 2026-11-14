@@ -237,6 +237,8 @@
     <string name="drawer_tab_hud">HUD</string>
     <string name="drawer_tab_perf">Performance</string>
     <string name="drawer_tab_controls">Controls</string>
+    <string name="drawer_tab_audio">Audio</string>
+    <string name="drawer_audio_unsupported">This pack\'s runtime has no switch for the audio output yet \u2014 update the runtime and it appears.</string>
     <string name="drawer_group_info">On-screen information</string>
     <string name="drawer_group_rate">Frame rate</string>
     <string name="drawer_group_picture">Picture</string>
