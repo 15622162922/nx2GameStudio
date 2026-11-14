@@ -2,7 +2,6 @@ package com.nx.android.feature.runtime
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -23,8 +22,7 @@ import com.nx.android.appstate.RuntimeUpdateState
 
 @Composable
 fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
-                        onRePort: () -> Unit, onUseCurrentProfile: () -> Unit,
-                        onFinished: () -> Unit) {
+                        onUseCurrentProfile: () -> Unit, onFinished: () -> Unit) {
     LaunchedEffect(state.phase) {
         if (state.phase == RuntimeUpdatePhase.SUCCEEDED) {
             state.dismiss()
@@ -60,23 +58,19 @@ fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
             }
         },
         confirmButton = {
-            if (!state.running) TextButton(onClick = onRetry) { Text(stringResource(R.string.runtime_retry)) }
-        },
-        dismissButton = {
             if (!state.running) {
-                Column(horizontalAlignment = Alignment.End) {
-                    // 档案对不上时的那条路：玩家可以用当前档案再来一次（不必拿原版文件重移植）
-                    if (state.profileDrift) {
-                        TextButton(onClick = onUseCurrentProfile) {
-                            Text(stringResource(R.string.runtime_use_current_profile))
-                        }
-                    }
-                    Row {
-                        TextButton(onClick = onRePort) { Text(stringResource(R.string.runtime_full_port)) }
-                        TextButton(onClick = { state.dismiss() }) { Text(stringResource(R.string.common_close)) }
-                    }
+                // 档案对不上是确定性的失败：重试还是同一个原因，只有「继续」（用当前档案）这一条路。
+                // 别的失败（编译失败、工具缺失）重试有意义。
+                if (state.profileDrift) {
+                    TextButton(onClick = onUseCurrentProfile) { Text(stringResource(R.string.common_continue)) }
+                } else {
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.runtime_retry)) }
                 }
             }
+        },
+        dismissButton = {
+            // 重新移植在游戏详情里做：这个弹框只管这一次更新
+            if (!state.running) TextButton(onClick = { state.dismiss() }) { Text(stringResource(R.string.common_close)) }
         },
     )
 }

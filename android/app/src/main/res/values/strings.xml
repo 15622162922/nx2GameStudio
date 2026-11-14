@@ -544,17 +544,15 @@
     <string name="update_failed">The check failed: no network, or the release page could not be reached.</string>
     <string name="update_download">Get it</string>
     <string name="runtime_update">Update runtime</string>
-    <string name="runtime_update_failed">The runtime could not be updated. Retry, or port the entire game again using its original files. Your saves are kept.</string>
+    <string name="runtime_update_failed">The runtime could not be updated. Retry, or port the game again from its original files in the game\'s details. Your saves are kept.</string>
     <string name="runtime_play_failed">The game could not run correctly. You can try porting it again from its original files in game details. Your saves are kept.</string>
     <string name="runtime_busy">Close the running game or wait for the current build to finish.</string>
     <string name="runtime_updating">Updating the game runtime. This takes about a minute.</string>
-    <string name="runtime_updated">Runtime updated. If the game misbehaves afterwards, port it again from its original files.</string>
-    <string name="runtime_update_hint">If the game misbehaves after this update, port it again from its original files.</string>
+    <string name="runtime_updated">Runtime updated. If the game misbehaves afterwards, port it again from its original files in the game\'s details.</string>
+    <string name="runtime_update_hint">If the game misbehaves after this update, port it again from its original files in the game\'s details.</string>
     <string name="runtime_retry">Retry</string>
-    <string name="runtime_full_port">Port entire game again</string>
-    <string name="runtime_use_current_profile">Continue with the current profile</string>
     <string name="runtime_profile_drift_hint">The profile this game was ported with has changed since then. Rebuilding with the profile the game has now is the same as porting it again, but the game may behave differently than it did when it was ported.</string>
-    <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the entire game again using its original files. Your game data is kept.</string>
+    <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the game again from its original files in the game\'s details. Your game data is kept.</string>
 
     <!-- 手柄中心（实体手柄）：手柄中心面板与抽屉里的那一组 -->
     <string name="pad_center_title">Gamepad center</string>

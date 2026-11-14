@@ -543,17 +543,15 @@
     <string name="update_failed">检查失败：没有网络，或者够不着 release 页。</string>
     <string name="update_download">去下载</string>
     <string name="runtime_update">更新运行库</string>
-    <string name="runtime_update_failed">运行库更新失败。可重试，或使用原始游戏文件完整重新移植；存档会保留。</string>
+    <string name="runtime_update_failed">运行库更新失败。可重试，或在游戏详情里使用原始游戏文件重新移植；存档会保留。</string>
     <string name="runtime_play_failed">游戏未能正常运行。可在游戏详情中使用原始游戏文件完整重新移植；存档会保留。</string>
     <string name="runtime_busy">请先关闭正在运行的游戏，或等待当前构建完成。</string>
     <string name="runtime_updating">正在更新游戏运行库，大约需要 1 分钟。</string>
-    <string name="runtime_updated">运行库已更新。若升级后游戏有问题，请使用原始游戏文件重新移植。</string>
-    <string name="runtime_update_hint">若升级后游戏有问题，请使用原始游戏文件重新移植。</string>
+    <string name="runtime_updated">运行库已更新。若升级后游戏有问题，请在游戏详情里使用原始游戏文件重新移植。</string>
+    <string name="runtime_update_hint">若升级后游戏有问题，请在游戏详情里使用原始游戏文件重新移植。</string>
     <string name="runtime_retry">重试</string>
-    <string name="runtime_full_port">完整重新移植</string>
-    <string name="runtime_use_current_profile">用当前档案继续</string>
     <string name="runtime_profile_drift_hint">这个游戏上次移植用的档案在之后被改过。用当前档案重建等同于重新移植，但游戏的运行表现可能与移植时不同。</string>
-    <string name="runtime_interrupted">运行库更新已中断。可重试，或使用原始游戏文件完整重新移植；游戏数据会保留。</string>
+    <string name="runtime_interrupted">运行库更新已中断。可重试，或在游戏详情里使用原始游戏文件重新移植；游戏数据会保留。</string>
 
     <!-- 手柄中心（实体手柄）：手柄中心面板与抽屉里的那一组 -->
     <string name="pad_center_title">手柄中心</string>

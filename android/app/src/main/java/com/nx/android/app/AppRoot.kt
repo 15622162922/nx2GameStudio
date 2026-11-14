@@ -372,26 +372,6 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
             // 玩家选择用当前档案继续：下一次更新带上这个开关（清单里的指纹会换成当前的）
             runtime.useCurrentProfile()
             actions.onUpdateRuntime(File(runtime.pack), runtime.name)
-        },
-        onRePort = {
-            val pack = File(runtime.pack)
-            val entry = lib.visible().firstOrNull { it.pack?.pack == pack }
-            val titleId = entry?.titleId ?: com.nx.android.data.library.LibraryFileScanner.portFromPack(pack)?.titleId
-            runtime.dismiss()
-            fun choose(file: File) {
-                if (titleId != null && !com.nx.android.domain.LibraryLogic.sourceMatchesTitle(file.name, titleId)) {
-                    actions.onToast(locale.str(R.string.lib_source_mismatch))
-                } else {
-                    lib.buildsTarget = file
-                    lib.selected = null
-                    buildsViewModel.setTarget(file)
-                    tab = Tab.BUILDS.ordinal
-                }
-            }
-            val source = entry?.source
-            if (source != null) choose(source)
-            else onRequest(PickerRequest(PickerMode.FILE, GAME_FILE_EXTENSIONS, File("/storage"),
-                locale.str(R.string.builds_choose_game_file), onPicked = { choose(it) }))
         })
 
     // 选中游戏的背景铺满整块屏幕：顶栏透明画在图上，三个 tab 共用这层背景
