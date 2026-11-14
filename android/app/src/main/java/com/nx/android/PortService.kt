@@ -96,6 +96,8 @@ class PortService : Service() {
     lateinit var guestLauncher: GuestProcessLauncher
     @Inject
     lateinit var completionCoordinator: PortCompletionCoordinator
+    @Inject
+    lateinit var paths: com.nx.android.core.storage.AppPaths
 
     /** Nothing binds to it: the service is started with Intents only. 没有谁绑定它：服务只用 Intent 启动 */
     override fun onBind(intent: Intent?): IBinder? = null
@@ -158,14 +160,14 @@ class PortService : Service() {
         startForeground(1, notification())
         val handler = android.os.Handler(mainLooper)
         lateinit var taskRunner: PortRunner
-        taskRunner = PortRunner(environmentSetup, guestLauncher, locale) { line ->
+        taskRunner = PortRunner(environmentSetup, guestLauncher, locale, File(paths.files, "nx2a/port_exit.txt")) { line ->
             handler.post {
                 if (runner === taskRunner && port.running && port.buildId == taskId) {
                     port.onLine(line)
                     nm.notify(1, notification())
                 }
             }
-        }
+        }   // the log bundle takes the exit status: a port the system killed says so
         runner = taskRunner
         try {
             taskRunner.port(

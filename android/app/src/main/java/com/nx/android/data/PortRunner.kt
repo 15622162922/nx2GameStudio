@@ -15,6 +15,7 @@ class PortRunner(
     private val environmentSetup: EnvironmentSetup,
     private val guestLauncher: GuestProcessLauncher,
     private val locale: AppLocale,
+    private val statusFile: File? = null,
     private val onLine: (String) -> Unit,
 ) {
 
@@ -91,7 +92,8 @@ class PortRunner(
                 }
                 p.inputStream.bufferedReader().forEachLine { onLine(it) }
                 val code = runCatching { p.waitFor() }.getOrDefault(-1)
-                if (code != 0) onLine(locale.str(R.string.runner_exit_code, code))
+                if (code != 0) onLine(exitLine(code))
+                statusFile?.let { writeStatus(it, code) }
             } catch (e: Exception) {
                 onLine("[RED] ${e.message}")
             } finally {
@@ -101,6 +103,32 @@ class PortRunner(
         }
         t.start()
         return t
+    }
+
+    /**
+     * How the run ended: the exit code, or the signal that killed it (the system takes the memory when a port
+     * grows too big; the JDK reports such a process as 128 + the signal).
+     */
+    private fun exitLine(code: Int): String {
+        val sig = signal(code)
+        return if (sig != 0) locale.str(R.string.runner_killed, sig) else locale.str(R.string.runner_exit_code, code)
+    }
+
+    /** The signal that killed the process, 0 when it ended on its own */
+    private fun signal(code: Int): Int = if (code in 129..255) code - 128 else 0
+
+    /**
+     * The run's end, in a file: the log bundle takes it, so a port the system killed says so (the porter itself
+     * had no chance to write anything).
+     */
+    private fun writeStatus(file: File, code: Int) {
+        try {
+            file.parentFile?.mkdirs()
+            val sig = signal(code)
+            val what = if (sig != 0) "killed by signal $sig" else "exit code $code"
+            file.writeText("port: $what\ntime: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}\n")
+        } catch (e: Exception) {
+        }
     }
 
     /** Stops the porter and the tools it started (they are the app's own processes, stopped one by one) */

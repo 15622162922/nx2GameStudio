@@ -66,6 +66,7 @@
     <string name="runner_interpreter_patched">改写解释器路径完成</string>
     <string name="runner_interpreter_patch_failed">[RED] 改写解释器路径失败：%1$s</string>
     <string name="runner_exit_code">[RED] 退出 %1$s</string>
+    <string name="runner_killed">[RED] 移植被信号 %1$s 杀死（多半是系统把内存收走了：清出内存再发起一次）</string>
     <string name="onb_step_of">第 %1$s 步，共 %2$s 步</string>
     <string name="onb_later">稍后再说</string>
     <string name="onb_welcome">欢迎来到 %1$s</string>
