@@ -17,6 +17,8 @@ void dm_present_sample(uint64_t out[5]);   // gfx_vk_present.c: the performance 
 char *dm_menu_saves(void); void dm_menu_export(void); int dm_menu_import(const char *name);
 int dm_menu_export_note(char *out, int cap); int dm_menu_state(void);
 char *dm_pad_layout_json(void); char *dm_pad_state_json(void);
+void dm_audio_route_device(int32_t id);   // hle_audio.c: the live output streams move to that device at once
+int32_t dm_aaudio_get_device(void);       // audiotoolbox_aaudio.c: the output device in force (0 = the system's own)
 #include <stdlib.h>
 #include <android/log.h>
 #include <android/native_window_jni.h>
@@ -297,4 +299,40 @@ Java_com_nx_android_game_Native_perfPinGet(JNIEnv *E, jclass c) {
     const char *e = getenv("DM_FPS_PIN");
     int v = e ? atoi(e) : 0;
     return v == 60 || v == 40 || v == 30 ? v : 0;   // any other value lets the rate adapt again (fps_pin's rule)
+}
+
+// The drawer's audio output: the device the game plays through (a Bluetooth headset, a USB dongle). The shared
+// audio backend moves the running streams over at once (hle_audio.c's dm_audio_route_device: it stops the units
+// and restarts them on the new device), so the change is heard without restarting the game.
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_audioSet(JNIEnv *E, jclass c, jint id) {
+    (void)E; (void)c;
+    dm_audio_route_device(id);
+}
+
+// The output device in force (0 = the system's own choice).
+JNIEXPORT jint JNICALL
+Java_com_nx_android_game_Native_audioGet(JNIEnv *E, jclass c) {
+    (void)E; (void)c;
+    return dm_aaudio_get_device();
+}
+
+// The drawer's GPU clock: DM_GPU_TURBO=1 keeps the GPU at its highest clock, =auto raises it only while the frames
+// miss the display (perf_android.c reads the variable every 60 presents, so setting it here takes effect at once).
+// 0 = off, the governor's own clock.
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_gpuTurboSet(JNIEnv *E, jclass c, jstring mode) {
+    (void)E; (void)c;
+    if (!mode) return;
+    const char *m = (*E)->GetStringUTFChars(E, mode, NULL);
+    if (m) { setenv("DM_GPU_TURBO", m, 1); (*E)->ReleaseStringUTFChars(E, mode, m); }
+}
+
+// The clock mode in force: "0" off, "1" always at the highest clock, "auto" only while the frames are late.
+JNIEXPORT jstring JNICALL
+Java_com_nx_android_game_Native_gpuTurboGet(JNIEnv *E, jclass c) {
+    (void)c;
+    const char *e = getenv("DM_GPU_TURBO");
+    const char *out = !e || atoi(e) <= 0 ? "0" : !strcmp(e, "auto") ? "auto" : "1";
+    return (*E)->NewStringUTF(E, out);
 }

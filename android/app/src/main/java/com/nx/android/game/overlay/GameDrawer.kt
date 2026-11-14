@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
@@ -148,11 +150,27 @@ fun GameDrawer(
                 // 体感（设备的转动带动六轴传感器）：老宿主也没有这个入口，整组不显示
                 val motionSupported = remember { runCatching { Native.motionGet() }.isSuccess }
                 var motionState by remember { mutableIntStateOf(if (motionSupported) motion() else 0) }
+                // 音频输出与 GPU 提频：老宿主也没有这两个入口（调用会抛 UnsatisfiedLinkError）——整行不显示
+                val audioGet = remember { runCatching { Native.audioGet() } }
+                val audioSupported = audioGet.isSuccess
+                var audioId by remember { mutableIntStateOf(if (audioSupported) audioGet.getOrDefault(0) else 0) }
+                val turboGet = remember { runCatching { Native.gpuTurboGet() } }
+                val turboSupported = turboGet.isSuccess
+                var turboMode by remember { mutableStateOf(if (turboSupported) GpuTurbo.normalize(turboGet.getOrNull()) else GpuTurbo.OFF) }
+                // 系统现在有的输出设备：插上耳机就多一个，所以边开边读
+                val context = LocalContext.current
+                var audioDevices by remember { mutableStateOf(emptyList<AudioOutput>()) }
+                var tick by remember { mutableIntStateOf(0) }
                 LaunchedEffect(open) {   // 打开期间 2 Hz 轮询宿主的状态串与帧率档位
                     while (open) {
                         runCatching { status = Native.frameGenStatus() }
                         if (rateSupported) runCatching { ratePin = Native.perfPinGet() }
                         if (motionSupported) runCatching { motionState = motion() }
+                        if (audioSupported) runCatching { audioId = Native.audioGet() }
+                        if (turboSupported) runCatching { turboMode = GpuTurbo.normalize(Native.gpuTurboGet()) }
+                        // 设备列表：两秒读一次（插拔耳机要看得见）
+                        if (audioSupported && tick % 4 == 0) runCatching { audioDevices = audioOutputDevices(context) }
+                        tick++
                         delay(500)
                     }
                 }
@@ -182,8 +200,9 @@ fun GameDrawer(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 when (DrawerTab.entries[tab]) {
-                                    // 性能页：帧率档位与底座模式（两个都是性能取舍，与帧生成无关）
-                                    DrawerTab.PERF -> PerfRows(ratePin, onRatePin, rateSupported)
+                                    // 性能页：帧率档位、GPU 提频与底座模式（都是性能取舍，与帧生成无关）
+                                    DrawerTab.PERF -> PerfRows(ratePin, onRatePin, rateSupported,
+                                        turboSupported, turboMode, { mode -> turboMode = mode; Native.gpuTurboSet(mode) })
                                     DrawerTab.HUD -> HudRows(hudStats, onHudStats, hudDevice, onHudDevice,
                                         hudFields, onHudFields, hudFahrenheit, onHudFahrenheit)
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
@@ -195,7 +214,9 @@ fun GameDrawer(
                                             onMotion(on, raw)
                                             // 即时反馈：开关的显示别等下一轮轮询（宿主的 env 已经改了）
                                             motionState = (if (on) 1 else 0) or (if (raw) 2 else 0)
-                                        })
+                                        },
+                                        audioSupported, audioId, audioDevices,
+                                        onAudio = { id -> audioId = id; Native.audioSet(id) })
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -361,11 +382,12 @@ private fun HudRows(
 }
 
 /**
- * 性能页：帧率档位（钉住呈现的那一档）与底座模式（更清晰的画面，更耗电）。
- * 宿主那边每 30 帧重读一次档位，所以改档即时生效；底座模式是宿主自己的设置，即改即生效。
+ * 性能页：帧率档位（钉住呈现的那一档）、GPU 提频与底座模式（更清晰的画面，更耗电）。
+ * 宿主那边每 30 帧重读一次档位、每 60 个 present 重读一次提频，所以改完即时生效；底座模式是宿主自己的设置，即改即生效。
  */
 @Composable
-private fun PerfRows(pin: Int, onPick: (RatePin) -> Unit, rateSupported: Boolean) {
+private fun PerfRows(pin: Int, onPick: (RatePin) -> Unit, rateSupported: Boolean,
+                      turboSupported: Boolean, turboMode: String, onTurbo: (String) -> Unit) {
     if (rateSupported) {
         GroupLabel(stringResource(R.string.drawer_group_rate))
         // 选项的词先取好：回调里不能取词
@@ -378,12 +400,37 @@ private fun PerfRows(pin: Int, onPick: (RatePin) -> Unit, rateSupported: Boolean
         Spacer(Modifier.height(4.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
+    // GPU 提频：老宿主没有这个入口，整组不显示
+    if (turboSupported) {
+        GroupLabel(stringResource(R.string.drawer_group_clock))
+        val labels = turboLabels()
+        OptionRow(Icons.Filled.Bolt, stringResource(R.string.drawer_gpu_turbo), labels, turboLabel(turboMode, labels)) { name ->
+            val i = labels.indexOf(name)
+            onTurbo(GpuTurbo.MODES.getOrNull(i) ?: GpuTurbo.OFF)
+        }
+        Hint(stringResource(R.string.drawer_gpu_turbo_hint))
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    }
     GroupLabel(stringResource(R.string.drawer_group_picture))
     var docked by remember { mutableStateOf(Native.menuGet(4) != 0) }
     ToggleRow(Icons.Filled.Tv, stringResource(R.string.drawer_docked), stringResource(R.string.drawer_docked_hint), docked) {
         docked = it; Native.menuSet(4, if (it) 1.0 else 0.0)
     }
 }
+
+/** 提频三档的词（顺序与 GpuTurbo.MODES 一致） */
+@Composable
+private fun turboLabels() = listOf(
+    stringResource(R.string.drawer_gpu_turbo_off),
+    stringResource(R.string.drawer_gpu_turbo_on),
+    stringResource(R.string.drawer_gpu_turbo_auto),
+)
+
+/** 当前提频档的词（宿主不认得的值就是关） */
+@Composable
+private fun turboLabel(mode: String, labels: List<String>) =
+    labels.getOrNull(GpuTurbo.MODES.indexOf(GpuTurbo.normalize(mode))) ?: labels[0]
 
 /** 档位的选项：跟随游戏在前，后面是宿主的三档（顺序与 RatePin.PINS 一致） */
 @Composable
@@ -406,6 +453,10 @@ private fun ControlRows(
     motion: () -> Int,
     motionHasGyro: Boolean,
     onMotion: (Boolean, Boolean) -> Unit,
+    audioSupported: Boolean,
+    audioId: Int,
+    audioDevices: List<AudioOutput>,
+    onAudio: (Int) -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -445,6 +496,47 @@ private fun ControlRows(
         }
         ToggleRow(Icons.Filled.TouchApp, stringResource(R.string.motion_raw), stringResource(R.string.motion_raw_note), raw) {
             onMotion(on, !raw)
+        }
+    }
+    // 声音输出：跟随系统，或系统现在有的那些设备（蓝牙耳机、USB 声卡……）。宿主那边换过去即刻生效。
+    // 老宿主没有这个入口，整组不显示。
+    if (audioSupported) {
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        GroupLabel(stringResource(R.string.drawer_group_audio))
+        AudioRow(audioId, audioDevices, onAudio)
+    }
+}
+
+/**
+ * 声音输出这一行：第一个是「跟随系统」，后面是系统现在有的设备（蓝牙用自己的产品名）。
+ * 下拉比别的行宽一点：设备的名字有长有短（蓝牙耳机的名字是系统给的）。
+ */
+@Composable
+private fun AudioRow(current: Int, devices: List<AudioOutput>, onPick: (Int) -> Unit) {
+    val labels = audioLabels(devices)
+    val ids = listOf(AUDIO_FOLLOW_SYSTEM) + devices.map { it.id }
+    val index = ids.indexOf(current).let { if (it < 0) 0 else it }
+    OptionRow(Icons.Filled.VolumeUp, stringResource(R.string.drawer_audio_output), labels, labels[index], width = 220.dp) { name ->
+        val i = labels.indexOf(name)
+        if (i >= 0) onPick(ids[i])
+    }
+}
+
+/** 设备的词：跟随系统 + 每个设备的说法（外接设备带自己的名字） */
+@Composable
+private fun audioLabels(devices: List<AudioOutput>): List<String> {
+    val follow = stringResource(R.string.drawer_audio_follow)
+    val speaker = stringResource(R.string.drawer_audio_speaker)
+    val wired = stringResource(R.string.drawer_audio_wired)
+    val bluetooth = stringResource(R.string.drawer_audio_bluetooth)
+    val external = stringResource(R.string.drawer_audio_external)
+    return listOf(follow) + devices.map { d ->
+        when (d.kind) {
+            AudioOutputKind.SPEAKER -> speaker
+            AudioOutputKind.WIRED -> wired
+            AudioOutputKind.BLUETOOTH -> d.productName ?: bluetooth
+            AudioOutputKind.EXTERNAL -> d.productName?.let { "$external · $it" } ?: external
         }
     }
 }
@@ -546,18 +638,19 @@ private fun targetLabel(t: Int) =
 private fun flowLabel(f: Int) = if (f == 0) stringResource(R.string.drawer_auto) else "$f%"
 
 @Composable
-private fun OptionRow(icon: ImageVector, label: String, options: List<String>, current: String, onPick: (String) -> Unit) {
+private fun OptionRow(icon: ImageVector, label: String, options: List<String>, current: String,
+                      width: Dp = 140.dp, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     DrawerRow(icon, label) {
         Box {
             // 与库页的字段同一做法：按钮定宽，箭头钉在右端，几行的箭头排成一列
             QuietButton(current, onClick = { open = !open },
-                modifier = Modifier.width(140.dp),
+                modifier = Modifier.width(width),
                 trailing = { Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(18.dp)) })
             androidx.compose.material3.DropdownMenu(
                 expanded = open,
                 onDismissRequest = { open = false },
-                modifier = Modifier.width(140.dp),
+                modifier = Modifier.width(width),
             ) {
                 for (o in options.distinct()) {
                     androidx.compose.material3.DropdownMenuItem(

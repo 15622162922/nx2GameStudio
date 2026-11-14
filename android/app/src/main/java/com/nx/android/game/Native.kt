@@ -43,6 +43,25 @@ object Native {
     /** 宿主现在的体感开关：位 1 = 体感开着，位 2 = 保留甩动方向 */
     @JvmStatic external fun motionGet(): Int
 
+    /**
+     * 运行中抽屉的音频输出：游戏的声音走哪个设备（蓝牙耳机、USB 声卡…）。
+     * 宿主那边立刻换（hle_audio.c 把在播的流停掉、在新设备上重启），不用重启游戏。
+     * 0 = 跟随系统自己选。
+     */
+    @JvmStatic external fun audioSet(id: Int)
+
+    /** 宿主现在的音频输出设备（0 = 跟随系统） */
+    @JvmStatic external fun audioGet(): Int
+
+    /**
+     * 运行中抽屉的 GPU 提频："0" 关（用调频器自己的频率）、"1" 一直跑最高频、
+     * "auto" 只在掉帧时拉高。宿主每 60 帧重读一次这个环境变量，所以即时生效。
+     */
+    @JvmStatic external fun gpuTurboSet(mode: String)
+
+    /** 宿主现在的 GPU 提频档："0" / "1" / "auto" */
+    @JvmStatic external fun gpuTurboGet(): String
+
     /** 运行中抽屉的宿主菜单行（画面与操作/存档）：what 0 overlay 1 opacity 2 rumble 4 docked */
     @JvmStatic external fun menuGet(what: Int): Int
     @JvmStatic external fun menuSet(what: Int, v: Double)
