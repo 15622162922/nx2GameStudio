@@ -9,7 +9,8 @@ import org.junit.Test
 /**
  * 查表规则：玩家自己绑的先，出厂字典兜底。
  *
- * 出厂字典必须与改动前逐键一致（按位置：下面那颗是 B，右边那颗是 A）；按标签是另一套（键上印什么就是什么）。
+ * 出厂字典是 NS 的位置（X 上、Y 左、A 右、B 下）：游戏嘴里的 A/B/X/Y 指的就是 NS 手柄上的四个位置，
+ * 手柄上印的字只是贴纸。按印字的那一套（弃用）是 Xbox 的印字。
  */
 class PadMappingTest {
 
@@ -17,8 +18,8 @@ class PadMappingTest {
     fun `the default dictionary is the Switch's layout by position`() {
         assertEquals("b", PadMapping.defaultTarget(PadMapping.Key.BUTTON_A))
         assertEquals("a", PadMapping.defaultTarget(PadMapping.Key.BUTTON_B))
-        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X))
-        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y))
+        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X))
+        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y))
         assertEquals("l", PadMapping.defaultTarget(PadMapping.Key.BUTTON_L1))
         assertEquals("r", PadMapping.defaultTarget(PadMapping.Key.BUTTON_R1))
         assertEquals("zl", PadMapping.defaultTarget(PadMapping.Key.BUTTON_L2))
@@ -35,22 +36,23 @@ class PadMappingTest {
     }
 
     @Test
-    fun `by label the face buttons are A A B B X X Y Y`() {
+    fun `by print the face buttons are the Xbox print`() {
+        // 弃用的那一套：按 Xbox 的印字（下 A、右 B、上 Y、左 X）
         assertEquals("a", PadMapping.defaultTarget(PadMapping.Key.BUTTON_A, labels = true))
         assertEquals("b", PadMapping.defaultTarget(PadMapping.Key.BUTTON_B, labels = true))
-        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X, labels = true))
-        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y, labels = true))
+        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X, labels = true))
+        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y, labels = true))
         // the rest is the same either way
         assertEquals("l", PadMapping.defaultTarget(PadMapping.Key.BUTTON_L1, labels = true))
         assertEquals("plus", PadMapping.defaultTarget(PadMapping.Key.BUTTON_START, labels = true))
     }
 
     @Test
-    fun `the scan codes follow the same two layouts`() {
+    fun `the scan codes follow the same layout`() {
         assertEquals("b", PadMapping.defaultTarget(PadMapping.Key.BUTTON_A))
         assertEquals("a", PadMapping.defaultTarget(PadMapping.Key.BUTTON_B))
-        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X))
-        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y))
+        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X))
+        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y))
         assertEquals("l", PadMapping.defaultTarget(PadMapping.Key.BUTTON_L1))
         assertNull(PadMapping.defaultTarget(306))
     }

@@ -599,4 +599,6 @@
     <string name="pad_center_recovered">The saved profiles were broken; the ones that could be recovered are in use.</string>
     <string name="pad_center_temporary_profile">This controller cannot be identified on its own; the changes last for this connection only.</string>
     <string name="app_pad_center_connected">Controllers, %1$d connected</string>
+    <string name="pad_center_xbox_print">By the Xbox print</string>
+    <string name="pad_center_print_hint">The game speaks Switch positions (X on top, Y on the left, A on the right, B at the bottom); what the controller prints on its buttons is only a sticker. This preset binds the face buttons by the Xbox print (the bottom one A, the right one B, the top one Y, the left one X).</string>
 </resources>

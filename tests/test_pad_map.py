@@ -1,8 +1,12 @@
 """The physical controller's keys: the player's own bindings, the default dictionary and the calibration.
 
 The rules are pure C (nxnative/dm/android/pad_map.h): the phone's front end uses them, and here they are
-compiled on the host and checked. The default dictionary must stay bit-for-bit what it was before the gamepad
-center: the Switch's layout by position (the bottom face button is B, the right one A).
+compiled on the host and checked. The default dictionary is the Switch's layout by position: X on top, Y on
+the left, A on the right, B at the bottom (the game speaks Switch positions; what the controller prints on
+its buttons is only a sticker).
+
+It used to be half and half - A/B by position, X/Y by the Xbox print - which is why a controller of one
+kind matched its own print and the other kind did not.
 """
 import subprocess
 import sys
@@ -27,8 +31,8 @@ static void defaults(void) {
     // by position: the Switch's layout (the bottom button is B, the right one A)
     assert(pad_default_bit(PAD_KEY_BUTTON_A, 0) == DM_BTN_B);
     assert(pad_default_bit(PAD_KEY_BUTTON_B, 0) == DM_BTN_A);
-    assert(pad_default_bit(PAD_KEY_BUTTON_X, 0) == DM_BTN_Y);
-    assert(pad_default_bit(PAD_KEY_BUTTON_Y, 0) == DM_BTN_X);
+    assert(pad_default_bit(PAD_KEY_BUTTON_X, 0) == DM_BTN_X);
+    assert(pad_default_bit(PAD_KEY_BUTTON_Y, 0) == DM_BTN_Y);
     assert(pad_default_bit(PAD_KEY_BUTTON_L1, 0) == DM_BTN_L);
     assert(pad_default_bit(PAD_KEY_BUTTON_R1, 0) == DM_BTN_R);
     assert(pad_default_bit(PAD_KEY_BUTTON_L2, 0) == DM_BTN_ZL);
@@ -46,8 +50,9 @@ static void defaults(void) {
     // by label: A is A, B is B, X is X, Y is Y; the rest is the same
     assert(pad_default_bit(PAD_KEY_BUTTON_A, 1) == DM_BTN_A);
     assert(pad_default_bit(PAD_KEY_BUTTON_B, 1) == DM_BTN_B);
-    assert(pad_default_bit(PAD_KEY_BUTTON_X, 1) == DM_BTN_X);
-    assert(pad_default_bit(PAD_KEY_BUTTON_Y, 1) == DM_BTN_Y);
+    // the print (deprecated): the Xbox print - A is A, B is B, Y on top, X on the left
+    assert(pad_default_bit(PAD_KEY_BUTTON_X, 1) == DM_BTN_Y);
+    assert(pad_default_bit(PAD_KEY_BUTTON_Y, 1) == DM_BTN_X);
     assert(pad_default_bit(PAD_KEY_BUTTON_L1, 1) == DM_BTN_L);
     assert(pad_default_bit(PAD_KEY_BUTTON_START, 1) == DM_BTN_PLUS);
     assert(pad_default_bit(9999, 1) == 0);
@@ -65,13 +70,16 @@ static void table(void) {
 
     // the device's own table: the binding wins over the dictionary
     assert(pad_map_key_bit(&map, 3, 305, 97) == DM_BTN_A);
-    // a key the player did not touch: the dictionary, by label for this device
-    assert(pad_map_key_bit(&map, 3, 307, 99) == DM_BTN_X);
+    // a key the player did not touch: the dictionary, by print for this device (labels=1): Y on top
+    assert(pad_map_key_bit(&map, 3, 307, 99) == DM_BTN_Y);
     // a disabled source: nothing
     assert(pad_map_key_bit(&map, 3, 314, 109) == 0);
     // the other device: by position, and its own table
     assert(pad_map_key_bit(&map, 7, 305, 97) == DM_BTN_A);
     assert(pad_map_key_bit(&map, 7, 0, 96) == DM_BTN_B);
+    // by position is the Switch's arrangement: X on top, Y on the left
+    assert(pad_map_key_bit(&map, 7, 307, 99) == DM_BTN_X);
+    assert(pad_map_key_bit(&map, 7, 308, 100) == DM_BTN_Y);
     // a device without a table: the dictionary, by position
     assert(pad_map_key_bit(&map, 9, 0, 96) == DM_BTN_B);
 

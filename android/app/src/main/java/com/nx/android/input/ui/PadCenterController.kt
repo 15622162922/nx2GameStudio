@@ -119,6 +119,26 @@ class PadCenterController(
         save(profile.copy(bindings = PadMapping.withoutBinding(profile.bindings, source)))
     }
 
+    /**
+     * 一键预设：面键按 **Xbox 的印字**（下面 A、右边 B、上 Y、左 X）。
+     *
+     * 出厂字典是 NS 的位置（游戏嘴里的 A/B/X/Y 指 NS 手柄上的四个位置）；
+     * Xbox 印字的手柄想要「印字说了算」，点这个就行——它只是写四条绑定，
+     * 「恢复默认」一键撤回。
+     */
+    fun applyXboxPrint(info: GamepadScan.Info) {
+        val profile = profile(info)
+        val faces = setOf("a", "b", "x", "y")
+        val print = mapOf(
+            PadSources.scan(PadMapping.Scan.SOUTH) to "a",   // 下面那颗
+            PadSources.scan(PadMapping.Scan.EAST) to "b",    // 右边那颗
+            PadSources.scan(PadMapping.Scan.NORTH) to "y",   // 上面那颗
+            PadSources.scan(PadMapping.Scan.WEST) to "x",    // 左边那颗
+        )
+        val bindings = profile.bindings.filterValues { it !in faces } + print
+        save(profile.copy(bindings = bindings))
+    }
+
     /** 全部绑定恢复出厂。 */
     fun resetBindings(info: GamepadScan.Info) {
         val profile = profile(info)

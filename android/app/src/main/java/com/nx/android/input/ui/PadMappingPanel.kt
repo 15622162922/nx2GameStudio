@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nx.android.R
@@ -118,18 +120,48 @@ fun PadMappingPanel(
         }
         Spacer(Modifier.height(8.dp))
         Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(NxPalette.Surface)
-                .clickable { controller.resetBindings(selected) }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Refresh, null, Modifier.width(18.dp).height(18.dp), tint = NxPalette.Brand)
-            Text(stringResource(R.string.pad_center_reset), style = MaterialTheme.typography.bodyMedium)
+            // 一键：面键按 Xbox 的印字（它只是写四条绑定）
+            Row(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(NxPalette.Surface)
+                    .clickable { controller.applyXboxPrint(selected) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.BrightnessHigh, null, Modifier.width(18.dp).height(18.dp), tint = NxPalette.Brand)
+                Text(
+                    stringResource(R.string.pad_center_xbox_print),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // 全部绑定恢复出厂
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(NxPalette.Surface)
+                    .clickable { controller.resetBindings(selected) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Refresh, null, Modifier.width(18.dp).height(18.dp), tint = NxPalette.Brand)
+                Text(stringResource(R.string.pad_center_reset), style = MaterialTheme.typography.bodyMedium)
+            }
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.pad_center_print_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = NxPalette.Unbuilt,
+        )
     }
 
     // 撞车了：让玩家选（替换 / 交换 / 取消）

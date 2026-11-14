@@ -171,6 +171,41 @@ class PadCenterControllerTest {
     }
 
     @Test
+    fun `the xbox print preset binds the four face buttons`() {
+        val f = Fixture()
+        f.controller.applyXboxPrint(f.info())
+
+        val bindings = f.controller.profile(f.info()).bindings
+        assertEquals("a", bindings[PadSources.scan(PadMapping.Scan.SOUTH)])
+        assertEquals("b", bindings[PadSources.scan(PadMapping.Scan.EAST)])
+        assertEquals("y", bindings[PadSources.scan(PadMapping.Scan.NORTH)])
+        assertEquals("x", bindings[PadSources.scan(PadMapping.Scan.WEST)])
+        // and the game gets them
+        assertEquals("a", f.controller.resolveTarget(7, PadMapping.Scan.SOUTH, PadMapping.Key.BUTTON_A))
+        assertEquals("b", f.controller.resolveTarget(7, PadMapping.Scan.EAST, PadMapping.Key.BUTTON_B))
+        assertEquals("y", f.controller.resolveTarget(7, PadMapping.Scan.NORTH, PadMapping.Key.BUTTON_X))
+        assertEquals("x", f.controller.resolveTarget(7, PadMapping.Scan.WEST, PadMapping.Key.BUTTON_Y))
+    }
+
+    @Test
+    fun `the preset replaces the face buttons it writes and keeps the rest`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.SOUTH)
+        f.release(PadMapping.Scan.SOUTH)
+        f.controller.capture(7, "l")
+        f.press(PadMapping.Scan.L1)
+        f.release(PadMapping.Scan.L1)
+
+        f.controller.applyXboxPrint(f.info())
+
+        val bindings = f.controller.profile(f.info()).bindings
+        assertEquals("a", bindings[PadSources.scan(PadMapping.Scan.SOUTH)])
+        assertEquals("l", bindings[PadSources.scan(PadMapping.Scan.L1)])   // the rest is kept
+        assertEquals(5, bindings.size)
+    }
+
+    @Test
     fun `the calibration belongs to the controller`() {
         val f = Fixture()
         f.controller.setCalibration(f.info(), PadCalibration(deadzone = 0.25f, trigger = 0.6f))

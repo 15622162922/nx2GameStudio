@@ -598,4 +598,6 @@
     <string name="pad_center_recovered">存的档案坏了，能救回来的已经用上了。</string>
     <string name="pad_center_temporary_profile">这只手柄没法单独认出来，改动只对这一次连接有效。</string>
     <string name="app_pad_center_connected">手柄，接了 %1$d 只</string>
+    <string name="pad_center_xbox_print">按 Xbox 印字</string>
+    <string name="pad_center_print_hint">游戏说的是 NS 的位置（上 X、左 Y、右 A、下 B），手柄上印的字只是贴纸。这个预设把面键绑成 Xbox 的印字（下面 A、右边 B、上 Y、左 X）。</string>
 </resources>

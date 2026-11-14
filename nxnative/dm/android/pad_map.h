@@ -87,18 +87,19 @@ static inline int pad_button_index(const char *name) {
 }
 static inline uint64_t pad_button_bit(int index) { return index < 0 || index >= PAD_N ? 0 : pad_buttons[index].bit; }
 
-// The default dictionary: the Switch's layout by position (the bottom face button is B, the right one A).
+// The default dictionary: the Switch's layout by position (X on top, Y on the left, A on the right, B at the bottom).
+// The game speaks Switch positions; what the controller prints on its buttons is only a sticker.
 static inline uint64_t pad_default_bit(int key, int labels) {
-    if (labels) {   // by label: A is A, B is B, X is X, Y is Y
+    if (labels) {   // by print (deprecated, always 0): the Xbox print - A is A, B is B, Y on top, X on the left
         switch (key) {
         case PAD_KEY_BUTTON_A: return DM_BTN_A; case PAD_KEY_BUTTON_B: return DM_BTN_B;
-        case PAD_KEY_BUTTON_X: return DM_BTN_X; case PAD_KEY_BUTTON_Y: return DM_BTN_Y;
+        case PAD_KEY_BUTTON_X: return DM_BTN_Y; case PAD_KEY_BUTTON_Y: return DM_BTN_X;
         default: break;
         }
     } else {
         switch (key) {
         case PAD_KEY_BUTTON_A: return DM_BTN_B; case PAD_KEY_BUTTON_B: return DM_BTN_A;
-        case PAD_KEY_BUTTON_X: return DM_BTN_Y; case PAD_KEY_BUTTON_Y: return DM_BTN_X;
+        case PAD_KEY_BUTTON_X: return DM_BTN_X; case PAD_KEY_BUTTON_Y: return DM_BTN_Y;
         default: break;
         }
     }

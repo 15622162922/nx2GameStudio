@@ -52,18 +52,27 @@ object PadMapping {
     /** 一个键占了两个目标时的冲突：源原来绑的、目标原来是谁的。 */
     data class Conflict(val sourceTarget: String?, val targetSource: String?)
 
-    /** 按位置的出厂字典（Switch 的布局）。 */
+    /**
+     * 出厂字典：**NS 的位置**（游戏嘴里的 A/B/X/Y 指的就是 NS 手柄上的四个位置：
+     * X 在上、Y 在左、A 在右、B 在下）。跟手柄上印的字无关——印字只是贴纸。
+     *
+     * 所以 NS 印字的手柄零配置全对；Xbox 印字的手柄按位置走（游戏要 A 就是右边那颗），
+     * 想按印字来的玩家在改键页自己绑（或者点那个一键预设）。
+     */
     private val POSITION: Map<Int, String> = mapOf(
-        Key.BUTTON_A to "b", Key.BUTTON_B to "a", Key.BUTTON_X to "y", Key.BUTTON_Y to "x",
+        Key.BUTTON_A to "b", Key.BUTTON_B to "a", Key.BUTTON_X to "x", Key.BUTTON_Y to "y",
         Key.BUTTON_L1 to "l", Key.BUTTON_R1 to "r", Key.BUTTON_L2 to "zl", Key.BUTTON_R2 to "zr",
         Key.BUTTON_THUMBL to "ls", Key.BUTTON_THUMBR to "rs",
         Key.BUTTON_START to "plus", Key.BUTTON_SELECT to "minus",
         Key.DPAD_UP to "up", Key.DPAD_DOWN to "down", Key.DPAD_LEFT to "left", Key.DPAD_RIGHT to "right",
     )
 
-    /** 按标签的出厂字典（面键那四个换了，其余一样）。 */
+    /**
+     * 按印字的出厂字典（弃用：面键按位置还是按标签的老开关，恒 false）。
+     * 留着是为了老档案读得出来也不作数——它按 Xbox 的印字：下 A、右 B、上 Y、左 X。
+     */
     private val LABEL: Map<Int, String> = POSITION + mapOf(
-        Key.BUTTON_A to "a", Key.BUTTON_B to "b", Key.BUTTON_X to "x", Key.BUTTON_Y to "y",
+        Key.BUTTON_A to "a", Key.BUTTON_B to "b", Key.BUTTON_X to "y", Key.BUTTON_Y to "x",
     )
 
     /**
