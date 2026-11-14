@@ -551,6 +551,8 @@
     <string name="runtime_update_hint">若升级后游戏有问题，请使用原始游戏文件重新移植。</string>
     <string name="runtime_retry">重试</string>
     <string name="runtime_full_port">完整重新移植</string>
+    <string name="runtime_use_current_profile">用当前档案继续</string>
+    <string name="runtime_profile_drift_hint">这个游戏上次移植用的档案在之后被改过。用当前档案重建等同于重新移植，但游戏的运行表现可能与移植时不同。</string>
     <string name="runtime_interrupted">运行库更新已中断。可重试，或使用原始游戏文件完整重新移植；游戏数据会保留。</string>
 
     <!-- 手柄中心（实体手柄）：手柄中心面板与抽屉里的那一组 -->

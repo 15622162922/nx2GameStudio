@@ -23,7 +23,8 @@ import com.nx.android.appstate.RuntimeUpdateState
 
 @Composable
 fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
-                        onRePort: () -> Unit, onFinished: () -> Unit) {
+                        onRePort: () -> Unit, onUseCurrentProfile: () -> Unit,
+                        onFinished: () -> Unit) {
     LaunchedEffect(state.phase) {
         if (state.phase == RuntimeUpdatePhase.SUCCEEDED) {
             state.dismiss()
@@ -47,6 +48,11 @@ fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
                     val reason = state.reason
                     if (reason.isNotBlank()) Text(reason)
                     else Text(stringResource(if (state.interrupted) R.string.runtime_interrupted else R.string.runtime_update_failed))
+                    // 档案对不上：说清继续意味着什么（重建用当前档案，游戏表现可能与移植时不同）
+                    if (state.profileDrift) {
+                        Text(stringResource(R.string.runtime_profile_drift_hint),
+                             style = MaterialTheme.typography.bodySmall)
+                    }
                     // a pack that could not be checked is rebuilt with the profile at hand: if the game misbehaves
                     // afterwards, porting it again is the way out
                     Text(stringResource(R.string.runtime_update_hint), style = MaterialTheme.typography.bodySmall)
@@ -58,9 +64,17 @@ fun RuntimeUpdateDialog(state: RuntimeUpdateState, onRetry: () -> Unit,
         },
         dismissButton = {
             if (!state.running) {
-                Row {
-                    TextButton(onClick = onRePort) { Text(stringResource(R.string.runtime_full_port)) }
-                    TextButton(onClick = { state.dismiss() }) { Text(stringResource(R.string.common_close)) }
+                Column(horizontalAlignment = Alignment.End) {
+                    // 档案对不上时的那条路：玩家可以用当前档案再来一次（不必拿原版文件重移植）
+                    if (state.profileDrift) {
+                        TextButton(onClick = onUseCurrentProfile) {
+                            Text(stringResource(R.string.runtime_use_current_profile))
+                        }
+                    }
+                    Row {
+                        TextButton(onClick = onRePort) { Text(stringResource(R.string.runtime_full_port)) }
+                        TextButton(onClick = { state.dismiss() }) { Text(stringResource(R.string.common_close)) }
+                    }
                 }
             }
         },

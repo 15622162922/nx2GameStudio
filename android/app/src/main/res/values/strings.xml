@@ -552,6 +552,8 @@
     <string name="runtime_update_hint">If the game misbehaves after this update, port it again from its original files.</string>
     <string name="runtime_retry">Retry</string>
     <string name="runtime_full_port">Port entire game again</string>
+    <string name="runtime_use_current_profile">Continue with the current profile</string>
+    <string name="runtime_profile_drift_hint">The profile this game was ported with has changed since then. Rebuilding with the profile the game has now is the same as porting it again, but the game may behave differently than it did when it was ported.</string>
     <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the entire game again using its original files. Your game data is kept.</string>
 
     <!-- 手柄中心（实体手柄）：手柄中心面板与抽屉里的那一组 -->

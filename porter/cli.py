@@ -69,6 +69,9 @@ def _parser():
     rt = sub.add_parser('rebuild-runtime', help='rebuild a pack runtime without the original game files')
     rt.add_argument('pack')
     rt.add_argument('--no-lsfg', action='store_true')
+    rt.add_argument('--allow-profile-drift', action='store_true',
+                    help='rebuild with the profile the game has now even when it is not the one the pack was built with '
+                         '(that profile is the one a full re-port would use too; the game may behave differently than when it was ported)')
     rt.add_argument('--jobs', type=int, default=os.cpu_count() or 8)
     rt.add_argument('--progress', choices=('json', 'lines'), default='lines')
     ins = sub.add_parser('install', help='install a port made earlier'); ins.add_argument('data', help='the data pack folder (<App>-data)'); ins.add_argument('--apk', help='the APK (default: <App>.apk beside the pack)')
@@ -197,18 +200,23 @@ def cmd_port(a):
 
 
 def cmd_rebuild_runtime(a):
-    from porter.runtime_update import rebuild
+    from porter.runtime_update import ProfileDrift, rebuild
     def emit(message):
         if a.progress == 'json': print(json.dumps({'ev': 'say', 'msg': message}), flush=True)
         else: print(message, flush=True)
     try:
         if a.progress == 'json': print(json.dumps({'ev': 'stage', 'k': 1, 'n': 1, 'name': 'Update runtime'}), flush=True)
-        result = rebuild(a.pack, no_lsfg=a.no_lsfg, jobs=a.jobs, emit=emit)
+        result = rebuild(a.pack, no_lsfg=a.no_lsfg, jobs=a.jobs, allow_profile_drift=a.allow_profile_drift, emit=emit)
         if a.progress == 'json': print(json.dumps({'ev': 'result', **result}), flush=True)
         else: emit('Runtime updated: ' + result['data'])
         return 0
     except KeyboardInterrupt:
         emit('[RED] Runtime update cancelled. Check the game status before retrying.'); return 130
+    except ProfileDrift as error:
+        # 档案对不上：App 拿这条事件知道「玩家还可以用当前档案再来一次」
+        if a.progress == 'json': print(json.dumps({'ev': 'profile-drift', 'msg': str(error)}), flush=True)
+        else: emit('Port the game again from its original files, or use --allow-profile-drift to rebuild with the profile the game has now.')
+        emit(f'[RED] {error}'); return 1
     except Exception as error:
         emit(f'[RED] {error}'); return 1
 

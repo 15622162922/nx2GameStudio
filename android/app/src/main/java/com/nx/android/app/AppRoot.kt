@@ -368,6 +368,11 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
     com.nx.android.feature.runtime.RuntimeUpdateDialog(runtime,
         onRetry = { actions.onUpdateRuntime(File(runtime.pack), runtime.name) },
         onFinished = { actions.onToast(locale.str(R.string.runtime_updated)) },
+        onUseCurrentProfile = {
+            // 玩家选择用当前档案继续：下一次更新带上这个开关（清单里的指纹会换成当前的）
+            runtime.useCurrentProfile()
+            actions.onUpdateRuntime(File(runtime.pack), runtime.name)
+        },
         onRePort = {
             val pack = File(runtime.pack)
             val entry = lib.visible().firstOrNull { it.pack?.pack == pack }
