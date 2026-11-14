@@ -19,6 +19,8 @@ class PadProfileStore(private val file: File) {
         val key: String,
         val name: String = "",
         val persistent: Boolean = true,
+        /** 弃用：面键按位置还是按标签的老开关。现在面键的语义由逐键绑定表达，这个恒为 false；
+         *  老档案里存过的值照读不误（读出来也不作数），留着是为了不把老档案判成坏的。 */
         val labels: Boolean = false,
         val bindings: Map<String, String> = emptyMap(),   // 来源 → 游戏键（PadSources.DISABLED 是禁用）
         val calibration: PadCalibration = PadCalibration(),

@@ -47,12 +47,12 @@ class PadMappingTest {
 
     @Test
     fun `the scan codes follow the same two layouts`() {
-        assertEquals("b", PadMapping.defaultTargetByScan(PadMapping.Scan.SOUTH, labels = false))
-        assertEquals("a", PadMapping.defaultTargetByScan(PadMapping.Scan.EAST, labels = false))
-        assertEquals("a", PadMapping.defaultTargetByScan(PadMapping.Scan.SOUTH, labels = true))
-        assertEquals("b", PadMapping.defaultTargetByScan(PadMapping.Scan.EAST, labels = true))
-        assertEquals("l", PadMapping.defaultTargetByScan(PadMapping.Scan.L1, labels = false))
-        assertNull(PadMapping.defaultTargetByScan(306, labels = false))
+        assertEquals("b", PadMapping.defaultTarget(PadMapping.Key.BUTTON_A))
+        assertEquals("a", PadMapping.defaultTarget(PadMapping.Key.BUTTON_B))
+        assertEquals("y", PadMapping.defaultTarget(PadMapping.Key.BUTTON_X))
+        assertEquals("x", PadMapping.defaultTarget(PadMapping.Key.BUTTON_Y))
+        assertEquals("l", PadMapping.defaultTarget(PadMapping.Key.BUTTON_L1))
+        assertNull(PadMapping.defaultTarget(306))
     }
 
     @Test

@@ -241,11 +241,6 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     /** 这只手柄的档案（没有就是空的那一份）。 */
     private fun padProfile(info: GamepadScan.Info): PadProfileStore.Profile = padController.profile(info)
 
-    /** 面键按位置还是按标签（标签属于手柄，不属于游戏）。 */
-    private fun setPadLabels(info: GamepadScan.Info, labels: Boolean) {
-        padController.setLabels(info, labels)
-    }
-
     /** 手柄中心开着：输入静音（游戏继续跑），键只进示波与捕获。 */
     private fun padCenterMute(): Boolean = padCenterOpen
 
@@ -428,7 +423,6 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun DrawerRoot() {
         // 手柄：接着的设备与它们此刻的输入（中心的面板用）
         val padDevices by GamepadScan.devices.collectAsState()
-        val padSingle = padDevices.singleOrNull()
         Box(Modifier.fillMaxSize()) {
             if (paused) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(
@@ -476,9 +470,6 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onLayoutEditor = { openEditor() },
                 onResetPadLayout = { resetPadLayout() },
                 padCenterSupported = padSupported,
-                padLabels = padSingle?.let { padProfile(it).labels } ?: false,
-                padLabelsEnabled = padSingle != null,
-                onPadLabels = { labels -> padSingle?.let { setPadLabels(it, labels) } },
                 onOpenPadCenter = { openPadCenter() },
                 // 暂停/继续：游戏原地停/起，抽屉不收——玩家可以一边停着一边调设置
                 onPauseGame = {

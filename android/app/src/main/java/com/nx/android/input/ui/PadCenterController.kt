@@ -125,12 +125,6 @@ class PadCenterController(
         save(profile.copy(bindings = emptyMap()))
     }
 
-    /** 面键按位置还是按标签（标签属于手柄，不属于游戏）。 */
-    fun setLabels(info: GamepadScan.Info, labels: Boolean) {
-        val profile = profile(info)
-        save(profile.copy(labels = labels))
-    }
-
     /** 校准（死区与扳机阈值）。 */
     fun setCalibration(info: GamepadScan.Info, calibration: PadCalibration) {
         val profile = profile(info)

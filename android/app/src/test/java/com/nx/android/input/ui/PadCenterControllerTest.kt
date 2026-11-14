@@ -171,15 +171,22 @@ class PadCenterControllerTest {
     }
 
     @Test
-    fun `the labels and the calibration belong to the controller`() {
+    fun `the calibration belongs to the controller`() {
         val f = Fixture()
-        f.controller.setLabels(f.info(), true)
         f.controller.setCalibration(f.info(), PadCalibration(deadzone = 0.25f, trigger = 0.6f))
 
         val profile = f.controller.profile(f.info())
-        assertTrue(profile.labels)
         assertEquals(0.25f, profile.calibration.deadzone, 0.0001f)
         assertEquals(0.6f, profile.calibration.trigger, 0.0001f)
+    }
+
+    @Test
+    fun `the old labels flag is read but not used`() {
+        // 老档案里存过的 labels（面键按位置还是按标签的老开关）：读得出来，也不作数
+        val f = Fixture()
+        val profile = f.controller.profile(f.info())
+        assertTrue(!profile.labels)
+        assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
     }
 
     @Test
@@ -201,10 +208,6 @@ class PadCenterControllerTest {
         // 出厂字典按位置：下面那颗（BUTTON_A）是游戏的 B，右边那颗（BUTTON_B）是游戏的 A
         assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
         assertEquals("a", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_B))
-        // 面键按标签：键上印着 A 的那颗就是游戏的 A
-        f.controller.setLabels(f.info(), true)
-        assertEquals("a", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
-        assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_B))
     }
 
     @Test

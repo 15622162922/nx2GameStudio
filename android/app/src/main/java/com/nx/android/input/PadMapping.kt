@@ -66,37 +66,29 @@ object PadMapping {
         Key.BUTTON_A to "a", Key.BUTTON_B to "b", Key.BUTTON_X to "x", Key.BUTTON_Y to "y",
     )
 
-    /** 出厂字典：这个 keyCode 是哪个游戏键（不是手柄键就是 null）。 */
+    /**
+     * 出厂字典：这个 keyCode 是哪个游戏键（不是手柄键就是 null）。
+     *
+     * @param labels 弃用：面键按位置还是按标签的老开关（恒 false）。面键的语义现在由逐键绑定表达。
+     */
     fun defaultTarget(keyCode: Int, labels: Boolean = false): String? =
         (if (labels) LABEL else POSITION)[keyCode]
 
-    /** 某个游戏键的默认来源（扫描码优先，没有就 keyCode）：设置页显示默认绑定用。 */
+    /**
+     * 某个游戏键的默认来源（出厂字典：扫描码优先，没有就 keyCode）：设置页显示默认绑定用。
+     *
+     * 这里走的是**运行时那一条路**（扫描码 → 它的 keyCode → 出厂字典），所以面板上写的
+     * 默认来源与游戏真的收到的一致（X/Y 那对按方位与按名字对调，别处算出来的那一套不作数）。
+     */
     fun defaultSourceFor(target: String, labels: Boolean = false): String? {
         for (scan in intArrayOf(
             Scan.SOUTH, Scan.EAST, Scan.NORTH, Scan.WEST, Scan.L1, Scan.R1, Scan.L2, Scan.R2,
             Scan.SELECT, Scan.START, Scan.L3, Scan.R3,
         )) {
-            if (defaultTargetByScan(scan, labels) == target) return PadSources.scan(scan)
+            if (defaultTarget(Face.keyCodeOf(scan), labels) == target) return PadSources.scan(scan)
         }
         for (key in POSITION.keys) if (POSITION[key] == target) return PadSources.key(key)
         return null
-    }
-
-    /** 出厂字典按扫描码（手柄上那颗键在 Switch 的布局下是哪个游戏键）。 */
-    fun defaultTargetByScan(scanCode: Int, labels: Boolean): String? = when (scanCode) {
-        Scan.SOUTH -> if (labels) "a" else "b"
-        Scan.EAST -> if (labels) "b" else "a"
-        Scan.NORTH -> if (labels) "y" else "x"
-        Scan.WEST -> if (labels) "x" else "y"
-        Scan.L1 -> "l"
-        Scan.R1 -> "r"
-        Scan.L2 -> "zl"
-        Scan.R2 -> "zr"
-        Scan.SELECT -> "minus"
-        Scan.START -> "plus"
-        Scan.L3 -> "ls"
-        Scan.R3 -> "rs"
-        else -> null
     }
 
     /** 查表：玩家自己绑的先（扫描码优先，keyCode 兜底），没有就落回出厂字典。 */
@@ -193,6 +185,14 @@ object PadMapping {
             Scan.EAST -> Key.BUTTON_B
             Scan.NORTH -> Key.BUTTON_X
             Scan.WEST -> Key.BUTTON_Y
+            Scan.L1 -> Key.BUTTON_L1
+            Scan.R1 -> Key.BUTTON_R1
+            Scan.L2 -> Key.BUTTON_L2
+            Scan.R2 -> Key.BUTTON_R2
+            Scan.SELECT -> Key.BUTTON_SELECT
+            Scan.START -> Key.BUTTON_START
+            Scan.L3 -> Key.BUTTON_THUMBL
+            Scan.R3 -> Key.BUTTON_THUMBR
             else -> 0
         }
     }

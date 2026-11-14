@@ -330,38 +330,9 @@ private fun ColumnScope.PhysicalControllerPage(
             )
 
             if (selected != null) {
-                Spacer(Modifier.height(20.dp))
-                // 面键：按位置还是按标签（标签属于手柄，不属于游戏）
                 val profile = controller.profile(selected)
-                val positionLabel = stringResource(R.string.pad_center_position)
-                val labelLabel = stringResource(R.string.pad_center_label)
-                Column {
-                    Text(
-                        stringResource(R.string.pad_center_face_buttons),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFFA9A9B2),
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ChoiceChip(
-                            label = positionLabel,
-                            selected = !profile.labels,
-                        ) { controller.setLabels(selected, false) }
-                        ChoiceChip(
-                            label = labelLabel,
-                            selected = profile.labels,
-                        ) { controller.setLabels(selected, true) }
-                    }
-                    Text(
-                        stringResource(R.string.pad_center_face_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NxPalette.Unbuilt,
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                // 校准
+                Spacer(Modifier.height(20.dp))
+                // 面键：按哪颗实体键来，由改键页里的绑定说了算（这里只做校准与振动）
                 Text(
                     stringResource(R.string.pad_center_calibration),
                     style = MaterialTheme.typography.labelLarge,
@@ -549,24 +520,6 @@ private fun CalibrationSlider(
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(title, style = MaterialTheme.typography.bodyMedium, color = Color.White)
         Slider(value = value, onValueChange = onChange, valueRange = range)
-    }
-}
-
-/** 两个里选一个（面键：按位置还是按标签）。 */
-@Composable
-private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) NxPalette.Brand else NxPalette.Surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.titleMedium,
-            color = if (selected) NxPalette.Background else Color(0xFFA9A9B2),
-        )
     }
 }
 

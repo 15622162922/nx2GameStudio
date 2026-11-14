@@ -560,10 +560,6 @@
     <string name="pad_center_none">没有接着手柄。打开蓝牙，连一只。</string>
     <string name="pad_center_bluetooth">蓝牙设置</string>
     <string name="pad_center_scope">手柄此刻的动作</string>
-    <string name="pad_center_position">按位置</string>
-    <string name="pad_center_label">按标签</string>
-    <string name="pad_center_face_buttons">面键</string>
-    <string name="pad_center_face_hint">按位置是 Switch 的布局（下面那颗是 B，右边那颗是 A）。按标签用手柄自己的印字（Xbox 手柄的 A 就是游戏的 A）。</string>
     <string name="pad_center_mapping">按键</string>
     <string name="pad_center_rebind">改键</string>
     <string name="pad_center_clear">清除</string>
@@ -579,9 +575,6 @@
     <string name="pad_center_no_vibration">没有振动马达</string>
     <string name="pad_center_events">事件</string>
     <string name="drawer_group_physical">实体手柄</string>
-    <string name="drawer_pad_face_buttons">面键</string>
-    <string name="drawer_pad_face_hint">标签属于手柄，不属于游戏：Xbox 手柄按标签时，它的 A 就是游戏的 A。</string>
-    <string name="drawer_pad_face_needs_one">接一只手柄才能在这里改；多只手柄在手柄中心里管。</string>
     <string name="drawer_pad_center">手柄中心</string>
     <string name="drawer_pad_center_hint">看手柄、试按键、改键与校准。</string>
     <string name="pad_conflict_title">这个键已经有别的用处</string>
