@@ -35,6 +35,16 @@ class FrameGenKnobsTest {
     }
 
     @Test
+    fun `the flow's default is half the picture, not the game's own resolution`() {
+        // the default the settings fall back to: 50%, not auto (the game's own resolution: at 1080p the full-size flow
+        // costs more than the frame it buys)
+        assertEquals(50, FrameGenKnobs.DEFAULT_FLOW)
+        assertTrue(FrameGenKnobs(true, 2, 0, FrameGenKnobs.DEFAULT_FLOW).envLines(null).contains("DM_LSFG_FLOW=50"))
+        // auto is still one of the choices (0 = the game's own resolution), it is just not the default any more
+        assertEquals(0, FrameGenKnobs.clampFlow(0))
+    }
+
+    @Test
     fun `a PE image of at least 100 KB validates`() {
         val f = File.createTempFile("dll", ".bin")
         f.writeBytes(ByteArray(50)); assertFalse(LosslessDll.looksValid(f))

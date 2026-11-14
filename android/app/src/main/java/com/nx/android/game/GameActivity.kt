@@ -366,7 +366,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 deviceLine = hudDevice,
                 fields = hudFields,
                 fahrenheit = hudFahrenheit,
-                engineLabel = { fgSettings?.load()?.let { "LSFG ${it.mult}x" } },
+                engineLabel = { fgSettings?.load()?.takeIf { it.on }?.let { "LSFG ${it.mult}x" } },
                 chargingText = locale.str(R.string.hud_charging),
                 packPath = packPath,
                 modifier = Modifier.align(Alignment.TopCenter).displayCutoutPadding().padding(top = 8.dp),
