@@ -831,6 +831,20 @@ def chain_files(repo):   # what the iOS shaders run: dmsh_build.py and every rep
     return sorted(seen) + [repo / 'dm/gfx/tools/dmsh_chain.lock']
 
 
+def vulkan_files(repo):   # what the Vulkan translation runs: the translator (dm/android/tools/shader_vk.py), the bundle's writer (dmsv.py) and every repository module they import, at any
+    # depth (dmsh_facts.py, dmsh_chain.py, shader_stage.py, game.py); not the split's readers (shader_split.py, unityfs.py, uepak.py), whose changes leave the bundle as it is. A key
+    # over all of dm/gfx/tools made a change to the split cost the translation again (FINAL FANTASY RESONANCE: 73,512 shaders, 40 minutes)
+    dirs, todo, seen = [repo / d for d in ('dm/android/tools', 'dm/gfx/tools', 'dm/games')], [repo / 'dm/android/tools/shader_vk.py', repo / 'dm/android/tools/dmsv.py', repo / 'dm/android/tools/shader_products.py'], set()
+    while todo:
+        p = todo.pop()
+        if p in seen or not p.is_file(): continue
+        seen.add(p)
+        for n in ast.walk(ast.parse(p.read_bytes())):
+            mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module] if isinstance(n, ast.ImportFrom) and n.module else []
+            todo += [d / f'{m.split(".")[0]}.py' for m in mods for d in dirs]
+    return sorted(seen)
+
+
 def package_key(pkg):   # the shader package's content (file names and bytes): what the iOS shaders are built from
     fs = [rel for rel, _ in files_under(pkg)]
     return fingerprint(fs, ('files', [pkg / f for f in fs]))

@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 TOOLS = HERE.parent.parent / 'gfx/tools'
 sys.path[:0] = [str(TOOLS), str(HERE)]
 import dmsh_facts, dmsh_chain, dmsv   # noqa: E402  (DM_GAME picks the profile)
-from shader_split import glslc_stage   # the package reader also recognizes headerless compute code
+from shader_stage import glslc_stage   # a code area's stage: the package reader's rule (headerless compute code included), in a module of its own
 
 ap = argparse.ArgumentParser()
 ap.add_argument('pkg'); ap.add_argument('out')
