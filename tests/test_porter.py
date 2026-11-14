@@ -429,6 +429,50 @@ class Experimental(unittest.TestCase):
         finally: shutil.rmtree(t, ignore_errors=True)
 
 
+class OwnDecoder(unittest.TestCase):
+    """The shader split gets the game's own decoder only when the game's files hold Oodle entries of their own (GFPAK / Trinity packs). A pure Unreal game's shader code archives are
+    decoded by the UE rounds (device_ue), so the split gets no decoder: it would boot the game for a job of zero entries (and crash on a dump whose build the profile does not register)"""
+
+    SRC_UE = dict(graphics=('nvn', 'NVN'), oodle_packs=(False, ''), ue_decode=(True, 'Unreal Engine 5.6 IoStore containers'),
+                  glslc_capture=(False, ''), ue_legacy=(False, ''))
+    SRC_GFPAK = dict(graphics=('nvn', 'NVN'), oodle_packs=(True, "Game Freak's GFPAK archives"), ue_decode=(False, ''),
+                     glslc_capture=(False, ''), ue_legacy=(False, ''))
+
+    def tearDown(self): os.environ.pop('DM_GAMES_DIR', None)
+
+    def port(self, src, lost=()):
+        p = pipeline.Port(pipeline.Options(Path(tempfile.mkdtemp(prefix='nx2a_test_port_'))))
+        d = profile_dir([('status', 'boots')])
+        p.g = game.load(d.name)
+        p.game = Path(tempfile.mkdtemp(prefix='nx2a_test_game_'))
+        (p.game / 'ExeFS').mkdir(); (p.game / 'RomFS').mkdir()
+        p.app_name, p.tools, p.lost = 'Test Game', {}, list(lost)
+        with mock.patch.object(pipeline.profile_guess, 'build_sources', return_value=src), \
+             mock.patch.object(pipeline, 'oodle_where', return_value='local'):
+            p.check_graphics()
+        return p
+
+    def test_a_pure_unreal_game_does_not_start_the_own_decoder(self):
+        p = self.port(self.SRC_UE)
+        self.assertIsNone(p.oodle_run)   # the split gets no decoder
+        self.assertTrue(p.ue_why)         # the UE rounds decode the shader code archives
+
+    def test_a_game_with_oodle_entries_keeps_the_own_decoder(self):
+        p = self.port(self.SRC_GFPAK)
+        self.assertIsNotNone(p.oodle_run)
+        self.assertTrue(p.oodle_why)
+
+    def test_a_dump_the_profile_does_not_register_stops_before_the_decoder(self):
+        with self.assertRaises(pipeline.BuildError) as e:
+            self.port(self.SRC_UE, lost=['main build 736837af… is not the tested b7f965b9… and has none of its 1 registered patches (nninitStartup)'])
+        self.assertIn('nninitStartup', str(e.exception))
+        self.assertIn('version the profile registers', str(e.exception))
+
+    def test_a_registered_build_goes_on(self):
+        p = self.port(self.SRC_UE)   # no lost patches: the port goes on
+        self.assertIsNone(p.oodle_run)
+
+
 class Misc(unittest.TestCase):
     def test_config_roundtrip(self):
         config.set_value('device', 'abc:5555'); self.assertEqual(config.load()['device'], 'abc:5555')

@@ -550,9 +550,10 @@ class Port:
             self.use_profile_dir(pdir, first=True)
             self.g = game.load(g.id); self.ap = android_profile.AndroidProfile(self.g)
             say(f'derived game profile for {self.pkg_ver} ({disp}): {self.g.dir}')
-            self.lost = [f'{x}: the port may fail where they are needed; register them for this build (dm/tools/nso_fnmap.py carries addresses over) or port a version the '
-                         f'profile registers' for x in lost_patches(g.builds(), self.game / 'ExeFS', g.words('modules'))]
-            for x in self.lost: say(f'[RED] {x}')
+            self.lost = lost_patches(g.builds(), self.game / 'ExeFS', g.words('modules'))
+            for x in self.lost:
+                say(f'[RED] {x}: the port may fail where they are needed; register them for this build (dm/tools/nso_fnmap.py carries addresses over) or port a version the '
+                    f'profile registers')
         else: self.mem_profile()
         if dlc_reused:
             PROG.stage('extract DLC'); self.aoc = self.work / 'aoc'; PROG.end(f'{len(self.fam["dlc"])} DLC, reused (inputs unchanged)')
@@ -640,6 +641,13 @@ class Port:
         # Unreal paks (version 11) and IoStore containers: their shader code archives are decoded with the game's own Oodle too (device_ue)
         self.ue_why = src['ue_decode'][1] if src['ue_decode'][0] else ''
         why = self.oodle_why or self.ue_why
+        # The game's own decoder runs the game's own code (it boots the game's modules): the patches the profile registers for the tested build are needed there, and the rewriter applies
+        # them by build ID only. A dump of another build runs without them and the decoder crashes in the game's initialization, so the port stops here, before it starts.
+        if why and self.lost:
+            vers = ', '.join(b.get('display', v) for v, b in self.g.builds().items() if 'main' in b)
+            raise BuildError(f"{self.app_name}: this dump is not the build the game profile registers, and the game's own decoder (its shaders are Oodle-compressed) needs the patches of "
+                             f"the tested build: {'; '.join(self.lost)}. Port the version the profile registers ({vers}), or register the patches for this build "
+                             f"(dm/tools/nso_fnmap.py carries the addresses over)")
         self.oodle_run, self.oodle_local, self.oodle_where = None, False, ''
         if why:
             where = oodle_where(self.tools)
@@ -653,7 +661,9 @@ class Port:
             else:
                 raise BuildError(f"{self.app_name}'s shaders are in Oodle-compressed archives ({why}): the port decodes them with the game's own decoder on the Android "
                                  f'device, so it needs adb and the device even without installing. {NO_ADB}; then connect the device (USB debugging on) and port again')
-            self.oodle_run = self.device_oodle
+            # The split needs the game's own decoder only for the Oodle entries of GFPAK / Trinity packs. A pure Unreal game's shader code archives are decoded by device_ue (its own
+            # rounds), so the split gets no decoder: it would boot the game for a job of zero entries (and crash on a dump whose build the profile does not register).
+            self.oodle_run = self.device_oodle if self.oodle_why else None
         for k in ('glslc_capture', 'ue_legacy') + (() if self.ue_why else ('ue_decode',)) + (() if self.oodle_why else ('oodle_packs',)):
             if src[k][0]: raise BuildError(f'{self.app_name} needs a step that boots the game in the Mac host ({src[k][1]}), which the Android port cannot run yet')
 
