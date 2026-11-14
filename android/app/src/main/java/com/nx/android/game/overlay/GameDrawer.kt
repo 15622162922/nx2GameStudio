@@ -190,7 +190,12 @@ fun GameDrawer(
                                         else FrameGenRows(settings, status)
                                     DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
                                         padStyle, onPadStyle, onLayoutEditor, onResetPadLayout,
-                                        motionSupported, motion, motionHasGyro, onMotion)
+                                        motionSupported, { motionState }, motionHasGyro,
+                                        onMotion = { on, raw ->
+                                            onMotion(on, raw)
+                                            // 即时反馈：开关的显示别等下一轮轮询（宿主的 env 已经改了）
+                                            motionState = (if (on) 1 else 0) or (if (raw) 2 else 0)
+                                        })
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
