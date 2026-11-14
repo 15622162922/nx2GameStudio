@@ -16,13 +16,22 @@ class FrameGenKnobsTest {
     }
 
     @Test
-    fun `env lines carry the switch, the knobs and the dll only when there is one`() {
-        assertEquals(0, FrameGenKnobs(false, 3, 60, 25).envLines(null).size)   // off: no rows at all
+    fun `env lines carry the switch, the knobs and the dll`() {
+        assertEquals(0, FrameGenKnobs(false, 3, 60, 25).envLines(null).size)   // off and no DLL: no rows at all
         val k = FrameGenKnobs(true, 3, 60, 25)
         assertEquals(listOf("DM_LSFG=1", "DM_LSFG_MULT=3", "DM_LSFG_TARGET=60", "DM_LSFG_FLOW=25"), k.envLines(null).toList())
         assertEquals(listOf("DM_LSFG=1", "DM_LSFG_MULT=3", "DM_LSFG_TARGET=60", "DM_LSFG_FLOW=25", "DM_LSFG_DLL=/data/lsfg/Lossless.dll"),
                      k.envLines("/data/lsfg/Lossless.dll").toList())
         assertEquals(0, FrameGenKnobs(false, 9, 60, 25).envLines(null).size)   // off: no rows, whatever the knobs hold
+    }
+
+    @Test
+    fun `the dll's path goes to the host even when the generation is off`() {
+        // the player turns the generation on in the drawer, with the game running: the host has to know the file then
+        assertEquals(listOf("DM_LSFG_DLL=/data/lsfg/Lossless.dll"),
+                     FrameGenKnobs(false, 2, 0, 0).envLines("/data/lsfg/Lossless.dll").toList())
+        // no file on the device: nothing to hand over
+        assertEquals(0, FrameGenKnobs(false, 2, 0, 0).envLines(null).size)
     }
 
     @Test

@@ -16,11 +16,20 @@ data class FrameGenKnobs(var on: Boolean, var mult: Int, var target: Int, var fl
         fun clampFlow(v: Int) = if (v <= 0) 0 else if (v < 25) 25 else if (v > 100) 100 else v
     }
 
-    /** The env rows for the game's start (DM_LSFG*); the DLL row only when the private copy is there */
+    /**
+     * The env rows for the game's start (DM_LSFG*).
+     *
+     * The knob rows only when the generation is on. The DLL's path is a different thing: it says "the device has this file", not
+     * "the generation is wanted now" — so it goes whenever the file is there. The host reads the path the first time the player turns
+     * the generation on (in the drawer, with the game running): without that row it would say the DLL is missing although the
+     * settings page has it, and the only way out was to leave the game and start it again.
+     */
     fun envLines(dllPath: String?): Array<String> {
-        if (!on) return emptyArray()
-        val m = clampMult(mult); val f = clampFlow(flow)
-        val rows = mutableListOf("DM_LSFG=1", "DM_LSFG_MULT=$m", "DM_LSFG_TARGET=${if (target < 0) 0 else target}", "DM_LSFG_FLOW=$f")
+        val rows = mutableListOf<String>()
+        if (on) {
+            val m = clampMult(mult); val f = clampFlow(flow)
+            rows += listOf("DM_LSFG=1", "DM_LSFG_MULT=$m", "DM_LSFG_TARGET=${if (target < 0) 0 else target}", "DM_LSFG_FLOW=$f")
+        }
         if (dllPath != null) rows.add("DM_LSFG_DLL=$dllPath")
         return rows.toTypedArray()
     }
