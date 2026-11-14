@@ -396,7 +396,6 @@
     <string name="lib_port_config">移植配置</string>
     <string name="lib_needs_gl">OpenGL ES</string>
     <string name="lib_needs_lan">可局域联机</string>
-    <string name="lib_needs_driver">建议装驱动</string>
     <string name="lib_needs_status_wip">部分可玩</string>
     <string name="lib_needs_status_boots">只能开机</string>
     <string name="lib_needs_status_experimental">实验性移植</string>

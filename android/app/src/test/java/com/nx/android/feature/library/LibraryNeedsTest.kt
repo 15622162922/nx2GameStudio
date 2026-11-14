@@ -39,11 +39,6 @@ class LibraryNeedsTest {
     }
 
     @Test
-    fun `a game that needs a device feature asks for a driver`() {
-        assertEquals(listOf(GameNeed.DRIVER), needsOf(profile(requires = listOf("bcn")), null))
-    }
-
-    @Test
     fun `the profile's state shows while the game is not ported`() {
         assertEquals(listOf(GameNeed.WIP), needsOf(profile(status = "wip"), null))
         assertEquals(listOf(GameNeed.BOOTS), needsOf(profile(status = "boots"), null))

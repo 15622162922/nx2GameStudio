@@ -397,7 +397,6 @@
     <string name="lib_port_config">Port configuration</string>
     <string name="lib_needs_gl">OpenGL ES</string>
     <string name="lib_needs_lan">LAN play</string>
-    <string name="lib_needs_driver">a driver is recommended</string>
     <string name="lib_needs_status_wip">partly playable</string>
     <string name="lib_needs_status_boots">boots only</string>
     <string name="lib_needs_status_experimental">experimental port</string>

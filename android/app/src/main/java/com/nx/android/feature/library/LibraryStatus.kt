@@ -33,12 +33,12 @@ internal fun statusLabel(s: GameStatus): String = when (s) {
 
 /**
  * 这款游戏需要什么：图形接口（OpenGL ES 的游戏手机自己画，Vulkan 的游戏走回放）、能不能局域联机、
- * 设备要有什么（BC 纹理压缩：手机的 GPU 不支持就得装驱动）、档案调通到哪一步。
+ * 档案调通到哪一步。（档案的 requires 不再上墙：App 自带 Turnip 驱动，玩家装不装都是自己的选择。）
  *
  * 已移植的游戏从数据包清单读，没移植的从 App 自带的档案读；两处都没有就什么都不显示。
  */
 /** 这款游戏需要什么：纯逻辑（测它），词是界面上的（映射它） */
-internal enum class GameNeed { GL, LAN, DRIVER, WIP, BOOTS, EXPERIMENTAL }
+internal enum class GameNeed { GL, LAN, WIP, BOOTS, EXPERIMENTAL }
 
 internal fun needsOf(profile: GameProfile?, ported: Ported?): List<GameNeed> {
     if (profile == null) return emptyList()
@@ -48,7 +48,6 @@ internal fun needsOf(profile: GameProfile?, ported: Ported?): List<GameNeed> {
     val out = mutableListOf<GameNeed>()
     if (graphics == "gl") out += GameNeed.GL
     if (lan) out += GameNeed.LAN
-    if (profile.requires.isNotEmpty()) out += GameNeed.DRIVER
     // 档案调通到哪一步：已经移植过的游戏那一句「实验性移植」已经说了，别的状态这里补上
     if (ported == null) {
         when (profile.status) {
@@ -66,7 +65,6 @@ internal fun needsTags(profile: GameProfile?, ported: Ported?): List<String> =
         when (it) {
             GameNeed.GL -> stringResource(R.string.lib_needs_gl)
             GameNeed.LAN -> stringResource(R.string.lib_needs_lan)
-            GameNeed.DRIVER -> stringResource(R.string.lib_needs_driver)
             GameNeed.WIP -> stringResource(R.string.lib_needs_status_wip)
             GameNeed.BOOTS -> stringResource(R.string.lib_needs_status_boots)
             GameNeed.EXPERIMENTAL -> stringResource(R.string.lib_needs_status_experimental)
