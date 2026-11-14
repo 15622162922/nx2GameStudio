@@ -81,12 +81,29 @@ Java_com_nx_android_game_Native_motion(JNIEnv *E, jclass c, jint source, jint de
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_nx_android_game_Native_key(JNIEnv *E, jclass c, jint device, jint source, jint code, jint action, jint meta, jint repeat) {
+Java_com_nx_android_game_Native_key(JNIEnv *E, jclass c, jint device, jint source, jint code, jint scan, jint action, jint meta, jint repeat) {
     (void)E; (void)c;
     dm_java_event e; memset(&e, 0, sizeof e);
     e.type = AINPUT_EVENT_TYPE_KEY; e.source = source; e.device = device;
-    e.key_code = code; e.key_action = action; e.key_meta = meta; e.key_repeat = repeat;
+    e.key_code = code; e.key_scan = scan; e.key_action = action; e.key_meta = meta; e.key_repeat = repeat;
     return dm_java_input(&e) ? JNI_TRUE : JNI_FALSE;
+}
+
+// The controllers' own table (the gamepad center): the line format pad_map.h reads. Pushed when the game starts
+// and again whenever the player changes something.
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_padMapping(JNIEnv *E, jclass c, jstring spec) {
+    (void)c;
+    const char *s = (*E)->GetStringUTFChars(E, spec, NULL);
+    dm_pad_mapping_set(s ? s : "");
+    if (s) (*E)->ReleaseStringUTFChars(E, spec, s);
+}
+
+// Everything the controller holds is released (the center mutes the input while it is open).
+JNIEXPORT void JNICALL
+Java_com_nx_android_game_Native_padReleaseAll(JNIEnv *E, jclass c) {
+    (void)E; (void)c;
+    dm_pad_release_all();
 }
 
 JNIEXPORT void JNICALL

@@ -132,6 +132,11 @@ fun GameDrawer(
     onHudFahrenheit: (Boolean) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
+    padCenterSupported: Boolean,
+    padLabels: Boolean,
+    padLabelsEnabled: Boolean,
+    onPadLabels: (Boolean) -> Unit,
+    onOpenPadCenter: () -> Unit,
     onPauseGame: () -> Unit,
     onResumeGame: () -> Unit,
     onExit: () -> Unit,
@@ -215,7 +220,8 @@ fun GameDrawer(
                                             onMotion(on, raw)
                                             // 即时反馈：开关的显示别等下一轮轮询（宿主的 env 已经改了）
                                             motionState = (if (on) 1 else 0) or (if (raw) 2 else 0)
-                                        })
+                                        },
+                                        padCenterSupported, padLabels, padLabelsEnabled, onPadLabels, onOpenPadCenter)
                                     // 音频页：声音走哪个设备（宿主换了流，即时出声）
                                     DrawerTab.AUDIO -> AudioRows(audioSupported, audioId, audioDevices,
                                         onPick = { id -> audioId = id; Native.audioSet(id) })
@@ -257,20 +263,20 @@ private fun ExitButton(text: String, onClick: () -> Unit, modifier: Modifier = M
 }
 
 @Composable
-private fun HintRow(text: String) {
+internal fun HintRow(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** 分组的小标题：页里的东西按组走，一眼能扫 */
 @Composable
-private fun GroupLabel(text: String) {
+internal fun GroupLabel(text: String) {
     Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
          fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
 }
 
 /** 一行：图标 + 标题 + 小字提示 + 控件 */
 @Composable
-private fun DrawerRow(
+internal fun DrawerRow(
     icon: ImageVector,
     title: String,
     hint: String? = null,
@@ -292,7 +298,7 @@ private fun DrawerRow(
 
 /** 一行：图标 + 标题 + 小字提示 + 药丸开关（App 自己的那套）。enabled=false 时开关灰着，按不动 */
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     icon: ImageVector, title: String, hint: String? = null,
     checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit,
 ) {
@@ -317,7 +323,7 @@ private fun ToggleRow(
 
 /** 一行：图标 + 标题 + 小字提示 + 展开的箭头（点了去某个地方） */
 @Composable
-private fun ActionRow(
+internal fun ActionRow(
     icon: ImageVector, title: String, hint: String? = null,
     onClick: () -> Unit,
 ) {
@@ -455,6 +461,11 @@ private fun ControlRows(
     motion: () -> Int,
     motionHasGyro: Boolean,
     onMotion: (Boolean, Boolean) -> Unit,
+    padCenterSupported: Boolean,
+    padLabels: Boolean,
+    padLabelsEnabled: Boolean,
+    onPadLabels: (Boolean) -> Unit,
+    onOpenPadCenter: () -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -495,6 +506,25 @@ private fun ControlRows(
         ToggleRow(Icons.Filled.TouchApp, stringResource(R.string.motion_raw), stringResource(R.string.motion_raw_note), raw) {
             onMotion(on, !raw)
         }
+    }
+    // 实体手柄：面键按位置还是按标签（标签属于手柄，不属于游戏），以及手柄中心。
+    // 老包里的宿主没有手柄中心那两个入口，这一组不显示。
+    if (padCenterSupported) {
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        GroupLabel(stringResource(R.string.drawer_group_physical))
+        val positionLabel = stringResource(R.string.pad_center_position)
+        val labelLabel = stringResource(R.string.pad_center_label)
+        OptionRow(Icons.Filled.SportsEsports, stringResource(R.string.drawer_pad_face_buttons),
+            listOf(positionLabel, labelLabel), if (padLabels) labelLabel else positionLabel) { name ->
+            onPadLabels(name == labelLabel)
+        }
+        HintRow(
+            if (padLabelsEnabled) stringResource(R.string.drawer_pad_face_hint)
+            else stringResource(R.string.drawer_pad_face_needs_one)
+        )
+        ActionRow(Icons.Filled.Tune, stringResource(R.string.drawer_pad_center), stringResource(R.string.drawer_pad_center_hint),
+            onClick = onOpenPadCenter)
     }
 }
 
@@ -643,7 +673,7 @@ private fun targetLabel(t: Int) =
 private fun flowLabel(f: Int) = if (f == 0) stringResource(R.string.drawer_auto) else "$f%"
 
 @Composable
-private fun OptionRow(icon: ImageVector, label: String, options: List<String>, current: String,
+internal fun OptionRow(icon: ImageVector, label: String, options: List<String>, current: String,
                       width: Dp = 140.dp, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     DrawerRow(icon, label) {

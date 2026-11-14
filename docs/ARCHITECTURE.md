@@ -195,6 +195,29 @@ measured direction of a flick instead of the host's made-up waveform). They are 
 game starts and reach the running game over JNI (`motionSet`, the same way the frame rate step does), so a change
 takes effect at once, without restarting the game. One game has one pair (like the drawer's other rows).
 
+**The gamepad center** (`com.nx.android.input/`, the app's side; `nxnative/dm/android/pad_map.h`, the host's side):
+a physical controller is a controller, not a game, so what the player changes about it is kept **per controller**
+(`files/pads/profiles.json`, keyed by the controller's fingerprint: its descriptor, its vendor and model and its axes'
+capabilities, hashed; two controllers of the same model get a session of their own). The profile holds the bindings
+(which physical key is which game key), the disabled keys, the stick's dead zone, the trigger's threshold and
+whether the face buttons follow their **position** (the Switch's layout: the bottom button is B, the right one A —
+the default, and what the host did before) or their **label** (an Xbox controller's A is the game's A). The label
+belongs to the controller, not to the game, so the choice is per controller and not per game.
+
+The app pushes the profile to the host as a line-based text (`Native.padMapping`, the host reads it in
+`pad_map.h`: the host has no JSON parser), keyed by the Android input device id, so two controllers of the same model
+keep their own tables. The host looks the event's device up, then the player's own binding (the physical scan code
+first, the key code as the fallback), and falls back to the default dictionary — unchanged for a controller nobody
+touched. The key events carry the scan code now (`dm_java_event`'s `key_scan`, from `KeyEvent.getScanCode()`), which
+is what makes a binding survive a change of phone. The calibration is per controller too: the dead zone is applied
+when the axis event comes in, the trigger's threshold when the button is derived from it.
+
+The center itself is a Compose overlay over the game (`game/overlay/PadCenter.kt`, opened from the drawer's
+**Controls** tab): the controllers that are connected, what the selected one is doing (the scope), the bindings
+(one row per game key: rebind it by pressing the physical key, clear it), the calibration and the vibration test.
+While it is open the game keeps running but the controller's input is muted (the app swallows it), and every key is
+released when it opens and when it closes, so nothing stays pressed in the game.
+
 ## What the player installs
 
 The player gets the bundle (`dist/nx2android-<version>-<os>-<cpu>.zip` from `python packaging/build_bundle.py`, for Windows and macOS): unzip, start `nx2android.exe` (`nx2android` on a Mac), nothing to install with pip. It does not ship toolchains; the Setup tab (`nx2android.exe -m porter doctor`, or `python -m porter doctor` from the repository) checks them and the free disk space, and its **Download missing tools** button (`porter tools --download`, `porter/fetch.py`) fetches the missing NDK, .NET SDK and platform-tools from Google's SDK repository and Microsoft's release list, checks each archive against the checksum its list gives, and unpacks them into the player's nx2android folder (`toolchains/`), which the finders search:

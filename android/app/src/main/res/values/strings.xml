@@ -553,4 +553,36 @@
     <string name="runtime_retry">Retry</string>
     <string name="runtime_full_port">Port entire game again</string>
     <string name="runtime_interrupted">The runtime update was interrupted. Retry, or port the entire game again using its original files. Your game data is kept.</string>
+
+    <!-- 手柄中心（实体手柄）：手柄中心面板与抽屉里的那一组 -->
+    <string name="pad_center_title">Gamepad center</string>
+    <string name="pad_center_muted">The game keeps running, but the controller does not reach it while the center is open.</string>
+    <string name="pad_center_devices">Controllers</string>
+    <string name="pad_center_none">No controller is connected. Turn on Bluetooth and connect one.</string>
+    <string name="pad_center_bluetooth">Bluetooth settings</string>
+    <string name="pad_center_scope">What the controller is doing</string>
+    <string name="pad_center_position">By position</string>
+    <string name="pad_center_label">By label</string>
+    <string name="pad_center_face_buttons">Face buttons</string>
+    <string name="pad_center_face_hint">By position is the Switch\'s layout (the bottom button is B, the right one A). By label takes the controller\'s own labels (an Xbox controller\'s A is the game\'s A).</string>
+    <string name="pad_center_mapping">Buttons</string>
+    <string name="pad_center_rebind">Rebind</string>
+    <string name="pad_center_clear">Clear</string>
+    <string name="pad_center_default">Default</string>
+    <string name="pad_center_unbound">Not bound</string>
+    <string name="pad_center_disabled">Disabled</string>
+    <string name="pad_center_capture">Press the button on the controller you want to use…</string>
+    <string name="pad_center_reset">Restore the defaults</string>
+    <string name="pad_center_calibration">Calibration</string>
+    <string name="pad_center_deadzone">Stick dead zone</string>
+    <string name="pad_center_trigger">Trigger threshold</string>
+    <string name="pad_center_vibrate">Test the vibration</string>
+    <string name="pad_center_no_vibration">no vibration motor</string>
+    <string name="pad_center_events">Events</string>
+    <string name="drawer_group_physical">Controller</string>
+    <string name="drawer_pad_face_buttons">Face buttons</string>
+    <string name="drawer_pad_face_hint">The label belongs to the controller, not to the game: with an Xbox controller, by label makes its A the game\'s A.</string>
+    <string name="drawer_pad_face_needs_one">Connect one controller to change this here; the gamepad center manages several.</string>
+    <string name="drawer_pad_center">Gamepad center</string>
+    <string name="drawer_pad_center_hint">See the controllers, test their buttons, rebind and calibrate them.</string>
 </resources>

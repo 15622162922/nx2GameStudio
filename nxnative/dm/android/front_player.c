@@ -14,11 +14,17 @@
 // The app talks to this file through jni_android.c (the JNI surface) and to the shared core through the
 // contract in dm/host/front.h. The headless dmhost executable (adb shell) links the same file: it has no
 // window, no input and no text entry, and the guards below say so.
+//
+// The physical controller: the keys go through the player's own table (pad_map.h), which the app pushes
+// (the gamepad center): the player's binding first, the default dictionary otherwise. The face buttons
+// follow their position (the Switch's layout) or their label (an Xbox controller's A is the game's A),
+// per controller — the label belongs to the controller, not to the game.
 #include "dm.h"
 #include "front.h"
 #include "dm_input.h"
 #include "overlay_layout.h"
 #include "motion_map.h"
+#include "pad_map.h"
 #include "saves_android.h"
 #include "jni_android.h"
 #include <math.h>
@@ -148,22 +154,30 @@ void dm_java_lifecycle(int ev) {
 
 // ---- input: a physical controller (the app's on-screen gamepad has its own way in) ----
 static uint64_t g_btn; static float g_ax[8];   // lx ly rx ry lt rt hatx haty
-static uint64_t key_bit(int32_t k) {   // Nintendo layout by position: the bottom face button is B, the right one A (as the iOS front end maps)
-    switch (k) {
-    case AKEYCODE_BUTTON_A: return DM_BTN_B; case AKEYCODE_BUTTON_B: return DM_BTN_A; case AKEYCODE_BUTTON_X: return DM_BTN_Y; case AKEYCODE_BUTTON_Y: return DM_BTN_X;
-    case AKEYCODE_BUTTON_L1: return DM_BTN_L; case AKEYCODE_BUTTON_R1: return DM_BTN_R; case AKEYCODE_BUTTON_L2: return DM_BTN_ZL; case AKEYCODE_BUTTON_R2: return DM_BTN_ZR;
-    case AKEYCODE_BUTTON_THUMBL: return DM_BTN_LS; case AKEYCODE_BUTTON_THUMBR: return DM_BTN_RS; case AKEYCODE_BUTTON_START: return DM_BTN_PLUS; case AKEYCODE_BUTTON_SELECT: return DM_BTN_MINUS;
-    case AKEYCODE_DPAD_UP: return DM_BTN_UP; case AKEYCODE_DPAD_DOWN: return DM_BTN_DOWN; case AKEYCODE_DPAD_LEFT: return DM_BTN_LEFT; case AKEYCODE_DPAD_RIGHT: return DM_BTN_RIGHT;
-    default: return 0;
-    }
+static uint64_t g_axis_btn;   // the buttons an analog axis carries (the triggers, the hat, the player's own axis bindings)
+static pad_map_t g_map;       // the player's own bindings per controller (the app's gamepad center pushes them; pad_map.h)
+static uint64_t key_bit(int device, int32_t scan, int32_t k) {
+    return pad_map_key_bit(&g_map, device, scan, k);   // the player's own binding first, the default dictionary otherwise
 }
-static int32_t axis(float v) { if (v > -0.12f && v < 0.12f) return 0; return (int32_t)(v * DM_STICK_MAX); }
+static int32_t axis(float v) { return (int32_t)(v * DM_STICK_MAX); }   // the dead zone is applied per device, when the event comes in
 static uint64_t g_shake_btn;   // DM_BTN_SHAKE while the device is being shaken (below); input thread only
 static void pad_publish(void) {
-    uint64_t b = g_btn | g_shake_btn;
-    if (g_ax[4] > 0.5f) b |= DM_BTN_ZL; if (g_ax[5] > 0.5f) b |= DM_BTN_ZR;
-    if (g_ax[6] < -0.5f) b |= DM_BTN_LEFT; if (g_ax[6] > 0.5f) b |= DM_BTN_RIGHT; if (g_ax[7] < -0.5f) b |= DM_BTN_UP; if (g_ax[7] > 0.5f) b |= DM_BTN_DOWN;
+    uint64_t b = g_btn | g_shake_btn | g_axis_btn;
     dm_pad_set(b, axis(g_ax[0]), -axis(g_ax[1]), axis(g_ax[2]), -axis(g_ax[3]));   // Android's y grows downward, the Switch's upward
+}
+
+// The player's own table for the controllers (the app's gamepad center pushes it: pad_map.h's line format).
+void dm_pad_mapping_set(const char *spec) {
+    int n = pad_map_parse(&g_map, spec);
+    LOG("[input] the controllers' table: %d device(s)", n);
+}
+
+// Everything the controller holds is released: the gamepad center mutes the input while it is open, so a key the
+// player held when it opened (and released while it was open) must not stay pressed in the game.
+void dm_pad_release_all(void) {
+    g_btn = 0; g_axis_btn = 0; memset(g_ax, 0, sizeof g_ax);
+    dm_pad_set(0, 0, 0, 0, 0);
+    LOG("[input] the controller's keys are all released");
 }
 
 // ---- the on-screen gamepad: the app owns it now ----
@@ -392,7 +406,7 @@ static int handle_event(const dm_java_event *e) {
             if (down && e->key_repeat == 0) dm_app_notice(DM_NOTICE_MENU);
             return 1;
         }
-        uint64_t bit = key_bit(k);
+        uint64_t bit = key_bit(e->device, e->key_scan, k);
         if (!bit) {   // the rest: the system's
             static uint8_t seen[64];
             if ((src & AINPUT_SOURCE_GAMEPAD) == AINPUT_SOURCE_GAMEPAD && down && k >= 0 && k < 512 && !(seen[k >> 3] >> (k & 7) & 1)) {
@@ -407,11 +421,22 @@ static int handle_event(const dm_java_event *e) {
     if (atomic_load(&g_tx_on) && ((src & AINPUT_SOURCE_JOYSTICK) == AINPUT_SOURCE_JOYSTICK || (src & AINPUT_SOURCE_GAMEPAD) == AINPUT_SOURCE_GAMEPAD)) return 1;   // sticks: not for the text entry
     if ((src & AINPUT_SOURCE_JOYSTICK) == AINPUT_SOURCE_JOYSTICK || (src & AINPUT_SOURCE_GAMEPAD) == AINPUT_SOURCE_GAMEPAD) {
         atomic_store(&g_pad_in, e->device); dm_haptics_android_device(e->device);
-        g_ax[0] = e->axis[0]; g_ax[1] = e->axis[1];
-        g_ax[2] = e->axis[2]; g_ax[3] = e->axis[3];
+        float dz = pad_map_deadzone(&g_map, e->device);   // the stick's dead zone: the device's own (the default when it has none)
+        for (int i = 0; i < 4; i++) { float v = e->axis[i]; g_ax[i] = (v > -dz && v < dz) ? 0 : v; }
         g_ax[4] = e->axis[4]; g_ax[5] = e->axis[5];
         g_ax[6] = e->axis[6]; g_ax[7] = e->axis[7];
         if (g_ax[4] == 0) g_ax[4] = e->axis[8]; if (g_ax[5] == 0) g_ax[5] = e->axis[9];
+        // the analog buttons: the triggers (the device's threshold), the hat and the player's own axis bindings
+        float tr = pad_map_trigger(&g_map, e->device);
+        g_axis_btn = 0;
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_LTRIGGER) && g_ax[4] > tr) g_axis_btn |= DM_BTN_ZL;
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_RTRIGGER) && g_ax[5] > tr) g_axis_btn |= DM_BTN_ZR;
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_HAT_X)) { if (g_ax[6] < -0.5f) g_axis_btn |= DM_BTN_LEFT; if (g_ax[6] > 0.5f) g_axis_btn |= DM_BTN_RIGHT; }
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_HAT_Y)) { if (g_ax[7] < -0.5f) g_axis_btn |= DM_BTN_UP; if (g_ax[7] > 0.5f) g_axis_btn |= DM_BTN_DOWN; }
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_LTRIGGER, g_ax[4]);
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_RTRIGGER, g_ax[5]);
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_HAT_X, g_ax[6]);
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_HAT_Y, g_ax[7]);
         dm_pad_players(1); pad_publish(); return 1;
     }
     if ((src & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) return 1;   // the touches are the app's (it routes them)

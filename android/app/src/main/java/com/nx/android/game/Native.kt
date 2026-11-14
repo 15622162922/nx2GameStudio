@@ -18,8 +18,18 @@ object Native {
     @JvmStatic external fun start(pack: String, internal: String, titleId: String?, dpi: Int, env: Array<String>, ctx: Context): Boolean
     @JvmStatic external fun setSurface(surface: Surface?)
     @JvmStatic external fun motion(source: Int, device: Int, action: Int, ids: IntArray, xs: FloatArray, ys: FloatArray, axis: FloatArray): Boolean
-    @JvmStatic external fun key(device: Int, source: Int, code: Int, action: Int, meta: Int, repeat: Int): Boolean
+    @JvmStatic external fun key(device: Int, source: Int, code: Int, scan: Int, action: Int, meta: Int, repeat: Int): Boolean
     @JvmStatic external fun lifecycle(ev: Int)
+
+    /**
+     * 实体手柄的映射表：手柄中心推给宿主的行式文本（pad_map.h 读它）。
+     * 一只设备一段：面键的翻法（labels）、摇杆死区（dz）、扳机阈值（tr），下面跟着它的绑定。
+     * 游戏启动时推一次，玩家改了键再推一次。
+     */
+    @JvmStatic external fun padMapping(spec: String)
+
+    /** 手柄上所有的键松开（手柄中心开着的时候输入是静音的：按住的键不能留在游戏里） */
+    @JvmStatic external fun padReleaseAll()
 
     /** 运行中抽屉的帧生成：即时下发（DM_CTL 的 env 行走不到 JNI，这里直达宿主）；"<state> <reason>" 见 dm_framegen.h */
     @JvmStatic external fun frameGenSet(on: Boolean, mult: Int, target: Int, flow: Int)
