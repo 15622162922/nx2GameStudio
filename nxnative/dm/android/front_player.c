@@ -426,15 +426,19 @@ static int handle_event(const dm_java_event *e) {
         g_ax[4] = e->axis[4]; g_ax[5] = e->axis[5];
         g_ax[6] = e->axis[6]; g_ax[7] = e->axis[7];
         if (g_ax[4] == 0) g_ax[4] = e->axis[8]; if (g_ax[5] == 0) g_ax[5] = e->axis[9];
-        // the analog buttons: the triggers (the device's threshold), the hat and the player's own axis bindings
+        // the analog buttons: the triggers (the device's threshold), the hat and the player's own axis bindings.
+        // A pad may report its triggers as LTRIGGER/RTRIGGER or as BRAKE/GAS (the event's array puts BRAKE at 8 and GAS at 9),
+        // so both ids are looked up for each of the two trigger slots.
         float tr = pad_map_trigger(&g_map, e->device);
         g_axis_btn = 0;
-        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_LTRIGGER) && g_ax[4] > tr) g_axis_btn |= DM_BTN_ZL;
-        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_RTRIGGER) && g_ax[5] > tr) g_axis_btn |= DM_BTN_ZR;
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_LTRIGGER) && !pad_map_has_axis(&g_map, e->device, PAD_AXIS_BRAKE) && g_ax[4] > tr) g_axis_btn |= DM_BTN_ZL;
+        if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_RTRIGGER) && !pad_map_has_axis(&g_map, e->device, PAD_AXIS_GAS) && g_ax[5] > tr) g_axis_btn |= DM_BTN_ZR;
         if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_HAT_X)) { if (g_ax[6] < -0.5f) g_axis_btn |= DM_BTN_LEFT; if (g_ax[6] > 0.5f) g_axis_btn |= DM_BTN_RIGHT; }
         if (!pad_map_has_axis(&g_map, e->device, PAD_AXIS_HAT_Y)) { if (g_ax[7] < -0.5f) g_axis_btn |= DM_BTN_UP; if (g_ax[7] > 0.5f) g_axis_btn |= DM_BTN_DOWN; }
         g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_LTRIGGER, g_ax[4]);
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_BRAKE, g_ax[4]);
         g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_RTRIGGER, g_ax[5]);
+        g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_GAS, g_ax[5]);
         g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_HAT_X, g_ax[6]);
         g_axis_btn |= pad_map_axis_bit(&g_map, e->device, PAD_AXIS_HAT_Y, g_ax[7]);
         dm_pad_players(1); pad_publish(); return 1;

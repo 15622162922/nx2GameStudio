@@ -55,7 +55,10 @@ enum { PAD_N = sizeof pad_buttons / sizeof pad_buttons[0] };
 #define PAD_DEFAULT_TRIGGER 0.5f
 
 // The Android axis ids the event carries (MotionEvent's): the event's axis array is X Y Z RZ LTRIGGER RTRIGGER HAT_X HAT_Y BRAKE GAS.
-enum { PAD_AXIS_LTRIGGER = 17, PAD_AXIS_RTRIGGER = 18, PAD_AXIS_HAT_X = 15, PAD_AXIS_HAT_Y = 16 };
+enum {
+    PAD_AXIS_LTRIGGER = 17, PAD_AXIS_RTRIGGER = 18, PAD_AXIS_HAT_X = 15, PAD_AXIS_HAT_Y = 16,
+    PAD_AXIS_GAS = 22, PAD_AXIS_BRAKE = 23,
+};
 
 #define PAD_MAP_MAX_DEVICES 8
 #define PAD_MAP_MAX_BINDINGS 64

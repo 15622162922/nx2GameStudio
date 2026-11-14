@@ -1,0 +1,224 @@
+package com.nx.android.input.ui
+
+import com.nx.android.input.GamepadScan
+import com.nx.android.input.PadCalibration
+import com.nx.android.input.PadMapping
+import com.nx.android.input.PadProfileStore
+import com.nx.android.input.PadSources
+import com.nx.android.input.PadTargets
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+import java.nio.file.Files
+
+/** 一只接在手机上的手柄（GameSir-X5 Lite）。 */
+private fun device(id: Int = 7, key: String = "device:abc") = GamepadScan.Info(
+    id = id,
+    name = "GameSir-X5 Lite",
+    vibration = true,
+    descriptor = "GameSir-X5 Lite",
+    vendorId = 48879,
+    productId = 57005,
+    axes = setOf(0, 1),
+    profileKey = key,
+    profilePersistent = true,
+    capabilitySignature = "sig",
+    modelTemplateKey = null,
+    requiresProfileConfirmation = false,
+)
+
+/**
+ * 手柄中心的状态：抓键、撞车、拔掉的手柄。
+ *
+ * 中心在首页与游戏里共用一份状态：抓键抓到的源绑上去，撞车时问玩家（替换 / 交换 / 取消），
+ * 手柄拔了，抓它的会话作废。
+ */
+class PadCenterControllerTest {
+
+    private class Fixture {
+        val dir: File = Files.createTempDirectory("nx2a-pad-center").toFile()
+        val store = PadProfileStore(File(dir, PadProfileStore.FILE_NAME))
+        var clock = 1000L
+        var devices = listOf(device())
+        val controller: PadCenterController
+        var changes = 0
+
+        init {
+            controller = PadCenterController(
+                store = store,
+                onChanged = { changes++ },
+                devices = { devices },
+                now = { clock },
+            )
+        }
+
+        fun info() = devices.first()
+
+        /** 按下一个物理键（扫描码优先）。 */
+        fun press(scanCode: Int, keyCode: Int = 0, deviceId: Int = 7): Boolean =
+            controller.offerKey(deviceId, true, down = true, up = false, repeatCount = 0, scanCode = scanCode, keyCode = keyCode)
+
+        fun release(scanCode: Int, keyCode: Int = 0, deviceId: Int = 7): Boolean =
+            controller.offerKey(deviceId, true, down = false, up = true, repeatCount = 0, scanCode = scanCode, keyCode = keyCode)
+    }
+
+    @Test
+    fun `a captured key is bound to the target`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        assertEquals("a", f.controller.capturing)
+
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        assertNull(f.controller.capturing)
+        val profile = f.controller.profile(f.info())
+        assertEquals("a", profile.bindings[PadSources.scan(PadMapping.Scan.EAST)])
+        assertEquals(1, f.changes)
+    }
+
+    @Test
+    fun `a conflict waits for the player`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        // 另一颗键也要 "a"：撞车了，等玩家选
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.NORTH)
+        f.release(PadMapping.Scan.NORTH)
+
+        val hit = f.controller.conflict
+        assertNotNull(hit)
+        assertEquals("a", hit!!.target)
+        assertEquals(PadSources.scan(PadMapping.Scan.EAST), hit.otherSource)
+    }
+
+    @Test
+    fun `replace gives the target to the new key`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.NORTH)
+        f.release(PadMapping.Scan.NORTH)
+
+        f.controller.resolveConflict(replace = true, swap = false)
+        val bindings = f.controller.profile(f.info()).bindings
+        assertEquals("a", bindings[PadSources.scan(PadMapping.Scan.NORTH)])
+        assertNull(bindings[PadSources.scan(PadMapping.Scan.EAST)])
+        assertNull(f.controller.conflict)
+    }
+
+    @Test
+    fun `swap gives the old target to the other key`() {
+        val f = Fixture()
+        // 这颗键原来绑着 "x"
+        f.controller.capture(7, "x")
+        f.press(PadMapping.Scan.NORTH)
+        f.release(PadMapping.Scan.NORTH)
+        // 另一颗键占着 "a"
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        // 这颗键（NORTH）现在要 "a"：两个对调
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.NORTH)
+        f.release(PadMapping.Scan.NORTH)
+
+        f.controller.resolveConflict(replace = false, swap = true)
+        val bindings = f.controller.profile(f.info()).bindings
+        assertEquals("a", bindings[PadSources.scan(PadMapping.Scan.NORTH)])
+        assertEquals("x", bindings[PadSources.scan(PadMapping.Scan.EAST)])
+    }
+
+    @Test
+    fun `cancel leaves the bindings alone`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.NORTH)
+        f.release(PadMapping.Scan.NORTH)
+
+        f.controller.resolveConflict(replace = false, swap = false)
+        val bindings = f.controller.profile(f.info()).bindings
+        assertEquals("a", bindings[PadSources.scan(PadMapping.Scan.EAST)])
+        assertEquals(1, bindings.size)
+    }
+
+    @Test
+    fun `a controller that goes away cancels the capture`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        assertEquals("a", f.controller.capturing)
+
+        f.devices = emptyList()
+        f.controller.devicesChanged(f.devices)
+
+        assertNull(f.controller.capturing)
+        // 拔掉了以后按键不再被吃掉
+        assertTrue(!f.press(PadMapping.Scan.EAST))
+    }
+
+    @Test
+    fun `the labels and the calibration belong to the controller`() {
+        val f = Fixture()
+        f.controller.setLabels(f.info(), true)
+        f.controller.setCalibration(f.info(), PadCalibration(deadzone = 0.25f, trigger = 0.6f))
+
+        val profile = f.controller.profile(f.info())
+        assertTrue(profile.labels)
+        assertEquals(0.25f, profile.calibration.deadzone, 0.0001f)
+        assertEquals(0.6f, profile.calibration.trigger, 0.0001f)
+    }
+
+    @Test
+    fun `the profiles are written where the game reads them`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+
+        val reloaded = PadProfileStore(File(f.dir, PadProfileStore.FILE_NAME)).load().profiles
+        val profile = reloaded[f.info().profileKey]
+        assertNotNull(profile)
+        assertEquals("a", profile!!.bindings[PadSources.scan(PadMapping.Scan.EAST)])
+    }
+
+    @Test
+    fun `the resolved target is the game key the player sees`() {
+        val f = Fixture()
+        // 出厂字典按位置：下面那颗（BUTTON_A）是游戏的 B，右边那颗（BUTTON_B）是游戏的 A
+        assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
+        assertEquals("a", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_B))
+        // 面键按标签：键上印着 A 的那颗就是游戏的 A
+        f.controller.setLabels(f.info(), true)
+        assertEquals("a", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
+        assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_B))
+    }
+
+    @Test
+    fun `a target the player cleared falls back to the default`() {
+        val f = Fixture()
+        f.controller.capture(7, "a")
+        f.press(PadMapping.Scan.EAST)
+        f.release(PadMapping.Scan.EAST)
+        f.controller.clearBinding(f.info(), PadSources.scan(PadMapping.Scan.EAST))
+
+        val bindings = f.controller.profile(f.info()).bindings
+        assertTrue(bindings.isEmpty())
+        // 落回出厂字典
+        assertEquals("b", f.controller.resolveTarget(7, 0, PadMapping.Key.BUTTON_A))
+        assertTrue(PadTargets.isValid("a"))
+    }
+}

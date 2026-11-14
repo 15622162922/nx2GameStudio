@@ -170,4 +170,30 @@ object PadMapping {
     /** 去掉一条绑定（那个键落回出厂字典）。 */
     fun withoutBinding(mapping: Map<String, String>, source: String): Map<String, String> =
         if (mapping.containsKey(source)) mapping - source else mapping
+
+    /**
+     * 面键的**方位**：手柄上那四颗键各在哪儿。
+     *
+     * Linux 的扫描码说的是位置（BTN_NORTH 是上面那颗），Android 的 keyCode 说的是它在那儿叫什么
+     * （BTN_NORTH 在 Android 那边叫 BUTTON_X）。方位是扫描码的事，所以面板上的菱形按它画。
+     */
+    object Face {
+        /** 上面那颗（打印 Y 的那颗在 Xbox 布局的手柄上）。 */
+        const val TOP = Scan.NORTH
+        /** 左边那颗。 */
+        const val LEFT = Scan.WEST
+        /** 右边那颗。 */
+        const val RIGHT = Scan.EAST
+        /** 下面那颗。 */
+        const val BOTTOM = Scan.SOUTH
+
+        /** 那颗键在 Android 那边是什么 keyCode（系统的键位表：扫描码与 keyCode 是一对）。 */
+        fun keyCodeOf(scanCode: Int): Int = when (scanCode) {
+            Scan.SOUTH -> Key.BUTTON_A
+            Scan.EAST -> Key.BUTTON_B
+            Scan.NORTH -> Key.BUTTON_X
+            Scan.WEST -> Key.BUTTON_Y
+            else -> 0
+        }
+    }
 }

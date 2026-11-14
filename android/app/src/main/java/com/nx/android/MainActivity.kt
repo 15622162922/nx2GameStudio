@@ -41,6 +41,14 @@ import com.nx.android.domain.LibraryLogic
 import com.nx.android.domain.RunAction
 import com.nx.android.app.AppActions
 import com.nx.android.app.AppRoot
+import com.nx.android.input.GamepadScan
+import com.nx.android.input.PadCalibration
+import com.nx.android.input.PadTestInput
+import com.nx.android.input.ui.PadCenterController
+import com.nx.android.input.ui.capturableAxes
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +90,13 @@ class MainActivity : ComponentActivity() {
     var launchTab = 0
     private var launchBuildId by mutableStateOf("")
 
+    /** 手柄中心（首页顶栏的入口）：档案跟游戏共用同一个文件 */
+    private val padController by lazy { PadCenterController.forContext(this) }
+
+    /** 首页的手柄中心开着吗（开着的时候手柄的键不进库页，只进示波与抓键）。
+     *  这一份是**唯一**的那份：分发层（dispatchKeyEvent）与页面读的都是它。 */
+    var padCenterOpen by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 全屏沉浸：内容铺满整块屏幕，系统栏隐藏（下滑临时呼出）
@@ -92,6 +107,7 @@ class MainActivity : ComponentActivity() {
         }
         onboarding.storageOk = storageGranted()
         onboarding.batteryOk = batteryUnrestricted()
+        GamepadScan.start(this)   // 顶栏的手柄入口要知道有几只手柄接着
         launchTab = intent?.getIntExtra(EXTRA_TAB, 0) ?: 0
         launchBuildId = intent?.getStringExtra(EXTRA_BUILD_ID).orEmpty()
         if (!prefs.bool(PrefsStore.OB_COMPLETED)) onboarding.open()
@@ -105,7 +121,11 @@ class MainActivity : ComponentActivity() {
         // 玩家看不见，但游戏结束后它就在那儿）。判据直接问进程，不看 PlayerState.running：那个靠 2 秒
         // 轮询，App 的进程刚起来时还是 false。
         if (isLauncherEntry(intent) && Player.playProcessAlive(this)) com.nx.android.game.GameActivity.resume(this)
-        setContent { AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, launchTab, runtime, launchBuildId) }
+        setContent {
+            AppRoot(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions,
+                launchTab, runtime, launchBuildId, padController,
+                padCenterOpen = padCenterOpen, onPadCenter = { padCenterOpen = it })
+        }
         // the small tools come with the app: an update brings new ones, and the phone has to get them
         // (the app's own Vulkan driver too: it is unpacked into the app's folder, ready to be picked)
         Thread {
@@ -291,6 +311,48 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * 手柄中心开着：手柄的键只进示波与抓键，不进库页（库页的按钮不该被手柄按到）。
+     * Back 不在这里管：面板自己收（Compose 的 BackHandler）。
+     */
+    override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        // 手柄中心开着：手柄设备的键只进示波与抓键，不进库页。
+        // 判据是「这个事件来自手柄设备」，不是「keyCode 是不是手柄键」：有的 ROM 会把
+        // 手柄的 B 键再发一个 BACK（小米就是这样），漏下去就把中心关了。
+        // 导航条与手势的 Back 不是手柄设备：它们照旧走（BackHandler 关中心）。
+        if (padCenterOpen && isGamepad(e.deviceId)) {
+            if (GamepadScan.devices.value.none { it.id == e.deviceId }) GamepadScan.refreshNow(this)
+            PadTestInput.onKey(e) { deviceId, scan, key -> padController.resolveTarget(deviceId, scan, key) }
+            padController.offerKey(
+                e.deviceId, true,
+                e.action == KeyEvent.ACTION_DOWN, e.action == KeyEvent.ACTION_UP, e.repeatCount,
+                e.scanCode, e.keyCode,
+            )
+            return true
+        }
+        return super.dispatchKeyEvent(e)
+    }
+
+    /** 摇杆与扳机：中心开着的时候只进示波与抓键。 */
+    override fun onGenericMotionEvent(e: MotionEvent): Boolean {
+        if (padCenterOpen) {
+            val info = GamepadScan.devices.value.firstOrNull { it.id == e.deviceId }
+            val deadzone = info?.let { padController.deadzoneOf(it) } ?: PadCalibration.DEFAULT_DEADZONE
+            PadTestInput.onMotion(e, deadzone)
+            padController.offerAxis(e.deviceId, isGamepad(e.deviceId), capturableAxes(e))
+            return true
+        }
+        return super.onGenericMotionEvent(e)
+    }
+
+    /** 这只设备是手柄吗（虚拟设备不算：小米常驻一个 uinput-xiaomi，它说是手柄却从不发输入）。 */
+    private fun isGamepad(deviceId: Int): Boolean {
+        val manager = getSystemService(android.hardware.input.InputManager::class.java) ?: return false
+        val device = manager.getInputDevice(deviceId) ?: return false
+        return GamepadScan.isGamepad(device)
+    }
+
 
     /**
      * 桌面图标那条 intent 会送到任务根的**已有**那个库页实例上（栈的顺序不动，游戏页还在最上面）。

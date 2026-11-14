@@ -52,6 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -60,6 +64,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nx.android.R
+import com.nx.android.input.GamepadScan
+import com.nx.android.input.ui.PadCenterController
+import com.nx.android.input.ui.PadCenterScreen
 import com.nx.android.appstate.PortState
 import com.nx.android.appstate.PlayerState
 import com.nx.android.appstate.OnboardingState
@@ -169,6 +176,9 @@ fun AppRoot(
     startTab: Int,
     runtime: com.nx.android.appstate.RuntimeUpdateState,
     launchBuildId: String,
+    padController: PadCenterController,
+    padCenterOpen: Boolean,
+    onPadCenter: (Boolean) -> Unit,
 ) {
     NxTheme {
         // 界面语言：整棵树读同一份资源，玩家在设置里换语言时这里跟着换
@@ -194,6 +204,8 @@ fun AppRoot(
                 OnboardingScreen(onboardingViewModel, actions) { pickerReq = it }
             } else {
                 MainScreen(prefs, locale, port, library, player, onboarding, drivers, environmentSetup, actions, startTab, runtime, launchBuildId,
+                    padController = padController,
+                    padCenterOpen = padCenterOpen, onPadCenter = onPadCenter,
                     onRequest = { pickerReq = it },
                     onDrivers = { driversOpen = true },
                     onLog = { id -> buildLogId = id },
@@ -341,6 +353,9 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                environmentSetup: EnvironmentSetup, actions: AppActions, startTab: Int,
                runtime: com.nx.android.appstate.RuntimeUpdateState,
                launchBuildId: String,
+               padController: PadCenterController,
+               padCenterOpen: Boolean,
+               onPadCenter: (Boolean) -> Unit,
                onRequest: (PickerRequest) -> Unit,
                onDrivers: () -> Unit,
                onLog: (String) -> Unit,
@@ -350,6 +365,9 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
     // 设置是一整页，盖住顶栏与下面的页面：从顶栏的设置图标进来，关掉才回到底下的页面
     var settingsOpen by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf(SettingsSection.ENVIRONMENT) }
+    // 手柄中心：从顶栏的手柄按钮进来，盖住整屏（跟设置页一样）。开着不开着是活动那边
+    // 的一份（分发层也要知道：手柄的键该进中心还是进页面）
+    val padDevices by GamepadScan.devices.collectAsStateWithLifecycle()
     val lib = library
     val libraryViewModel: LibraryViewModel = hiltViewModel()
     val buildsViewModel: BuildsViewModel = hiltViewModel()
@@ -383,6 +401,8 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
             onSelect = { tab = it.ordinal },
             onRefresh = { lib.rescan() },
             onSettings = { settingsOpen = true },
+            padCount = padDevices.size,
+            onOpenPadCenter = { onPadCenter(true) },
             chip = environmentCheckUiState.chip,
             onChip = onEnvCheck,
         )
@@ -413,6 +433,13 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
                     onClose = { lib.selected = null })
             }
         }
+        // 手柄中心：盖住整屏（顶栏也在下面），关掉才回到底下的页面
+        if (padCenterOpen) {
+            PadCenterScreen(
+                controller = padController,
+                onClose = { onPadCenter(false) },
+            )
+        }
         // 设置页：盖住整屏（顶栏也在下面），关掉才回到底下的页面
         if (settingsOpen) {
             SettingsScreen(onboarding, installedDrivers, drivers, updateViewModel,
@@ -429,6 +456,7 @@ fun MainScreen(prefs: PrefsStore, locale: AppLocale, port: PortState, library: L
 @Composable
 private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit,
                    onSettings: () -> Unit,
+                   padCount: Int, onOpenPadCenter: () -> Unit,
                    chip: EnvCheck.Chip, onChip: () -> Unit) {
     val time by produceState(initialValue = "") {
         val format = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -463,12 +491,48 @@ private fun TopBar(selected: Int, onSelect: (Tab) -> Unit, onRefresh: () -> Unit
         Spacer(Modifier.weight(1f))
         TopIcon(Icons.Filled.Refresh, stringResource(R.string.app_refresh_library), onRefresh)
         Spacer(Modifier.width(6.dp))
+        // 手柄中心：顶栏的入口（接着几只手柄就亮几颗）
+        PadIcon(padCount, onOpenPadCenter)
+        Spacer(Modifier.width(6.dp))
         // 设置：它是一整页，从这个图标进来
         TopIcon(Icons.Filled.Settings, stringResource(R.string.app_tab_settings), onSettings)
         Spacer(Modifier.width(6.dp))
         EnvChip(chip, onChip)
         Text(time, style = MaterialTheme.typography.titleMedium,
              color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/** 手柄的入口：接着手柄时图标是亮的，旁边一个数字是接了几只。 */
+@Composable
+private fun PadIcon(padCount: Int, onClick: () -> Unit) {
+    val description = stringResource(R.string.app_pad_center_connected, padCount)
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(
+                Icons.Filled.SportsEsports,
+                null,
+                Modifier.size(22.dp),
+                tint = if (padCount > 0) MaterialTheme.colorScheme.onBackground else NxPalette.Unbuilt,
+            )
+            if (padCount > 0) {
+                Text(
+                    "$padCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

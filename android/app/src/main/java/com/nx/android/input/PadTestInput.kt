@@ -84,8 +84,12 @@ object PadTestInput {
         }
     }
 
-    /** 一个摇杆/扳机的移动。 */
-    fun onMotion(event: MotionEvent) {
+    /**
+     * 一个摇杆/扳机的移动。
+     *
+     * @param deadzone 这只手柄的死区（面板上画的是**游戏收到的那一份**：死区里的偏移算 0）。
+     */
+    fun onMotion(event: MotionEvent, deadzone: Float = 0f) {
         if (!observing) return
         if (event.actionMasked != MotionEvent.ACTION_MOVE) return
         if (!event.isFromSource(InputDevice.SOURCE_JOYSTICK)) return
@@ -94,10 +98,17 @@ object PadTestInput {
         val ranges = device.motionRanges.filter { it.isFromSource(InputDevice.SOURCE_JOYSTICK) }
             .associateBy { it.axis }
         fun value(axis: Int): Float = if (axis in ranges) event.getAxisValue(axis).coerceIn(-1f, 1f) else 0f
-        val leftX = value(MotionEvent.AXIS_X)
-        val leftY = value(MotionEvent.AXIS_Y)
-        val rightX = value(MotionEvent.AXIS_RX)
-        val rightY = value(MotionEvent.AXIS_RY)
+        fun stick(axis: Int): Float {
+            val v = value(axis)
+            return if (v > -deadzone && v < deadzone) 0f else v
+        }
+        val leftX = stick(MotionEvent.AXIS_X)
+        val leftY = stick(MotionEvent.AXIS_Y)
+        // The right stick: some pads report it as RX/RY, others as Z/RZ (the GameSir-X5 Lite:
+        // the kernel says ABS_Z/ABS_RZ, and Android keeps those names). Whichever the device
+        // has, the right stick is the right stick.
+        val rightX = if (MotionEvent.AXIS_RX in ranges) stick(MotionEvent.AXIS_RX) else stick(MotionEvent.AXIS_Z)
+        val rightY = if (MotionEvent.AXIS_RY in ranges) stick(MotionEvent.AXIS_RY) else stick(MotionEvent.AXIS_RZ)
         val leftTrigger = if (MotionEvent.AXIS_LTRIGGER in ranges) value(MotionEvent.AXIS_LTRIGGER) else 0f
         val rightTrigger = if (MotionEvent.AXIS_RTRIGGER in ranges) value(MotionEvent.AXIS_RTRIGGER) else 0f
         val hatX = value(MotionEvent.AXIS_HAT_X)

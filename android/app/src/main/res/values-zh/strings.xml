@@ -584,4 +584,25 @@
     <string name="drawer_pad_face_needs_one">接一只手柄才能在这里改；多只手柄在手柄中心里管。</string>
     <string name="drawer_pad_center">手柄中心</string>
     <string name="drawer_pad_center_hint">看手柄、试按键、改键与校准。</string>
+    <string name="pad_conflict_title">这个键已经有别的用处</string>
+    <string name="pad_conflict_text">%1$s 已经绑在 %2$s 上。给新按的那个、两个对调，或者什么都不改。</string>
+    <string name="pad_conflict_replace">替换</string>
+    <string name="pad_conflict_swap">交换</string>
+    <string name="pad_conflict_cancel">取消</string>
+    <string name="pad_center_physical">实体手柄</string>
+    <string name="pad_center_waiting">等待输入</string>
+    <string name="pad_center_receiving">正在接收输入</string>
+    <string name="pad_center_test_hint">动一动摇杆或按个键</string>
+    <string name="pad_center_no_axes">没有摇杆轴</string>
+    <string name="pad_center_left_trigger">左扳机</string>
+    <string name="pad_center_right_trigger">右扳机</string>
+    <string name="pad_center_custom_device">设备 %1$d</string>
+    <string name="pad_center_pressed">按着</string>
+    <string name="pad_center_released">松开</string>
+    <string name="pad_center_stick_state">%1$s：%2$d，%3$d</string>
+    <string name="pad_center_stick">摇杆</string>
+    <string name="pad_center_vibration">有振动马达</string>
+    <string name="pad_center_recovered">存的档案坏了，能救回来的已经用上了。</string>
+    <string name="pad_center_temporary_profile">这只手柄没法单独认出来，改动只对这一次连接有效。</string>
+    <string name="app_pad_center_connected">手柄，接了 %1$d 只</string>
 </resources>

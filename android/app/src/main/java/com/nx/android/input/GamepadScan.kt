@@ -75,6 +75,19 @@ object GamepadScan {
         mutableDevices.value = scan(manager)
     }
 
+    /**
+     * 列表可能落后于系统（手柄重连以后设备 id 变了，而热插拔的回调没赶上）：
+     * 有一个事件的设备不在列表里，就重扫一遍，把新列表发出去。
+     */
+    @Synchronized
+    fun refreshNow(ctx: Context) {
+        val manager = inputManager
+            ?: ctx.applicationContext.getSystemService(InputManager::class.java)
+            ?: return
+        inputManager = manager
+        mutableDevices.value = scan(manager)
+    }
+
     /** 现在接着的手柄（直接扫一次，不靠监听）。 */
     fun scan(ctx: Context): List<Info> {
         val im = ctx.getSystemService(InputManager::class.java) ?: return emptyList()

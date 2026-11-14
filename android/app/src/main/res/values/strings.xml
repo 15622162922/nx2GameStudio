@@ -585,4 +585,25 @@
     <string name="drawer_pad_face_needs_one">Connect one controller to change this here; the gamepad center manages several.</string>
     <string name="drawer_pad_center">Gamepad center</string>
     <string name="drawer_pad_center_hint">See the controllers, test their buttons, rebind and calibrate them.</string>
+    <string name="pad_conflict_title">That button is already spoken for</string>
+    <string name="pad_conflict_text">%1$s is already bound to %2$s. Give it to the new button, swap the two, or leave it as it is.</string>
+    <string name="pad_conflict_replace">Replace</string>
+    <string name="pad_conflict_swap">Swap</string>
+    <string name="pad_conflict_cancel">Cancel</string>
+    <string name="pad_center_physical">Physical controller</string>
+    <string name="pad_center_waiting">Waiting for input</string>
+    <string name="pad_center_receiving">Input received</string>
+    <string name="pad_center_test_hint">Move a stick or press a button</string>
+    <string name="pad_center_no_axes">No joystick axes reported</string>
+    <string name="pad_center_left_trigger">Left trigger</string>
+    <string name="pad_center_right_trigger">Right trigger</string>
+    <string name="pad_center_custom_device">Device %1$d</string>
+    <string name="pad_center_pressed">Pressed</string>
+    <string name="pad_center_released">Released</string>
+    <string name="pad_center_stick_state">%1$s: %2$d, %3$d</string>
+    <string name="pad_center_stick">Stick</string>
+    <string name="pad_center_vibration">Vibration available</string>
+    <string name="pad_center_recovered">The saved profiles were broken; the ones that could be recovered are in use.</string>
+    <string name="pad_center_temporary_profile">This controller cannot be identified on its own; the changes last for this connection only.</string>
+    <string name="app_pad_center_connected">Controllers, %1$d connected</string>
 </resources>
