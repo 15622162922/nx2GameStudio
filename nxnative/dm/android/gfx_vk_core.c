@@ -1367,7 +1367,7 @@ static int ubd_candidates(uint64_t a, uint64_t n, int *out, int max) {
     }
     for (int i = lo; i < g_nubd; i++) {   // above a: it overlaps while it starts below a + n
         if (g_ubd[g_ubd_ix[i]].lo >= a + n) break;
-        if (k >= max) return -1; if (out) out[k] = g_ubd_ix[i]; k++;
+        if (k >= max) { return -1; } if (out) out[k] = g_ubd_ix[i]; k++;
     }
     return k;
 } uint64_t g_ubd_gen = 1, g_ubd_landed, g_ubd_shadows, g_ubd_bytes, g_ns_submit, g_ubd_superseded;
