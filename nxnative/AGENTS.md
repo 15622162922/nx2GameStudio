@@ -22,4 +22,4 @@
 
   The translator is `dm/gfx/tools/dmsh_xlate_bin`, which matches `dmsh_chain.lock`; a fresh `dotnet publish` does not.
 - iOS builds are unsigned IPAs that the user sideloads and tests; diagnostics come back as the app's `Documents/log.txt`. Do not sign or install builds on the user's devices.
-- Commit only when asked, as the checkout's own git identity (zfitness <zfitcode@163.com>): `git commit`, no `-c user.name` override.
+- Commit only when asked, as the checkout's own git identity (zfitness <zfitcode@163.com>): `git commit`, no `-c user.name` override — the identity of the person you work for, never another person's name or email (this fork is nx2androidX, a separate fork of seedds/nxnative by way of nx2android). Commit headers follow Conventional Commits (`.githooks/commit_msg.py`).

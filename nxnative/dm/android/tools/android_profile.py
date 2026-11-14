@@ -9,8 +9,8 @@
 #   graphics     the graphics API the game itself uses: vulkan | gl | nvn (empty when it is not known);
 #                gl means the game draws with OpenGL ES: the phone's own driver draws it, a Vulkan game needs the replay
 #   lan          1 when the game can be played over the local network with several devices (empty: not known)
-#   sysdata      system data titles the game reads from the console's firmware, 16-digit hex title IDs separated by spaces (0100000000000802: MiiModel, the Mii heads Mario Kart 8 Deluxe builds);
-#                porter extracts each from the player's firmware dump (--firmware) into the data pack, and the host mounts it in place of its stand-in
+#   sysdata      system data titles the game reads from the console's firmware, 16-digit hex title IDs separated by spaces (0100000000000802: MiiModel, the Mii heads Mario Kart 8 Deluxe builds; 0100000000000811 and 0100000000000810: the shared fonts, standard and Nintendo extension);
+#                porter extracts each from the player's firmware dump (--firmware) into the data pack, and the host mounts it in place of its stand-in (the fonts: the host decodes them)
 #   setting      <name>=<value>, one row each: the pause menu's defaults on first launch (overlay, rumble, docked, fps, opacity: 20..80 by 5)
 #   env          <KEY>=<VALUE>, one row each: host switches the game needs on Android (the data pack's env.txt)
 #   overlay      <tablet|phone> <control> <x> <y>: moves one control of that layout (dm/android/overlay_default.tsv) to x, y as fractions of the window

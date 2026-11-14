@@ -1109,11 +1109,19 @@ uint64_t mtl_present(const tex_t *t, double period, const int crop[4]) {
     // A longer period goes to the window only once it has held for 60 presents; a shorter one at once. Super Mario Bros. Wonder's own controller (main+0xcfd24) asks
     // for interval 2 for a frame or a few and then 1 again: each ask was a vote (176 in 3 minutes of its first level on the Y700, 27-60 a run in issue #64's log of an
     // Adreno 750 phone with a 60 Hz display), and where the display changes its mode for a vote, the switch itself lengthens the next frames (issue #45: 30-40 fps)
+    // DM_VK_WINDOW_GAME_RATE=1 (live, read every 60 presents): the window asks for the game's own rate (nvn_game_fps), not the period a frame-step hold or the adaptive
+    // rate lengthened. Held at 2 vsyncs for 60 presents, Breath of the Wild's window asked for 30 fps and a Galaxy S25 Ultra's display went to 30 Hz (refresh 33.3 ms);
+    // every trial back to 60 then ran its first frames on that 30 Hz display, showed them late and failed within 5 presents, at 1-2 ms of GPU work a frame on its
+    // title screen, and the game stayed at 30 fps for the run (the display at 30 Hz in each of four 30 fps runs, never in the runs that held 60). This line's frame
+    // generation votes with its output rate instead (window_fps below), so the env only shortens the period before that vote when a player turns it on
+    static int game_rate = -1; static uint64_t game_rate_at; double wperiod = period;
+    if (game_rate < 0 || g_presents - game_rate_at >= 60) { const char *e = getenv("DM_VK_WINDOW_GAME_RATE"); game_rate = e && atoi(e) != 0; game_rate_at = g_presents; }
+    if (game_rate) { int nvn_game_fps(void); int gf = nvn_game_fps(); if (gf > 0 && 1.0 / gf < wperiod) wperiod = 1.0 / gf; }
     // The rate asked for is the frame generation's output rate while it is on: the panel has to carry the extra images, and with the game's own rate the panel
     // stays at 60 Hz, where two images do not fit into one refresh (the FIFO swapchain carries one a refresh) — the present thread then runs at half the game's
     // rate and the game waits behind it: the game slows down
     static ANativeWindow *rate_win; static double rate_fps, want_fps; static uint64_t want_since;
-    double fps = window_fps(period);
+    double fps = window_fps(wperiod);
     int changed = window_rate_changed(fps, &rate_fps, &want_fps, &want_since, g_presents);
     if (g_win && (g_win != rate_win || changed)) {
         rate_win = g_win;
@@ -1210,5 +1218,14 @@ int mtl_link_wait_tick(int vsyncs, uint64_t timeout_ns) { (void)vsyncs; (void)ti
 int mtl_has_window(void) { return dm_front_window() != NULL; }
 int mtl_display_hz(void) { return 60; }
 int mtl_fps_target(void) { return DM_GAME_FPS_TARGET > 0 ? DM_GAME_FPS_TARGET : 60; }
+// The adaptive frame rate's ceiling (perf_android.c fps_cap_step): the profile's fps_ceiling (30, or 0 for none; only Cardfight!! Vanguard Dear Days 2 sets it), which
+// DM_FPS_CEILING overrides (porter's --fps60 writes 0). A game whose host frame step is on (the rewriter's state page, loader.c dm_fps_state) gets none whatever the key says:
+// its holds are the frame step's (Breath of the Wild's VFR override fixes its step at one vsync, which a 30 fps ceiling would run at half speed)
+extern uint8_t *dm_fps_state;
+int dm_fps_ceiling(void) {
+    static int c = -1;
+    if (c < 0) { const char *e = getenv("DM_FPS_CEILING"); c = e ? atoi(e) : DM_GAME_FPS_CEILING; if (c != 30 || dm_fps_state) c = 0; }
+    return c;
+}
 void mtl_xv_window_tex(uint64_t serial) { (void)serial; }
 void mtl_prog_release(prog_t *p) { (void)p; }

@@ -43,7 +43,7 @@
 #   With an update: give RomFS and main as comma-separated lists (base game first, e.g. data/v0/RomFS,data/v327680/RomFS); the output is the union of both versions (see main())
 #   Unity type trees need Unity's common string table, which is taken from the first main
 # Pair table: (vertex key, pixel key) of every BNSH variation (every Unity program); dmsh_build uses it to give vertex shaders the outputs their pixel shaders read but they do not write (see dmsh_build.py vs_pad)
-import collections, concurrent.futures as cf, hashlib, json, mmap, os, re, struct, subprocess, sys
+import base64, collections, concurrent.futures as cf, hashlib, json, mmap, os, re, struct, subprocess, sys
 from forkpool import fork_map   # the pool without semaphores (no /dev/shm, as on Android)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../games')); import game as _game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import uepak
@@ -366,6 +366,23 @@ def kt_gz(d):
         o = (o + s + 0x7f) & ~0x7f
     return b''.join(out)
 
+def gust_gz(d):
+    """Gust's chunked zlib (Atelier Ryza DX: 156 of its 4,112 *.elixir.gz files, among them PostEffect/pe_pack.elixir.gz with the post effects' 162 GLSLC outputs; the other 3,956 are plain
+    'CRAE' archives): chunks of a u32 stored length and one zlib stream (16 KB inflated, the last shorter) until a zero length, which ends the file. → the inflated data, or None when d is
+    not in that form"""
+    import zlib
+    o, out = 0, []
+    while o + 4 <= len(d):
+        n = struct.unpack_from('<I', d, o)[0]; o += 4
+        if not n: return b''.join(out) if out and o == len(d) else None
+        if o + n > len(d) or d[o] != 0x78: return None
+        z = zlib.decompressobj()
+        try: out.append(z.decompress(d[o:o + n]))
+        except zlib.error: return None
+        if not z.eof or z.unused_data: return None
+        o += n
+    return None
+
 def kt_shaders(d, label, out):
     """Three Houses' KTGL keeps its shaders in SPKG packages (patch*/nx/shader/*.spkg, and 132 entries of DATA1.bin), each holding G2S containers ('_S2G3000', as in Age of Calamity) of GLSLC outputs,
     and in '_SPK4100' packages without G2S (DATA1.bin entry 549, the post effects: 27 outputs); map and model archives in DATA1.bin carry packages of their own. So every inflated file or entry is
@@ -464,13 +481,14 @@ PG_STAGES = {b'VSO\0': 'vs', b'HSO\0': 'hs', b'DSO\0': 'ds', b'GSO\0': 'gs', b'P
 def pkz_entries(path):
     """A PlatinumGames PKZ archive (Bayonetta 3: 72 in the RomFS root, 14 GB): 'pkzl', u32 version 0x20000, u64 archive length, u32 file count, u32 entry table offset (0x20), u32 name table length,
     u32 alignment (0x1000); then one 0x20-byte entry per file {u32 name offset, u32 compression name offset (both into the name table right after the entries), u64 length, u64 offset,
-    u64 stored length}. The compression is named per entry: 'OodleKraken' (main+0xcbdf80 maps it to 0xc9 and reads it through Oodle's streaming decoder), 'ZStandard' (0x65) or 'None'.
+    u64 stored length}. ASTRAL CHAIN's version 0x10000 uses the same layout (82 archives, 8,556 ZStandard entries); its last header word is zero instead of the v2 alignment.
+    The compression is named per entry: 'OodleKraken' (main+0xcbdf80 maps it to 0xc9 and reads it through Oodle's streaming decoder), 'ZStandard' (0x65) or 'None'.
     → [(name, compression, offset, stored length, length)], or None when path is no PKZ"""
     with open(path, 'rb') as f:
         h = f.read(0x20)
         if h[:4] != PKZL: return None
         ver, _, n, eo, nl = struct.unpack_from('<IQIII', h, 4)
-        if ver != 0x20000: red(f'{path}: PKZ version {ver:#x}: only 0x20000 is known')
+        if ver not in (0x10000, 0x20000): red(f'{path}: PKZ version {ver:#x}: only 0x10000 and 0x20000 are known')
         f.seek(eo); t = f.read(0x20 * n + nl)
     nm = lambda o: t[0x20 * n + o:t.index(b'\0', 0x20 * n + o)].decode()
     return [(nm(a), nm(c), off, csz, usz) for a, c, usz, off, csz in struct.iter_unpack('<IIQQQ', t[:0x20 * n])]
@@ -1387,6 +1405,7 @@ def unity_compute(x, base, trees):
             for v in o['variants']:
                 for k in v['kernels']:
                     for i, u in enumerate(k['uniqueVariants'] if 'uniqueVariants' in k else [p['second'] for p in k['variantMap']] if 'variantMap' in k else [k]):
+                        if not u['code']: continue   # Unity 6 may ship empty kernels (DAVE THE DIVER); they have no program to decode
                         where = f'{base}#{o["m_Name"]}#{k["name"]}.{i}'
                         out.extend((where, st, ctl, cd) for st, ctl, cd in unity_program(u['code'], where, 'cs'))
     except unityfs.NoTree as e:
@@ -1457,6 +1476,51 @@ def separable_pairs(keys):
     return {(v, p) for v in single for p in cover}, cover
 
 SMASH_ARC = struct.pack('<Q', 0xABCDEF9876543210)   # smash_arc.MAGIC (scan_file reads only the first bytes, without importing the reader)
+HEAPS_CACHE = 'shaders.cache.nx'
+
+def heaps_pak_files(f):
+    """The files of a Heaps PAK archive, open at +0 → [(path, offset in the archive, size)], or None when it is not one (other engines' .pak files share the magic's first bytes).
+    'PAK', a version byte, i32 header size (it counts these bytes, and the file data starts there), i32 data size; version 1 then holds a 64-character hash. The root entry follows, then 'DATA'.
+    An entry: u8 name length, name, u8 flags; a folder (bit 0) has i32 child count and its children, a file has its position in the data (f64 with bit 1, else i32), i32 size, i32 checksum"""
+    head = f.read(12)
+    if len(head) < 12 or head[:3] != b'PAK' or head[3] > 1: return None
+    size, _dsize = struct.unpack_from('<ii', head, 4)   # signed data size is only a hint; wide offsets can exceed it
+    if not 12 < size <= 1 << 28: return None
+    f.seek(0, os.SEEK_END); end = f.tell(); f.seek(12)
+    if size > end: return None
+    h = f.read(size - 12); out = []
+    if len(h) != size - 12: return None
+    def entry(p, path):
+        n = h[p]; name = h[p + 1:p + 1 + n].decode('utf-8'); fl = h[p + 1 + n]; p += n + 2
+        if fl & ~3: raise ValueError('unknown entry flags')
+        path = f'{path}/{name}' if name else path
+        if fl & 1:
+            cnt, = struct.unpack_from('<i', h, p); p += 4
+            if not 0 <= cnt <= len(h): raise ValueError('invalid child count')
+            for _ in range(cnt): p = entry(p, path)
+            return p
+        pos = struct.unpack_from('<d', h, p)[0] if fl & 2 else struct.unpack_from('<i', h, p)[0]; p += 8 if fl & 2 else 4
+        n, _ = struct.unpack_from('<iI', h, p)
+        offset = int(pos)   # rejects NaN/infinity before seeking
+        if offset != pos or offset < 0 or n < 0 or size + offset + n > end: raise ValueError('invalid file range')
+        out.append((path, size + offset, n))
+        return p + 8
+    try: header_end = entry(64 if head[3] else 0, '')
+    except (IndexError, struct.error, ValueError, OverflowError, RecursionError): return None
+    return out if h[header_end:header_end + 4] == b'DATA' else None
+
+def heaps_shaders(d, label):
+    """Heaps' hxsl.CacheFile for the Switch (Dead Cells' shaders.cache.nx): a table of programs, then each stage's GLSL; a GLSL that was compiled ends with a comment holding the base64 of its
+    GLSLC output, //BIN=<base64>#. Dead Cells: 1,222 of its 1,271 sources have one, the others are vertex shaders the outputs already hold, since an output is the whole program"""
+    found = []
+    for m in re.finditer(rb'//BIN=([^#\r\n]*)(#|[\r\n]|$)', d):
+        if m[2] != b'#': red(f'{label}@{m.start():#x}: unterminated //BIN= comment')
+        try: raw = base64.b64decode(m[1], validate=True)
+        except ValueError: red(f'{label}@{m.start():#x}: invalid base64 in //BIN= comment')
+        found += glslc_shaders(raw, f'{label}@{m.start():#x}')
+    if not found: red(f'{label}: no GLSLC output in //BIN= comments')
+    return found
+
 UE_TAG = {'SV': 'vs', 'SH': 'hs', 'SD': 'ds', 'SG': 'gs', 'SP': 'ps', 'SC': 'cs'}
 def main_imports(img):   # the names main imports (its dynamic symbols)
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../tools')); import nso_syms
@@ -1632,6 +1696,14 @@ def scan_file(args):
     if head[:4] == BND2:   # a Criterion Bundle 2 (Need for Speed: Hot Pursuit Remastered's SHADERS.BNDL): GLSLC outputs in its zlib resources (bnd2_shaders)
         found += bnd2_shaders(open(path, 'rb').read(), '/' + rel)
         return rel, uniq_keys(found), var_pairs(found), trees
+    if head[:3] == b'PAK':   # a Heaps PAK archive (Dead Cells): only its shader cache is read, not its 2 GB of other files (heaps_pak_files, heaps_shaders)
+        with open(path, 'rb') as f:
+            members = heaps_pak_files(f)
+            if members is not None:
+                for nm, off, n in members:
+                    if nm.endswith('/' + HEAPS_CACHE):
+                        f.seek(off); found += heaps_shaders(f.read(n), f'/{rel}{nm}')
+                return rel, uniq_keys(found), var_pairs(found), trees
     if head[:4] == SPKG or head[:4] == b'\0\0\1\0' and path.endswith('.gz'):   # Three Houses' loose shader packages and chunked zlib files (kt_shaders)
         kt_shaders(open(path, 'rb').read(), '/' + rel, found)
         return rel, uniq_keys(found), var_pairs(found), trees
@@ -1645,6 +1717,7 @@ def scan_file(args):
         for nm, m in gfpak_members(open(path, 'rb').read(), '/' + rel): scan_blob(m, f'/{rel}{nm}', found)
         return rel, uniq_keys(found), var_pairs(found), trees
     d = unzs(path) if head[:4] == ZSTD_MAGIC else open(path, 'rb').read()   # by the magic: Paper Mario: The Thousand-Year Door names its zstd files .zst (8,726, its shaders among them)
+    if head[4:5] == b'\x78' and path.endswith('.gz') and (z := gust_gz(d)) is not None: d = z   # Gust's chunked zlib, before the shader prefilter
     if head[:4] != ZSTD_MAGIC and head[4:8] in (ZSTD_MAGIC, LZ4_FRAME_MAGIC): d = unsized(d, '/' + rel)   # a size-prefixed frame (unsized): Kirby and the Forgotten Land keeps its BNSH in 7,201 .cmp files; read raw, the split found 121 of its 27,297 shaders
     if d[:4] == b'Yaz0': d = yaz0(d)
     if d[:8] == b'UnityFS\0' or (d[8:11] == b'\0\0\0' and __import__('unityfs').is_serialized(d)):
