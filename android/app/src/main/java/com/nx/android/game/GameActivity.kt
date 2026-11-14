@@ -630,7 +630,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                     editorOpen -> closeEditor()   // 编辑器：Back 是收工（改动早就存好了）
                     padCenterOpen -> closePadCenter()   // 手柄中心：Back 是收工
                     drawerOpen -> drawerOpen = false
-                    hostPanel -> Native.key(e.deviceId, e.source, e.keyCode, e.scanCode, e.action, e.metaState, e.repeatCount)   // 宿主的面板在后退一步
+                    hostPanel -> Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)   // 宿主的面板在后退一步
                     else -> drawerOpen = true
                 }
             }
@@ -649,7 +649,12 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         if (e.action == KeyEvent.ACTION_DOWN || e.action == KeyEvent.ACTION_UP) {
             noteController(e.source, e.deviceId)   // 手柄按了键：它算「在用」，虚拟手柄让位
-            Native.key(e.deviceId, e.source, e.keyCode, e.scanCode, e.action, e.metaState, e.repeatCount)
+            // 宿主带扫描码（新的运行时）就用带扫描码的那个入口；老运行时只有旧的那个
+            if (padSupported) {
+                Native.keyScan(e.deviceId, e.source, e.keyCode, e.scanCode, e.action, e.metaState, e.repeatCount)
+            } else {
+                Native.key(e.deviceId, e.source, e.keyCode, e.action, e.metaState, e.repeatCount)
+            }
         }
         return true
     }

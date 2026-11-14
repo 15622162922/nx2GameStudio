@@ -18,7 +18,14 @@ object Native {
     @JvmStatic external fun start(pack: String, internal: String, titleId: String?, dpi: Int, env: Array<String>, ctx: Context): Boolean
     @JvmStatic external fun setSurface(surface: Surface?)
     @JvmStatic external fun motion(source: Int, device: Int, action: Int, ids: IntArray, xs: FloatArray, ys: FloatArray, axis: FloatArray): Boolean
-    @JvmStatic external fun key(device: Int, source: Int, code: Int, scan: Int, action: Int, meta: Int, repeat: Int): Boolean
+    @JvmStatic external fun key(device: Int, source: Int, code: Int, action: Int, meta: Int, repeat: Int): Boolean
+
+    /**
+     * 按键事件，带它的物理扫描码（手柄中心的绑定按它认键）。
+     * 老运行时的宿主没有这个入口（那边只有 [key]），所以 App 先看宿主有没有那几个新的入口，
+     * 有才用这个 —— 老包照旧能用，输入不会断。
+     */
+    @JvmStatic external fun keyScan(device: Int, source: Int, code: Int, scan: Int, action: Int, meta: Int, repeat: Int): Boolean
     @JvmStatic external fun lifecycle(ev: Int)
 
     /**

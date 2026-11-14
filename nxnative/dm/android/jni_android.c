@@ -81,7 +81,19 @@ Java_com_nx_android_game_Native_motion(JNIEnv *E, jclass c, jint source, jint de
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_nx_android_game_Native_key(JNIEnv *E, jclass c, jint device, jint source, jint code, jint scan, jint action, jint meta, jint repeat) {
+// The key event, without the scan code (the entry the runtimes before the gamepad center have: the app calls
+// keyScan when the runtime knows it, and this one otherwise — an old runtime must keep working).
+Java_com_nx_android_game_Native_key(JNIEnv *E, jclass c, jint device, jint source, jint code, jint action, jint meta, jint repeat) {
+    (void)E; (void)c;
+    dm_java_event e; memset(&e, 0, sizeof e);
+    e.type = AINPUT_EVENT_TYPE_KEY; e.source = source; e.device = device;
+    e.key_code = code; e.key_action = action; e.key_meta = meta; e.key_repeat = repeat;
+    return dm_java_input(&e) ? JNI_TRUE : JNI_FALSE;
+}
+
+// The key event with its physical scan code: the gamepad center's bindings match on it.
+JNIEXPORT jboolean JNICALL
+Java_com_nx_android_game_Native_keyScan(JNIEnv *E, jclass c, jint device, jint source, jint code, jint scan, jint action, jint meta, jint repeat) {
     (void)E; (void)c;
     dm_java_event e; memset(&e, 0, sizeof e);
     e.type = AINPUT_EVENT_TYPE_KEY; e.source = source; e.device = device;
