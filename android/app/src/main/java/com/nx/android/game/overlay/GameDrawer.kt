@@ -43,7 +43,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -517,7 +517,7 @@ private fun AudioRow(current: Int, devices: List<AudioOutput>, onPick: (Int) -> 
     val labels = audioLabels(devices)
     val ids = listOf(AUDIO_FOLLOW_SYSTEM) + devices.map { it.id }
     val index = ids.indexOf(current).let { if (it < 0) 0 else it }
-    OptionRow(Icons.Filled.VolumeUp, stringResource(R.string.drawer_audio_output), labels, labels[index], width = 220.dp) { name ->
+    OptionRow(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.drawer_audio_output), labels, labels[index], width = 220.dp) { name ->
         val i = labels.indexOf(name)
         if (i >= 0) onPick(ids[i])
     }
