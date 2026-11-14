@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var onboarding: OnboardingState
     @Inject lateinit var environmentSetup: com.nx.android.domain.environment.EnvironmentSetup
     @Inject lateinit var drivers: com.nx.android.domain.drivers.DriverRepository
+    @Inject lateinit var firmwareRepo: com.nx.android.data.firmware.FirmwareRepository
     @Inject lateinit var envCheck: EnvCheckState
     @Inject lateinit var update: com.nx.android.appstate.UpdateState
 
@@ -134,7 +135,8 @@ class MainActivity : ComponentActivity() {
                 // 落位跟着这个游戏的数据包走：它在可移动卡上，新包就建在那儿（内部存储的那份不动）
                 val packDir = library.packDirOf(file)?.absolutePath
                 PortService.start(this, file.absolutePath, prefs.keys,
-                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom, packDir)
+                                  cfg.touch, cfg.fps60, cfg.experimental, cfg.aliasHeadroom,
+                                  cfg.sharedFont, firmwareRepo.folder ?: "", cfg.mtReplay, packDir)
             } else {
                 toast(locale.str(R.string.builds_needs_storage)); askStorage()
             }
@@ -180,6 +182,14 @@ class MainActivity : ComponentActivity() {
         onToast = { toast(it) },
         version = { versionName() },
         keys = { prefs.keys },
+        // 固件：整机级的一份，导入 zip 解到 App 的私有目录（可选项）
+        firmware = { firmwareRepo.imported },
+        onImportFirmware = { zip -> importFirmware(zip) },
+        onClearFirmware = {
+            firmwareRepo.clear()
+            envCheck.refresh()   // the chip's colour follows it at once
+            toast(locale.str(R.string.fw_cleared))
+        },
         onShareLog = {
             lifecycleScope.launch {
                 val zip = withContext(Dispatchers.IO) {
@@ -228,6 +238,21 @@ class MainActivity : ComponentActivity() {
             "${File(it.game).name} · ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.startedAt))}"
         } ?: locale.str(R.string.common_log) },
     )
+
+    /**
+     * 导入固件包：解压到 App 的私有目录（后台线程，340 MB 的包要十几秒）。
+     * 解的是模拟器那种固件包（zip 根下一堆 .nca）；解压后的那份就是移植器要的「系统内容文件夹」。
+     */
+    private fun importFirmware(zip: File) {
+        if (!zip.isFile) { toast(locale.str(R.string.fw_import_failed, zip.name)); return }
+        lifecycleScope.launch {
+            val n = withContext(Dispatchers.IO) {
+                runCatching { firmwareRepo.unpack(zip) }
+            }
+            n.onSuccess { toast(locale.str(R.string.fw_imported, zip.name, it)); envCheck.refresh() }   // the chip's colour follows it at once
+                .onFailure { toast(locale.str(R.string.fw_import_failed, zip.name)) }
+        }
+    }
 
     private fun updateRuntime(pack: File, name: String) {
         if (Player.playProcessAlive(this) || !operations.beginRuntimeUpdate(pack.absolutePath, name)) {

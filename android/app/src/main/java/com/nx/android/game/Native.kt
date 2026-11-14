@@ -34,6 +34,15 @@ object Native {
     /** 宿主现在的档位（它读 DM_FPS_PIN；0 = 自由自适应） */
     @JvmStatic external fun perfPinGet(): Int
 
+    /**
+     * 运行中抽屉的体感开关：设备的转动带动游戏里的六轴传感器（王国之泪的弓）。
+     * 即时下发：宿主那边每 250 ms 重读一次环境变量（front_player.c 的 motion poll），所以改完立刻生效。
+     */
+    @JvmStatic external fun motionSet(on: Boolean, raw: Boolean)
+
+    /** 宿主现在的体感开关：位 1 = 体感开着，位 2 = 保留甩动方向 */
+    @JvmStatic external fun motionGet(): Int
+
     /** 运行中抽屉的宿主菜单行（画面与操作/存档）：what 0 overlay 1 opacity 2 rumble 4 docked */
     @JvmStatic external fun menuGet(what: Int): Int
     @JvmStatic external fun menuSet(what: Int, v: Double)

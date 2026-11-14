@@ -141,6 +141,10 @@ data class AppActions(
     val emptyBuildLogMessage: (String) -> String,
     val titleBuildLog: (String) -> String,
     val onUpdateRuntime: (File, String) -> Unit = { _, _ -> },
+    // the firmware: one for the machine (imported from a zip into the app's own folder, optional)
+    val firmware: () -> String = { "" },
+    val onImportFirmware: (File) -> Unit = {},
+    val onClearFirmware: () -> Unit = {},
 )
 
 /** The app's root: the guided setup until it is done, the main shell after */
@@ -252,6 +256,13 @@ fun AppRoot(
                         pickerReq = PickerRequest(PickerMode.FILE, emptySet(), null,
                             locale.str(R.string.onb_choose_prod_keys),
                             onPicked = { f -> actions.onSetKeys(f.path) })
+                    },
+                    firmware = actions.firmware(),
+                    onImportFirmware = {
+                        envCheckOpen = false
+                        pickerReq = PickerRequest(PickerMode.FILE, setOf("zip"), null,
+                            locale.str(R.string.fw_pick),
+                            onPicked = { f -> actions.onImportFirmware(f) })
                     },
                     onRunOnboarding = {
                         // the checklist first: it is drawn over the setup and would hide it

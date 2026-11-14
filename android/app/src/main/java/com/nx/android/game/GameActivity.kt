@@ -46,7 +46,10 @@ import com.nx.android.R
 import com.nx.android.data.AppLocale
 import com.nx.android.data.FrameGenSettings
 import com.nx.android.data.LosslessDll
+import com.nx.android.data.MotionKnobs
+import com.nx.android.data.MotionSettings
 import com.nx.android.data.PrefsStore
+import com.nx.android.data.hasGyroscope
 import com.nx.android.data.RatePin
 import com.nx.android.data.RateSettings
 import com.nx.android.data.drivers.Drivers
@@ -119,6 +122,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var drawerOpen by mutableStateOf(false)
     private var fgSettings: FrameGenSettings? = null
     private var rateSettings: RateSettings? = null
+    private var motionSettings: MotionSettings? = null
     private var packPath: String? = null
     private lateinit var padView: PadView
 
@@ -226,6 +230,7 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         // the title id keeps this game's saves, temp and log apart from the others' (host_start_common)
         fgSettings = titleId?.let { FrameGenSettings(PrefsStore(this), it) }
         rateSettings = titleId?.let { RateSettings(PrefsStore(this), it) }
+        motionSettings = titleId?.let { MotionSettings(PrefsStore(this), it) }
         // the default driver: a game whose driver was never picked runs on the app's built-in one (the row goes
         // into the pack's env.txt, which the host reads). A driver the player picked is left alone.
         applyDefaultDriver(java.io.File(pack))
@@ -236,7 +241,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
         hudFields = HudField.of(prefs.str(PrefsStore.HUD_FIELDS, "").split(",").filter { it.isNotBlank() })
             .ifEmpty { HudField.DEFAULT }
         hudFahrenheit = prefs.bool(PrefsStore.HUD_TEMP_F, false)
-        val env = fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()
+        // 体感的两行也交给宿主：开不开（默认按设备有没有陀螺仪）与保留甩动方向（每个游戏各一份）
+        val env = (fgSettings?.load()?.envLines(LosslessDll.ensure(this)?.absolutePath) ?: emptyArray()) +
+            (motionSettings?.load(hasGyroscope(this))?.envLines() ?: emptyArray())
         if (!Native.start(pack, filesDir.path, titleId, resources.displayMetrics.densityDpi, env, this)) {
             endProcess()   // the save import asked to end: it happens at the next start
             return
@@ -279,6 +286,16 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun saveRatePin(pin: RatePin) {
         rateSettings?.save(pin)
         runCatching { Native.perfPinSet(pin.fps) }
+    }
+
+    /** 宿主现在的体感开关（位 1 = 体感开着，位 2 = 保留甩动方向）：宿主是唯一真源 */
+    private fun motionState(): Int =
+        runCatching { Native.motionGet() }.getOrDefault(0)
+
+    /** 抽屉的操作页：体感瞄准的两个开关（即时下发，顺手记下，下一次启动还是这个） */
+    private fun saveMotion(on: Boolean, raw: Boolean) {
+        motionSettings?.save(MotionKnobs(on, raw))
+        runCatching { Native.motionSet(on, raw) }
     }
 
     /**
@@ -360,6 +377,9 @@ class GameActivity : ComponentActivity(), SurfaceHolder.Callback {
                 onOpenChange = { drawerOpen = it },
                 settings = fgSettings,
                 onRatePin = { saveRatePin(it) },
+                motion = { motionState() },
+                motionHasGyro = hasGyroscope(this@GameActivity),
+                onMotion = { on, raw -> saveMotion(on, raw) },
                 padShown = { padView.shown },
                 onPadShown = { padView.shown = it },
                 padOpacity = { padView.opacity },

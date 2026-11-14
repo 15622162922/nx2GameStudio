@@ -8,5 +8,6 @@ tested	v327680 Xiaomi 23117RK66C (Android 16)
 package	org.nx2a.t01001300232f4000
 orientation	landscape
 requires	bcn
+graphics	nvn
 # the release's own languages are Korean, Traditional Chinese and Simplified Chinese; the port picks the first one (Korean), this row asks for the Simplified Chinese
 env	DM_LANG=zh-Hans

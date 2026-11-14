@@ -18,6 +18,7 @@
 #include "front.h"
 #include "dm_input.h"
 #include "overlay_layout.h"
+#include "motion_map.h"
 #include "saves_android.h"
 #include "jni_android.h"
 #include <math.h>
@@ -45,6 +46,7 @@ void front_screen_match(int fps) { (void)fps; }
 void dm_focus_set(int st); void dm_audio_suspend(int on); void guest_clock_freeze_for(int reason, int on); void dm_gfx_suspend(int on);
 static int g_dpi;       // the display's density (the start call's argument), 0 = unknown
 static ALooper *g_ilooper;   // the input thread's looper (the accelerometer's queue)
+static JavaVM *g_app_vm; static jobject g_app_act;   // the app's Activity: the notices to it, and the display's rotation for the motion
 
 // ---- the front end's capabilities: what this host can do (the app asks right after loading it) ----
 int dm_front_caps(void) { return DM_FRONT_CAPS_PLAYER | DM_FRONT_CAPS_PERF; }   // the player front: the app draws the gamepad, the host draws no panel of its own; the host counts the frames for the app's HUD
@@ -417,23 +419,101 @@ static int handle_event(const dm_java_event *e) {
 }
 int dm_java_input(const dm_java_event *e) { return handle_event(e); }
 
+// ---- the device's motion: the controller's six-axis sensor turns as the device does (dm_motion_set, hle_hid.c), as the Joy-Cons turn with the console in
+// handheld mode (The Legend of Zelda: Tears of the Kingdom aims the bow by them). The gyroscope at 200 Hz (the Switch sensor's rate) with the latest accelerometer
+// sample, in the screen's frame (the display's rotation is read through JNI every 250 ms: a 180-degree flip in sensorLandscape sends no configuration change),
+// angular velocity in revolutions / s and gravity's direction in G (the opposite sign of Android's). DM_MOTION=0 turns it off, DM_MOTION_RAW=1 keeps the measured
+// direction of a flick instead of the made-up waveform, DM_MOTION_LOG=1 logs the mapped values once a second. The switches are read again while the game runs, so
+// the app's ctl file (the drawer's live switches) turns the motion on and off without restarting the game. Off in the background with the accelerometer
 // ---- shaking the device: the controller is shaken (DM_BTN_SHAKE: its six-axis sensor, hle_hid.c; Super Mario Odyssey's cap throw), as the iOS front end does with the phone ----
 // The accelerometer at 60 Hz on the input thread's looper (no permission needed): gravity is followed by a slow low-pass (about 0.8 s), and a sample whose acceleration beyond it
 // exceeds DM_SHAKE_G (1.5 G by default; env.txt overrides) is a hit. The controller is shaken until 120 ms after the last hit: a flick is one shake (the host finishes it as a whole
 // cycle) and shaking on keeps it going. It goes through player 1's controller path, so it adds to the on-screen gamepad and a controller alike. Off while the app is in the background
-static ASensorEventQueue *g_sq; static const ASensor *g_accel;
+static ASensorEventQueue *g_sq; static const ASensor *g_accel, *g_gyro;
+static _Atomic int g_motion_on = 1;   // the device's motion drives the controller's six-axis sensor
+static _Atomic int g_motion_raw;      // keep the measured direction of a flick: the game's own gestures read it, the made-up waveform stops
+static _Atomic int g_motion_log;      // log the mapped values once a second (DM_MOTION_LOG=1)
+static int64_t g_mo_next;             // the next read of the switches (the app's ctl file changes them while the game runs)
+// the display's rotation, read through JNI (the Activity's window): 0..3 = 0, 90, 180, 270 degrees
+static JNIEnv *g_menv; static jobject g_display; static jmethodID g_mRotation; static int g_rot;
+static int jexc(JNIEnv *E) { if (!(*E)->ExceptionCheck(E)) return 0; (*E)->ExceptionClear(E); return 1; }
+static void rotation_start(void) {
+    JavaVM *vm = g_app_vm; JNIEnv *E;
+    if (!vm || !g_app_act || (*vm)->AttachCurrentThread(vm, &E, NULL) != JNI_OK) { LOG("[RED] front end: the input thread cannot reach the Activity: motion keeps rotation 0"); return; }
+    jclass cA = (*E)->GetObjectClass(E, g_app_act);
+    jmethodID mWm = cA ? (*E)->GetMethodID(E, cA, "getWindowManager", "()Landroid/view/WindowManager;") : NULL;
+    jobject wm = mWm ? (*E)->CallObjectMethod(E, g_app_act, mWm) : NULL; if (jexc(E) || !wm) { LOG("[RED] front end: no WindowManager: motion keeps rotation 0"); return; }
+    jclass cWm = (*E)->FindClass(E, "android/view/WindowManager"), cD = (*E)->FindClass(E, "android/view/Display");
+    jmethodID mDisp = cWm ? (*E)->GetMethodID(E, cWm, "getDefaultDisplay", "()Landroid/view/Display;") : NULL; if (jexc(E) || !mDisp || !cD) return;
+    jobject d = (*E)->CallObjectMethod(E, wm, mDisp); g_mRotation = (*E)->GetMethodID(E, cD, "getRotation", "()I"); if (jexc(E) || !d || !g_mRotation) return;
+    g_display = (*E)->NewGlobalRef(E, d); g_menv = E;
+}
+static void rotation_poll(int64_t now) {
+    static int64_t next; static int first = 1;
+    if (!g_menv || !g_display || now < next) return;
+    next = now + 250000000;
+    int r = (*g_menv)->CallIntMethod(g_menv, g_display, g_mRotation); if (jexc(g_menv)) return;
+    if ((r & 3) != g_rot || first) LOG("front end: display rotation %d degrees: motion axes follow it", (r & 3) * 90);
+    g_rot = r & 3; first = 0;
+}
+// a gyroscope sample with the latest acceleration (the device's frame, m/s^2) → the host
+static void motion_feed(const ASensorEvent *e, const double acc[3]) {
+    double g[3] = {e->vector.x, e->vector.y, e->vector.z}, a[3] = {acc[0], acc[1], acc[2]}, gm[3], am[3];
+    rotation_poll(e->timestamp);
+    dm_motion_map(g_rot, g, gm); dm_motion_map(g_rot, a, am);
+    float fa[3], fg[3];
+    for (int i = 0; i < 3; i++) { fg[i] = (float)(gm[i] / (2 * M_PI)); fa[i] = (float)(-am[i] / ASENSOR_STANDARD_GRAVITY); }
+    dm_motion_set(fa, fg, e->timestamp);
+    static int64_t logged;
+    if (atomic_load(&g_motion_log) && e->timestamp - logged >= 1000000000) { logged = e->timestamp;
+        LOG("front end: motion (rotation %d) acc %+.2f %+.2f %+.2f G, gyro %+.3f %+.3f %+.3f rev/s", g_rot * 90, fa[0], fa[1], fa[2], fg[0], fg[1], fg[2]); }
+}
 static void shake_sensor(int on) {
     if (!g_sq || !g_accel) return;
-    // the rate goes with the registration: enableSensor + setEventRate left it at the default 200 ms on the Y700 (dumpsys sensorservice), too slow for a flick
-    if (on) ASensorEventQueue_registerSensor(g_sq, g_accel, 16667, 0); else ASensorEventQueue_disableSensor(g_sq, g_accel);
+    // the rate goes with the registration: enableSensor + setEventRate left it at the default 200 ms on the Y700 (dumpsys sensorservice), too slow for a flick.
+    // 200 Hz with the gyroscope (its samples carry the latest acceleration), 60 Hz for shaking alone
+    int gyro = on && atomic_load(&g_motion_on) && g_gyro;
+    if (on) ASensorEventQueue_registerSensor(g_sq, g_accel, gyro ? 5000 : 16667, 0); else ASensorEventQueue_disableSensor(g_sq, g_accel);
+    if (g_gyro) { if (gyro) ASensorEventQueue_registerSensor(g_sq, g_gyro, 5000, 0); else ASensorEventQueue_disableSensor(g_sq, g_gyro); }
+}
+// the gyroscope, looked up when the player wants the motion (it may be off at the start and turned on later)
+static void motion_gyro_find(void) {
+    if (g_gyro) return;
+    ASensorManager *m = ASensorManager_getInstanceForPackage(NULL);
+    g_gyro = m ? ASensorManager_getDefaultSensor(m, ASENSOR_TYPE_GYROSCOPE) : NULL;
+    if (g_gyro) { rotation_start(); LOG("front end: the device's gyroscope (%s) moves the controller's six-axis sensor", ASensor_getName(g_gyro)); }
+    else LOG("front end: no gyroscope: the device's motion is not available");
+}
+// the switches, read again while the game runs: the app's ctl file (DM_CTL) writes them, so the change takes effect at once
+static void motion_poll(int64_t now) {
+    if (now < g_mo_next) return;
+    g_mo_next = now + 250000000;
+    const char *e = getenv("DM_MOTION");
+    int on = !(e && atoi(e) == 0);
+    if (on != atomic_load(&g_motion_on)) {
+        atomic_store(&g_motion_on, on);
+        if (on) motion_gyro_find();
+        LOG("front end: the device's motion is %s", on ? "on" : "off");
+        shake_sensor(!atomic_load(&g_bg));
+    }
+    const char *r = getenv("DM_MOTION_RAW");
+    atomic_store(&g_motion_raw, r && atoi(r) > 0);
+    const char *lg = getenv("DM_MOTION_LOG");
+    atomic_store(&g_motion_log, lg && atoi(lg) > 0);
 }
 static int on_sensor(int fd, int events, void *data) {
     (void)fd; (void)events; (void)data;
     static double thr, gx, gy, gz, peak; static int64_t last = -1; static int init;
+    static double acc[3] = {0, 0, ASENSOR_STANDARD_GRAVITY};
     if (!thr) { const char *e = getenv("DM_SHAKE_G"); thr = e && atof(e) > 0 ? atof(e) : 1.5; }
     ASensorEvent ev[16]; ssize_t n;
     while ((n = ASensorEventQueue_getEvents(g_sq, ev, 16)) > 0) for (ssize_t i = 0; i < n; i++) {
+        if (ev[i].type == ASENSOR_TYPE_GYROSCOPE) { motion_feed(&ev[i], acc); continue; }
         if (ev[i].type != ASENSOR_TYPE_ACCELEROMETER) continue;
+        motion_poll(ev[i].timestamp);
+        acc[0] = ev[i].acceleration.x; acc[1] = ev[i].acceleration.y; acc[2] = ev[i].acceleration.z;
+        // the raw mode: the game's own gestures read the measured direction, so the made-up shake stops (without a gyroscope it stays)
+        if (g_gyro && atomic_load(&g_motion_raw)) continue;
         double x = ev[i].acceleration.x / ASENSOR_STANDARD_GRAVITY, y = ev[i].acceleration.y / ASENSOR_STANDARD_GRAVITY, z = ev[i].acceleration.z / ASENSOR_STANDARD_GRAVITY;
         if (!init) { gx = x; gy = y; gz = z; init = 1; }
         double dx = x - gx, dy = y - gy, dz = z - gz, g = sqrt(dx * dx + dy * dy + dz * dz);
@@ -453,6 +533,9 @@ static void shake_start(void) {
     g_sq = ASensorManager_createEventQueue(m, g_ilooper, 2, on_sensor, NULL);
     const char *e = getenv("DM_SHAKE_G");
     LOG("front end: shaking the device shakes the controller (threshold %.2f G)", e && atof(e) > 0 ? atof(e) : 1.5);
+    const char *mo = getenv("DM_MOTION");
+    if (mo && !atoi(mo)) { atomic_store(&g_motion_on, 0); LOG("front end: DM_MOTION=0: the device's motion is off"); }
+    else motion_gyro_find();
     shake_sensor(!atomic_load(&g_bg));
 }
 static void *input_thread(void *a) {
@@ -520,7 +603,7 @@ static void host_start_common(JNIEnv *E, JavaVM *vm, jobject actctx, const char 
 // ---- the host's notices to the app (the player): the menu button was tapped (the app opens its drawer) ----
 // The notice goes on a thread of its own: it is a JNI call into the Activity, and the caller's thread must never wait for the app (the game's thread
 // blocked there once, and the game froze with no keyboard).
-static JavaVM *g_app_vm; static jobject g_app_act; static jmethodID g_app_notice;
+static jmethodID g_app_notice;
 #define NOTICE_Q 8
 static pthread_mutex_t g_notice_mu = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_notice_cv = PTHREAD_COND_INITIALIZER;

@@ -51,6 +51,9 @@ class PortService : Service() {
         const val FPS60 = "fps60";
         const val EXP = "exp"
         const val ALIAS = "alias";
+        const val FONT = "font";
+        const val FIRMWARE = "firmware";
+        const val MT = "mt";
         const val PACK_DIR = "packDir"
         // The Intent's extras: the port's parameters, handed over from the UI to the service
         // Intent 的 extra：移植的参数，从界面交到服务手里
@@ -62,6 +65,7 @@ class PortService : Service() {
         fun start(
             ctx: Context, game: String, keys: String,
             touch: Boolean, fps60: Boolean, exp: Boolean, aliasHeadroom: Int,
+            sharedFont: String = "", firmware: String = "", mtReplay: Boolean = false,
             packDir: String? = null
         ) {
             val i = Intent(ctx, PortService::class.java)
@@ -69,6 +73,9 @@ class PortService : Service() {
                 .putExtra(GAME, game).putExtra(KEYS, keys)
                 .putExtra(TOUCH, touch).putExtra(FPS60, fps60).putExtra(EXP, exp)
                 .putExtra(ALIAS, aliasHeadroom)
+            if (sharedFont.isNotBlank()) i.putExtra(FONT, sharedFont)
+            if (firmware.isNotBlank()) i.putExtra(FIRMWARE, firmware)
+            if (mtReplay) i.putExtra(MT, true)
             if (!packDir.isNullOrBlank()) i.putExtra(PACK_DIR, packDir)
             ContextCompat.startForegroundService(ctx, i)
         }
@@ -145,6 +152,8 @@ class PortService : Service() {
             fps60 = intent.getBooleanExtra(FPS60, false),
             experimental = intent.getBooleanExtra(EXP, false),
             aliasHeadroom = intent.getIntExtra(ALIAS, ALIAS_AUTO),
+            sharedFont = intent.getStringExtra(FONT) ?: "",
+            mtReplay = intent.getBooleanExtra(MT, false),
         )
         val began = try { operations.beginBuild(game, cfg) } catch (e: Exception) {
             AppLog.line("[RED] Build history could not be saved: ${e.message}")
@@ -173,7 +182,9 @@ class PortService : Service() {
             taskRunner.port(
                 game, keys, intent.getBooleanExtra(TOUCH, false),
                 intent.getBooleanExtra(FPS60, false), intent.getBooleanExtra(EXP, false),
-                intent.getIntExtra(ALIAS, ALIAS_AUTO), intent.getStringExtra(PACK_DIR),
+                intent.getIntExtra(ALIAS, ALIAS_AUTO),
+                intent.getStringExtra(FONT) ?: "", intent.getStringExtra(FIRMWARE) ?: "",
+                intent.getBooleanExtra(MT, false), intent.getStringExtra(PACK_DIR),
             ) {
                 handler.post {
                     if (runner === taskRunner) {

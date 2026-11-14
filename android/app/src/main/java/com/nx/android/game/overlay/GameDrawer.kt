@@ -35,9 +35,11 @@ import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Vibration
@@ -108,6 +110,9 @@ fun GameDrawer(
     onOpenChange: (Boolean) -> Unit,
     settings: FrameGenSettings?,
     onRatePin: (RatePin) -> Unit,
+    motion: () -> Int,
+    motionHasGyro: Boolean,
+    onMotion: (Boolean, Boolean) -> Unit,
     padShown: () -> Boolean,
     onPadShown: (Boolean) -> Unit,
     padOpacity: () -> Int,
@@ -140,10 +145,14 @@ fun GameDrawer(
                 // 宿主有没有帧率档位这个入口：老包里的旧宿主没有，调用会抛 UnsatisfiedLinkError——
                 // 那就整个不显示（玩家不该点一个按不动的开关）
                 val rateSupported = remember { runCatching { Native.perfPinGet() }.isSuccess }
+                // 体感（设备的转动带动六轴传感器）：老宿主也没有这个入口，整组不显示
+                val motionSupported = remember { runCatching { Native.motionGet() }.isSuccess }
+                var motionState by remember { mutableIntStateOf(if (motionSupported) motion() else 0) }
                 LaunchedEffect(open) {   // 打开期间 2 Hz 轮询宿主的状态串与帧率档位
                     while (open) {
                         runCatching { status = Native.frameGenStatus() }
                         if (rateSupported) runCatching { ratePin = Native.perfPinGet() }
+                        if (motionSupported) runCatching { motionState = motion() }
                         delay(500)
                     }
                 }
@@ -180,7 +189,13 @@ fun GameDrawer(
                                     DrawerTab.FRAMEGEN -> if (settings == null) HintRow(stringResource(R.string.drawer_no_framegen))
                                         else FrameGenRows(settings, status)
                                     DrawerTab.CONTROLS -> ControlRows(padShown, onPadShown, padOpacity, onPadOpacity,
-                                        padStyle, onPadStyle, onLayoutEditor, onResetPadLayout)
+                                        padStyle, onPadStyle, onLayoutEditor, onResetPadLayout,
+                                        motionSupported, { motionState }, motionHasGyro,
+                                        onMotion = { on, raw ->
+                                            onMotion(on, raw)
+                                            // 即时反馈：开关的显示别等下一轮轮询（宿主的 env 已经改了）
+                                            motionState = (if (on) 1 else 0) or (if (raw) 2 else 0)
+                                        })
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
@@ -387,6 +402,10 @@ private fun ControlRows(
     padStyle: () -> PadStyle, onPadStyle: (PadStyle) -> Unit,
     onLayoutEditor: () -> Unit,
     onResetPadLayout: () -> Unit,
+    motionSupported: Boolean,
+    motion: () -> Int,
+    motionHasGyro: Boolean,
+    onMotion: (Boolean, Boolean) -> Unit,
 ) {
     var shown by remember { mutableStateOf(padShown()) }
     var opacity by remember { mutableStateOf(padOpacity()) }
@@ -411,6 +430,23 @@ private fun ControlRows(
     Spacer(Modifier.height(4.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ToggleRow(Icons.Filled.Vibration, stringResource(R.string.drawer_rumble), null, rumble) { rumble = it; Native.menuSet(2, if (it) 1.0 else 0.0) }
+    // 体感：设备的转动带动游戏里的六轴传感器（王国之泪的弓）。宿主是唯一真源（档案的 env.txt 也可能写它），
+    // 改完即时下发；老宿主没有这个入口，整组不显示。
+    if (motionSupported) {
+        Spacer(Modifier.height(4.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        GroupLabel(stringResource(R.string.drawer_group_motion))
+        val state = motion()
+        val on = state and 1 != 0
+        val raw = state and 2 != 0
+        ToggleRow(Icons.Filled.ScreenRotation, stringResource(R.string.motion_on),
+            if (motionHasGyro) null else stringResource(R.string.motion_no_gyro), on, enabled = motionHasGyro) {
+            onMotion(!on, raw)
+        }
+        ToggleRow(Icons.Filled.TouchApp, stringResource(R.string.motion_raw), stringResource(R.string.motion_raw_note), raw) {
+            onMotion(on, !raw)
+        }
+    }
 }
 
 /** 手柄浓淡：标题行带当前值，滑杆占一整行（与上面那些行一样从文字列开始） */

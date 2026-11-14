@@ -32,6 +32,7 @@ import com.nx.android.appstate.PortState
 import com.nx.android.core.ui.LocalAppLocale
 import com.nx.android.core.ui.PreviewSurface
 import com.nx.android.domain.GAME_FILE_EXTENSIONS
+import com.nx.android.data.library.GameProfile
 import com.nx.android.domain.GameEntry
 import com.nx.android.domain.GameStatus
 import com.nx.android.domain.LibraryLogic
@@ -94,6 +95,7 @@ fun LibraryScreen(lib: LibraryState, port: PortState, player: PlayerState, actio
         entries = visible,
         heroIndex = heroIndex,
         statusOf = { lib.statusOf(it) },
+        profileOf = { lib.profileOf(it) },
         portProgress = port.progress,
         // 单游戏：别的游戏在玩时，那个游戏的「▶ 运行」置灰并说明
         lockedOf = { e ->
@@ -152,6 +154,7 @@ internal fun LibraryContent(
     entries: List<GameEntry>,
     heroIndex: Int,
     statusOf: (GameEntry) -> GameStatus,
+    profileOf: (String) -> GameProfile? = { null },
     portProgress: Float,
     lockedOf: (GameEntry) -> Boolean,
     runningGameName: String,
@@ -194,6 +197,7 @@ internal fun LibraryContent(
         sel?.let { entry ->
             HeroDetails(
                 entry = entry,
+                profile = profileOf(entry.titleId),
                 status = statusOf(entry),
                 stale = entry.pack?.needsRuntimeUpdate == true,
                 locked = lockedOf(entry),
